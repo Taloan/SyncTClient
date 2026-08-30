@@ -83,7 +83,8 @@ blockweise geladen und verifiziert.
 - [x] gegen Syncthing v2.1.3 verifiziert: 263 Blöcke, gleicher SHA-256 wie
       der Go-Vorläufer, 32 MB/s ab 8 parallelen Requests
 - [ ] Index persistieren (100k Dateien ≈ 128 MB Blockhashes — gehört auf Platte)
-- [ ] CfAPI-Platzhalter im Explorer
+- [x] CfAPI-Platzhalter im Explorer: 326 Platzhalter, 156 KB belegt statt
+      der vollen Größe; Lesezugriff hydriert und liefert den erwarteten Hash
 - [ ] Cache-Verwaltung mit Größenlimit und Verdrängung
 - [ ] Schreibweg: lokale Änderungen ankündigen und ausliefern
 - [ ] Umbenennen, Löschen und Konflikte
