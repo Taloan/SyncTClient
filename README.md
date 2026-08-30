@@ -82,12 +82,15 @@ blockweise geladen und verifiziert.
 - [x] Blöcke gezielt anfordern, Hashes prüfen
 - [x] gegen Syncthing v2.1.3 verifiziert: 263 Blöcke, gleicher SHA-256 wie
       der Go-Vorläufer, 32 MB/s ab 8 parallelen Requests
-- [ ] Index persistieren (100k Dateien ≈ 128 MB Blockhashes — gehört auf Platte)
+- [x] Index persistiert in SQLite, mit Wiederaufnahme: beim Neustart nennt der
+      Client seine höchste Sequenznummer und bekommt nur Änderungen
+- [x] Cache mit Budget, Verdrängung nach letztem Zugriff, Invalidierung bei
+      Änderung; angeheftete Dateien bleiben verschont
+- [x] Konfigurationsdatei mit Teilbaum-Auswahl und Modus je Share
 - [x] CfAPI-Platzhalter im Explorer: 35 Verzeichnisse und 544 Platzhalter aus
       579 Index-Einträgen; 994,7 MB logisch, 252 KB auf der Platte. Lesezugriff
       hydriert und liefert den erwarteten Hash
 - [ ] Volle Hydration beim Öffnen vermeiden — partielle Hydration funktioniert
       nachweislich, aber der Virenscanner liest die Datei beim Öffnen komplett
-- [ ] Cache-Verwaltung mit Größenlimit und Verdrängung
 - [ ] Schreibweg: lokale Änderungen ankündigen und ausliefern
 - [ ] Umbenennen, Löschen und Konflikte
