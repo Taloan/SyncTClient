@@ -103,6 +103,7 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
     {
         bitmap = 0;
         alphaType = AlphaTypeRgb;
+        Host.KeepAlive();
 
         try
         {
@@ -154,6 +155,16 @@ internal static class Trace
         }
         catch { /* die Fehlersuche darf nie stoeren */ }
     }
+}
+
+/// <summary>
+/// Haelt den Wirtsprozess wach, solange Anfragen kommen. Im DLL-Fall gibt es
+/// keinen -- dann tut das hier nichts.
+/// </summary>
+internal static class Host
+{
+    public static Action? Alive;
+    public static void KeepAlive() => Alive?.Invoke();
 }
 
 /// <summary>Findet die vorbereitete Vorschau zu einem Dateipfad.</summary>

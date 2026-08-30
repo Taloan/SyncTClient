@@ -32,13 +32,15 @@ public static class ComCheck
     {
         Console.WriteLine($"CLSID: {ClassId:B}");
 
-        const uint InprocServer = 0x1;
-        var hr = CoCreateInstance(in ClassId, 0, InprocServer, in Unknown, out var instance);
+        // CLSCTX_INPROC_SERVER | CLSCTX_LOCAL_SERVER: der Anbieter darf eine
+        // DLL im eigenen Prozess sein oder ein eigenstaendiges Programm.
+        const uint AnyServer = 0x1 | 0x4;
+        var hr = CoCreateInstance(in ClassId, 0, AnyServer, in Unknown, out var instance);
 
         if (hr != 0 || instance == 0)
         {
             Console.WriteLine($"CoCreateInstance schlug fehl: 0x{(uint)hr:X8}");
-            Console.WriteLine("  -> die DLL laesst sich nicht laden oder registriert sich nicht richtig.");
+            Console.WriteLine("  -> weder DLL noch Wirtsprogramm liessen sich starten.");
             return 1;
         }
 
