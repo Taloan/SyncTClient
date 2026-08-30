@@ -60,10 +60,7 @@ public sealed class BepConnection : IAsyncDisposable
         {
             await tcp.ConnectAsync(host, port, ct).ConfigureAwait(false);
 
-            // Syncthing kennt keine CA: die Pruefung erfolgt unten ueber den
-            // Zertifikats-Hash, deshalb akzeptiert der Callback hier alles.
-            var tls = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false,
-                userCertificateValidationCallback: (_, _, _, _) => true);
+            var tls = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false);
 
             await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
             {

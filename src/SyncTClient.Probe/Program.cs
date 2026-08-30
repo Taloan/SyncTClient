@@ -58,8 +58,13 @@ static async Task<int> RunAsync(CommandLineOptions o)
 
     var index = new FolderIndex(o.Folder);
     var idle = new SemaphoreSlim(0);
+    var sawClusterConfig = false;
 
-    connection.ClusterConfigReceived += cc => PrintClusterConfig(cc, o.Folder, identity.Id, connection.PeerId);
+    connection.ClusterConfigReceived += cc =>
+    {
+        sawClusterConfig = true;
+        PrintClusterConfig(cc, o.Folder, identity.Id, connection.PeerId);
+    };
     connection.IndexReceived += msg =>
     {
         if (msg.Folder != o.Folder) return;
@@ -94,7 +99,16 @@ static async Task<int> RunAsync(CommandLineOptions o)
         IndexId = 0
     });
     clusterConfig.Folders.Add(folder);
-    await connection.SendClusterConfigAsync(clusterConfig, cts.Token);
+
+    try
+    {
+        await connection.SendClusterConfigAsync(clusterConfig, cts.Token);
+    }
+    catch (IOException)
+    {
+        PrintNotAuthorizedHint(identity.Id, o.Folder);
+        return 1;
+    }
 
     Console.WriteLine($"Sammle Index fuer Ordner \"{o.Folder}\" (max. {o.Wait.TotalSeconds:0}s) ...");
 
@@ -112,7 +126,18 @@ static async Task<int> RunAsync(CommandLineOptions o)
         }
     }
 
-    if (readLoop.IsFaulted) await readLoop; // wirft die eigentliche Ursache
+    if (readLoop.IsFaulted)
+    {
+        // Ein unbekanntes Geraet laesst Syncthing direkt nach dem Hello fallen,
+        // ohne je einen ClusterConfig zu schicken. Das ist der mit Abstand
+        // haeufigste Grund, warum hier nichts ankommt.
+        if (!sawClusterConfig)
+        {
+            PrintNotAuthorizedHint(identity.Id, o.Folder);
+            return 1;
+        }
+        await readLoop; // wirft die eigentliche Ursache
+    }
 
     var files = index.Snapshot();
     if (files.Count == 0)
@@ -174,6 +199,23 @@ static async Task FetchAsync(BepConnection connection, CommandLineOptions o, Bep
                       $"({data.Length / seconds / (1024 * 1024):0.0} MB/s)");
     Console.WriteLine($"  SHA-256:   {Convert.ToHexStringLower(SHA256.HashData(data))}");
     Console.WriteLine($"  Geschrieben nach: {target}");
+}
+
+static void PrintNotAuthorizedHint(DeviceId me, string folderId)
+{
+    // Ein unbekanntes Geraet laesst Syncthing direkt nach dem Hello fallen,
+    // ohne je einen ClusterConfig zu schicken. Das ist der mit Abstand
+    // haeufigste Grund, warum hier nichts ankommt.
+    Console.Error.WriteLine();
+    Console.Error.WriteLine($"""
+        Der Peer hat die Verbindung geschlossen, ohne einen ClusterConfig zu senden.
+        Das bedeutet fast immer: dieses Geraet ist dort nicht freigegeben.
+
+          Auf dem Peer als Geraet hinzufuegen:
+          {me}
+
+          ...und den Ordner "{folderId}" mit ihm teilen.
+        """);
 }
 
 static void PrintClusterConfig(ClusterConfig cc, string wanted, DeviceId me, DeviceId peer)
