@@ -42,6 +42,12 @@ public sealed class ShareConfig
     public long CacheMaxBytes { get; set; }
 
     /// <summary>
+    /// Beim Start der Oberflaeche automatisch hochfahren. Sie ist der
+    /// Sync-Dienst -- wer sie oeffnet, will in aller Regel, dass es laeuft.
+    /// </summary>
+    public bool AutoStart { get; set; } = true;
+
+    /// <summary>
     /// Vorschaubilder im Hintergrund vorbereiten. Kostet je Bild einen Block
     /// von 128 KiB -- ohne sie zeigt der Explorer nur ein Ersatzsymbol.
     /// </summary>

@@ -4,6 +4,7 @@
         Title="SyncTClient"
         Height="760" Width="1040"
         WindowStartupLocation="CenterScreen"
+        Loaded="OnLoaded"
         Closing="OnClosing">
 
   <Grid Margin="12">
