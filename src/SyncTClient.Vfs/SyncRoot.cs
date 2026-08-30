@@ -37,13 +37,17 @@ public static class SyncRoot
             var policies = new CF_SYNC_POLICIES
             {
                 StructSize = (uint)sizeof(CF_SYNC_POLICIES),
-                // PARTIAL: Windows darf einzelne Bereiche anfordern statt
-                // immer die ganze Datei. Das ist die Grundlage dafuer, dass
-                // eine Vorschau nicht 30 MB zieht.
+                // PARTIAL erlaubt teilweise gefuellte Dateien -- allein reicht
+                // das aber nicht: Windows fordert trotzdem die ganze Datei an,
+                // sobald jemand auch nur die ersten Bytes liest. Erst
+                // STREAMING_ALLOWED laesst Lesezugriffe aus einem noch
+                // unvollstaendigen Platzhalter bedienen. Das ist der
+                // Unterschied zwischen "Thumbnail kostet 128 KiB" und
+                // "Thumbnail kostet die ganze Datei".
                 Hydration = new CF_HYDRATION_POLICY
                 {
                     Primary = CF_HYDRATION_POLICY_PRIMARY.CF_HYDRATION_POLICY_PARTIAL,
-                    Modifier = CF_HYDRATION_POLICY_MODIFIER.CF_HYDRATION_POLICY_MODIFIER_NONE
+                    Modifier = CF_HYDRATION_POLICY_MODIFIER.CF_HYDRATION_POLICY_MODIFIER_STREAMING_ALLOWED
                 },
                 // FULL: wir legen alle Platzhalter selbst an, Windows muss
                 // Verzeichnisse nicht bei Bedarf nachfragen.
