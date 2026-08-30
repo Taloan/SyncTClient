@@ -1,0 +1,20 @@
+[
+  {
+    "Name": "SyncT-Client",
+    "Projects": [
+      {
+        "Path": "src\\SyncTClient.Mount\\SyncTClient.Mount.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
+    "Name": "Diagnose (Probe)",
+    "Projects": [
+      {
+        "Path": "src\\SyncTClient.Probe\\SyncTClient.Probe.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
