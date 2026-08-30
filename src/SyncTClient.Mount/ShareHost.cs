@@ -216,7 +216,12 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _cache = new HydrationCache(_config.LocalPath, budget, statePath, _log);
 
         _thumbnails = new ThumbnailStore(Path.Combine(_app.HomeDirectory, "thumbs"));
+
+        // Der Eintrag muss stehen, bevor die Shell den Sync-Root zur Kenntnis
+        // nimmt -- sie liest seine Eigenschaften beim Anmelden. Deshalb danach
+        // noch einmal anmelden, damit sie den Vorschau-Erzeuger mitbekommt.
         RegisterThumbnailProvider();
+        _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
         _mount = new CloudFilterMount(_config.LocalPath, this, _log);
         _mount.Connect();
