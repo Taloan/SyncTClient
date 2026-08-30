@@ -1,0 +1,89 @@
+using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.Storage.CloudFilters;
+
+namespace SyncTClient.Vfs;
+
+/// <summary>
+/// Meldet ein Verzeichnis bei Windows als Sync-Root an. Erst danach darf
+/// darin ueberhaupt ein Platzhalter entstehen.
+/// </summary>
+public static class SyncRoot
+{
+    /// <summary>
+    /// Registriert <paramref name="path"/>. Ist dort bereits ein Sync-Root
+    /// angemeldet, wird die Registrierung aktualisiert statt zu scheitern.
+    /// </summary>
+    public static unsafe void Register(string path, string providerName, string providerVersion)
+    {
+        Directory.CreateDirectory(path);
+
+        var namePtr = Marshal.StringToHGlobalUni(providerName);
+        var versionPtr = Marshal.StringToHGlobalUni(providerVersion);
+        // Die Identitaet unterscheidet mehrere Roots desselben Anbieters.
+        var identityPtr = Marshal.StringToHGlobalUni(path);
+
+        try
+        {
+            var registration = new CF_SYNC_REGISTRATION
+            {
+                StructSize = (uint)sizeof(CF_SYNC_REGISTRATION),
+                ProviderName = (char*)namePtr,
+                ProviderVersion = (char*)versionPtr,
+                SyncRootIdentity = (void*)identityPtr,
+                SyncRootIdentityLength = (uint)((path.Length + 1) * sizeof(char))
+            };
+
+            var policies = new CF_SYNC_POLICIES
+            {
+                StructSize = (uint)sizeof(CF_SYNC_POLICIES),
+                // PARTIAL: Windows darf einzelne Bereiche anfordern statt
+                // immer die ganze Datei. Das ist die Grundlage dafuer, dass
+                // eine Vorschau nicht 30 MB zieht.
+                Hydration = new CF_HYDRATION_POLICY
+                {
+                    Primary = CF_HYDRATION_POLICY_PRIMARY.CF_HYDRATION_POLICY_PARTIAL,
+                    Modifier = CF_HYDRATION_POLICY_MODIFIER.CF_HYDRATION_POLICY_MODIFIER_NONE
+                },
+                // FULL: wir legen alle Platzhalter selbst an, Windows muss
+                // Verzeichnisse nicht bei Bedarf nachfragen.
+                Population = new CF_POPULATION_POLICY
+                {
+                    Primary = CF_POPULATION_POLICY_PRIMARY.CF_POPULATION_POLICY_FULL,
+                    Modifier = CF_POPULATION_POLICY_MODIFIER.CF_POPULATION_POLICY_MODIFIER_NONE
+                },
+                InSync = CF_INSYNC_POLICY.CF_INSYNC_POLICY_TRACK_ALL,
+                HardLink = CF_HARDLINK_POLICY.CF_HARDLINK_POLICY_NONE,
+                PlaceholderManagement = CF_PLACEHOLDER_MANAGEMENT_POLICY.CF_PLACEHOLDER_MANAGEMENT_POLICY_DEFAULT
+            };
+
+            fixed (char* pathPtr = path)
+            {
+                // Ohne diese beiden Flags haelt Windows den Wurzelordner fuer
+                // unvollstaendig und verlangt beim ersten Auflisten eine
+                // On-Demand-Population -- die wir nicht bedienen, weil wir alle
+                // Platzhalter selbst anlegen. Die Folge waere ein Timeout schon
+                // beim blossen Oeffnen des Ordners.
+                var result = PInvoke.CfRegisterSyncRoot(
+                    pathPtr, &registration, &policies,
+                    CF_REGISTER_FLAGS.CF_REGISTER_FLAG_UPDATE
+                    | CF_REGISTER_FLAGS.CF_REGISTER_FLAG_DISABLE_ON_DEMAND_POPULATION_ON_ROOT
+                    | CF_REGISTER_FLAGS.CF_REGISTER_FLAG_MARK_IN_SYNC_ON_ROOT);
+                Marshal.ThrowExceptionForHR(result);
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(namePtr);
+            Marshal.FreeHGlobal(versionPtr);
+            Marshal.FreeHGlobal(identityPtr);
+        }
+    }
+
+    /// <summary>
+    /// Hebt die Registrierung auf. Bereits angelegte Platzhalter bleiben als
+    /// Dateien liegen -- dehydrierte werden dabei zu leeren Huellen.
+    /// </summary>
+    public static void Unregister(string path)
+        => Marshal.ThrowExceptionForHR(PInvoke.CfUnregisterSyncRoot(path));
+}
