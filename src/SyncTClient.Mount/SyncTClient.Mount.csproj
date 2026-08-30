@@ -10,7 +10,14 @@
     <RootNamespace>SyncTClient.Mount</RootNamespace>
     <AssemblyName>synctmount</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Dieselbe Umsetzung wie die DLL. Der laufende Client meldet die Klasse
+         zur Laufzeit an, so wie es Microsofts CloudMirror-Beispiel tut. -->
+    <Compile Include="..\SyncTClient.ThumbProvider\ThumbnailProvider.cs" Link="ThumbnailProvider.cs" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SyncTClient.Bep\SyncTClient.Bep.csproj" />

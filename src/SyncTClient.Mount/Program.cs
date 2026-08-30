@@ -1,4 +1,4 @@
-using SyncTClient.Bep;
+﻿using SyncTClient.Bep;
 using SyncTClient.Mount;
 using SyncTClient.Vfs;
 
@@ -52,6 +52,57 @@ if (Arg("--thumbcheck") is { } checkTarget) return ThumbnailCheck.Run(checkTarge
 
 // Erzeugt die Vorschau-Erweiterung direkt ueber COM.
 if (args.Contains("--comtest")) return ComCheck.Run();
+
+// Zeigt, was die Shell ueber eine Datei weiss.
+if (Arg("--shellprops") is { } propsTarget) return ShellProperties.Run(propsTarget);
+
+// Schaltet den Anheft-Zustand um -- zum Vergleichen mit fremden Anbietern.
+if (Arg("--pin") is { } pinTarget)
+    return PinStateTool.Run(pinTarget, Arg("--state") ?? "unspecified", args.Contains("--recurse"));
+
+// Fragt die Vorschau ueber den Zwischenspeicher der Shell ab -- Explorers Weg.
+if (Arg("--cachecheck") is { } cacheTarget)
+    return ShellThumbnailCache.Run(cacheTarget, Arg("--width") is { } w ? uint.Parse(w) : 256u);
+
+// Meldet die Vorschau-Erweiterung an, ohne den Client zu starten.
+if (Arg("--register-thumbs") is { } thumbStore)
+{
+    if (ThumbnailProviderRegistration.FindLibrary() is not { } thumbLibrary)
+    {
+        Console.Error.WriteLine("synctthumbs.dll nicht gefunden -- ThumbProvider veroeffentlichen.");
+        return 1;
+    }
+
+    Directory.CreateDirectory(thumbStore);
+    ThumbnailProviderRegistration.RegisterClass(thumbLibrary, Path.GetFullPath(thumbStore));
+    Console.WriteLine($"Klasse:  {ThumbnailProviderRegistration.ClassId} -> {thumbLibrary}");
+    Console.WriteLine($"Wirt:    {ThumbnailProviderRegistration.AppId} (DllSurrogate)");
+    Console.WriteLine($"Vorrat:  {Path.GetFullPath(thumbStore)}");
+
+    foreach (var id in ThumbnailProviderRegistration.OwnSyncRootIds())
+        Console.WriteLine($"Sync-Root {id}: {(ThumbnailProviderRegistration.AttachToSyncRoot(id) ? "verbunden" : "nicht schreibbar")}");
+
+    return 0;
+}
+
+// Ruft einen Vorschau-Anbieter unmittelbar auf. Ohne --clsid ist es unserer;
+// mit fremder CLSID laesst sich ein Anbieter vermessen, der funktioniert.
+if (Arg("--providertest") is { } probeTarget)
+{
+    var providerId = Arg("--clsid") is { } given
+        ? Guid.Parse(given)
+        : new Guid("7E4B2A61-3C9D-4F58-9A17-6D2E5B84C013");
+
+    var probeWidth = Arg("--width") is { } widthText ? uint.Parse(widthText) : 256u;
+    var probeContext = Arg("--ctx") switch
+    {
+        "inproc" => ProviderProbe.InProc,
+        "local" => ProviderProbe.LocalServer,
+        _ => ProviderProbe.InProc | ProviderProbe.LocalServer
+    };
+
+    return ProviderProbe.Run(providerId, probeTarget, probeWidth, probeContext);
+}
 
 if (args.Contains("--clean-winrt")) return CleanWinRt();
 if (Arg("--reset") is { } pathToReset) return Reset(pathToReset);

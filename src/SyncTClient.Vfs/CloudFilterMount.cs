@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -73,7 +73,35 @@ public sealed class CloudFilterMount : IDisposable
         }
 
         _connected = true;
+
+        // Ohne diese Meldung gilt der Anbieter als nicht betriebsbereit.
+        // Windows fragt den Zustand, bevor es die Erweiterungen eines
+        // Sync-Roots benutzt -- wer ihn nie meldet, wird uebergangen.
+        ReportIdle();
+
         _log?.Invoke($"Sync-Root verbunden: {_rootPath}");
+    }
+
+    /// <summary>
+    /// Meldet der Cloud-Filter-Schicht, was wir gerade tun.
+    /// </summary>
+    /// <remarks>
+    /// Der Zustand landet in der Statusanzeige des Explorers und steuert
+    /// ausserdem, ob Windows uns fuer Vorschauen und aehnliche Dienste
+    /// ueberhaupt in Betracht zieht.
+    /// </remarks>
+    public void ReportIdle() => ReportStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_IDLE);
+
+    /// <summary>Meldet, dass gerade Inhalte nachgeladen werden.</summary>
+    public void ReportBusy() => ReportStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_POPULATE_CONTENT);
+
+    private void ReportStatus(CF_SYNC_PROVIDER_STATUS status)
+    {
+        if (!_connected) return;
+
+        var result = PInvoke.CfUpdateSyncProviderStatus(_connectionKey, status);
+        if (result.Failed)
+            _log?.Invoke($"Anbieterstatus {status}: 0x{(uint)result.Value:X8}");
     }
 
     // ------------------------------------------------------------ Platzhalter
