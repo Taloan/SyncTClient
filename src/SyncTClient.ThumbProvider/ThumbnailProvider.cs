@@ -26,6 +26,24 @@ internal partial interface IInitializeWithFile
 }
 
 [GeneratedComInterface]
+[Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe")]
+internal partial interface IShellItem
+{
+    [PreserveSig] int BindToHandler(nint bindContext, in Guid handler, in Guid interfaceId, out nint result);
+    [PreserveSig] int GetParent(out nint parent);
+    [PreserveSig] int GetDisplayName(uint kind, out nint name);
+    [PreserveSig] int GetAttributes(uint mask, out uint attributes);
+    [PreserveSig] int Compare(nint other, uint hint, out int order);
+}
+
+[GeneratedComInterface]
+[Guid("7f73be3f-fb79-493c-a6c7-7ee14e245841")]
+internal partial interface IInitializeWithItem
+{
+    [PreserveSig] int Initialize(IShellItem item, uint mode);
+}
+
+[GeneratedComInterface]
 [Guid("e357fccd-a995-4576-b01f-234630154e96")]
 internal partial interface IThumbnailProvider
 {
@@ -34,7 +52,7 @@ internal partial interface IThumbnailProvider
 
 /// <summary>Liefert Explorer die vorbereitete Vorschau eines Platzhalters.</summary>
 [GeneratedComClass]
-internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IThumbnailProvider
+internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IInitializeWithItem, IThumbnailProvider
 {
     private const int Ok = 0;
     private const int Fail = unchecked((int)0x80004005);
@@ -50,8 +68,35 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IThu
     public int Initialize(string filePath, uint mode)
     {
         _filePath = filePath;
-        Trace.Write($"Initialize: {filePath}");
+        Trace.Write($"InitializeWithFile: {filePath}");
         return Ok;
+    }
+
+    /// <summary>
+    /// Der Weg, den Windows fuer Platzhalter bevorzugt: ein IShellItem
+    /// impliziert -- anders als ein Dateipfad -- keinen Lesezugriff.
+    /// </summary>
+    public int Initialize(IShellItem item, uint mode)
+    {
+        const uint FileSystemPath = 0x80058000; // SIGDN_FILESYSPATH
+
+        var hr = item.GetDisplayName(FileSystemPath, out var name);
+        if (hr != 0 || name == 0)
+        {
+            Trace.Write($"InitializeWithItem: kein Pfad, 0x{(uint)hr:X8}");
+            return hr == 0 ? Fail : hr;
+        }
+
+        try
+        {
+            _filePath = Marshal.PtrToStringUni(name);
+            Trace.Write($"InitializeWithItem: {_filePath}");
+            return Ok;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(name);
+        }
     }
 
     public int GetThumbnail(uint requestedSize, out nint bitmap, out int alphaType)
