@@ -1,4 +1,4 @@
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 
 namespace SyncTClient.Mount;
 
@@ -21,6 +21,19 @@ public static class ThumbnailProviderRegistration
     /// <summary>Muss mit Exports.ClassId in der Erweiterung uebereinstimmen.</summary>
     public const string ClassId = "{7E4B2A61-3C9D-4F58-9A17-6D2E5B84C013}";
 
+    /// <summary>
+    /// Anwendungskennung, die COM anweist, die DLL in einem eigenen Prozess zu
+    /// betreiben statt im Aufrufer.
+    /// </summary>
+    /// <remarks>
+    /// Das ist kein Beiwerk, sondern die Bedingung. Messbar an Nextcloud, das
+    /// dieselbe Bauform verwendet: derselbe Anbieter, dieselbe Datei -- im
+    /// eigenen Prozess erzeugt liefert er <c>E_FAIL</c>, ueber den Surrogat
+    /// eine Vorschau. Ohne diesen Eintrag laedt COM die DLL beim Aufrufer und
+    /// umgeht die Abschottung, auf die die Shell dabei baut.
+    /// </remarks>
+    public const string AppId = "{C2A9B4D7-5E31-4A88-9F60-71B3E8C42D19}";
+
     private const string SyncRootManager =
         @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager";
 
@@ -30,14 +43,31 @@ public static class ThumbnailProviderRegistration
         var beside = Path.Combine(AppContext.BaseDirectory, "synctthumbs.dll");
         if (File.Exists(beside)) return beside;
 
-        // Im Entwicklungsbaum liegt sie im Publish-Ordner ihres eigenen Projekts.
+        // Im Entwicklungsbaum liegt sie im Publish-Ordner ihres eigenen
+        // Projekts -- je nach Plattformwahl mit oder ohne x64-Zwischenstufe.
+        string[][] variants =
+        [
+            ["bin", "Release", "net10.0-windows", "win-x64", "publish"],
+            ["bin", "x64", "Release", "net10.0-windows", "win-x64", "publish"]
+        ];
+
+        var newest = (Path: (string?)null, Written: DateTime.MinValue);
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
+
         for (var i = 0; i < 8 && directory is not null; i++, directory = directory.Parent)
         {
-            var candidate = Path.Combine(directory.FullName,
-                "src", "SyncTClient.ThumbProvider", "bin", "x64", "Release",
-                "net10.0-windows", "win-x64", "publish", "synctthumbs.dll");
-            if (File.Exists(candidate)) return candidate;
+            foreach (var variant in variants)
+            {
+                var candidate = Path.Combine(
+                    [directory.FullName, "src", "SyncTClient.ThumbProvider", .. variant, "synctthumbs.dll"]);
+
+                // Beide Varianten koennen nebeneinander liegen; die aeltere
+                // waere eine schwer zu findende Fehlerquelle.
+                if (File.Exists(candidate) && File.GetLastWriteTimeUtc(candidate) > newest.Written)
+                    newest = (candidate, File.GetLastWriteTimeUtc(candidate));
+            }
+
+            if (newest.Path is not null) return newest.Path;
         }
 
         return null;
@@ -52,9 +82,20 @@ public static class ThumbnailProviderRegistration
         using (var clsid = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{ClassId}"))
         {
             clsid.SetValue(null, "SyncTClient Vorschaubilder");
+            clsid.SetValue("AppID", AppId);
+
             using var server = clsid.CreateSubKey("InprocServer32");
             server.SetValue(null, libraryPath);
             server.SetValue("ThreadingModel", "Apartment");
+        }
+
+        // Ein leerer DllSurrogate-Wert waehlt den mitgelieferten Wirt
+        // (dllhost.exe). Der Wert muss vorhanden und leer sein -- fehlt er,
+        // laeuft die DLL im Aufrufer.
+        using (var appId = Registry.CurrentUser.CreateSubKey($@"Software\Classes\AppID\{AppId}"))
+        {
+            appId.SetValue(null, "SyncTClient Vorschaubilder");
+            appId.SetValue("DllSurrogate", "");
         }
 
         using var own = Registry.CurrentUser.CreateSubKey(@"Software\SyncTClient");
@@ -94,8 +135,15 @@ public static class ThumbnailProviderRegistration
 
     public static void UnregisterClass()
     {
-        try { Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\CLSID\{ClassId}", throwOnMissingSubKey: false); }
-        catch (UnauthorizedAccessException) { /* egal */ }
+        foreach (var path in new[]
+                 {
+                     $@"Software\Classes\CLSID\{ClassId}",
+                     $@"Software\Classes\AppID\{AppId}"
+                 })
+        {
+            try { Registry.CurrentUser.DeleteSubKeyTree(path, throwOnMissingSubKey: false); }
+            catch (UnauthorizedAccessException) { /* egal */ }
+        }
     }
 
     /// <summary>Alle Sync-Roots, die dieses Programm angemeldet hat.</summary>

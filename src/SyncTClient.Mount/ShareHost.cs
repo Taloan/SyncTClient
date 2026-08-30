@@ -1,4 +1,4 @@
-using SyncTClient.Bep;
+﻿using SyncTClient.Bep;
 using SyncTClient.Vfs;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 
@@ -251,6 +251,10 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             ThumbnailProviderRegistration.RegisterClass(library, _thumbnails.Directory);
             if (!ThumbnailProviderRegistration.AttachToSyncRoot(_syncRootId))
                 _log($"[{FolderId}] Vorschau-Erweiterung liess sich nicht am Sync-Root eintragen.");
+
+            // Zusaetzlich zur Eintragung in der Registrierung: solange der
+            // Client laeuft, beantwortet er Anfragen selbst.
+            ThumbnailService.EnsureStarted(_log);
         }
         catch (Exception ex)
         {

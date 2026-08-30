@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace SyncTClient.Mount;
 
@@ -40,10 +40,11 @@ public static class ThumbnailCheck
         var attributes = (uint)new FileInfo(full).Attributes;
         Console.WriteLine($"Zustand: {(((attributes & 0x0040_0000) != 0) ? "Platzhalter (nicht lokal)" : "lokal vorhanden")}");
 
-        var store = new ThumbnailStore(
-            Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\SyncTClient")
-                ?.GetValue("ThumbnailStore") as string ?? "");
-        var cached = store.Directory.Length > 1 ? store.PathFor(full) : null;
+        var storeDirectory = Microsoft.Win32.Registry.CurrentUser
+            .OpenSubKey(@"Software\SyncTClient")?.GetValue("ThumbnailStore") as string;
+        var cached = string.IsNullOrWhiteSpace(storeDirectory)
+            ? null
+            : new ThumbnailStore(storeDirectory).PathFor(full);
         Console.WriteLine($"Vorrat:  {(cached is not null && File.Exists(cached) ? cached : "keine vorbereitete Vorschau")}");
         Console.WriteLine();
 
@@ -78,11 +79,7 @@ public static class ThumbnailCheck
                 {
                     factory.GetImage(new Size { Width = 256, Height = 256 }, flags, out bitmap);
 
-                    if (bitmap == 0) { Console.WriteLine($"  {name} -> nichts"); continue; }
-
-                    var info = new BitmapInfo();
-                    GetObject(bitmap, Marshal.SizeOf<BitmapInfo>(), ref info);
-                    Console.WriteLine($"  {name} -> {info.Width}x{info.Height}, {info.BitsPerPixel} bpp");
+                    Console.WriteLine($"  {name} -> {BitmapFingerprint.Describe(bitmap)}");
                 }
                 catch (COMException ex)
                 {
@@ -90,7 +87,7 @@ public static class ThumbnailCheck
                 }
                 finally
                 {
-                    if (bitmap != 0) DeleteObject(bitmap);
+                    BitmapFingerprint.Release(bitmap);
                 }
             }
         }
@@ -105,14 +102,6 @@ public static class ThumbnailCheck
     [StructLayout(LayoutKind.Sequential)]
     private struct Size { public int Width; public int Height; }
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BitmapInfo
-    {
-        public int Type, Width, Height, WidthBytes;
-        public ushort Planes, BitsPerPixel;
-        public nint Bits;
-    }
-
     [ComImport]
     [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -124,10 +113,4 @@ public static class ThumbnailCheck
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
     private static extern int SHCreateItemFromParsingName(
         string path, nint bindContext, in Guid interfaceId, out IShellItemImageFactory factory);
-
-    [DllImport("gdi32.dll")]
-    private static extern int GetObject(nint handle, int size, ref BitmapInfo info);
-
-    [DllImport("gdi32.dll")]
-    private static extern bool DeleteObject(nint handle);
 }
