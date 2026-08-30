@@ -43,6 +43,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     private Task? _readLoop;
     private CancellationTokenSource? _cts;
     private ShareState _state = ShareState.Gestoppt;
+    private ThumbnailStore? _thumbnails;
+    private Task? _thumbnailJob;
 
     private readonly SemaphoreSlim _indexArrived = new(0);
     private TaskCompletionSource<ClusterConfig> _clusterConfig =
@@ -75,6 +77,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     public event Action<TransferInfo>? TransferStarted;
     public event Action<TransferInfo>? TransferFinished;
     public event Action? CacheChanged;
+    public event Action<int, int>? ThumbnailProgress;
 
     public int IndexCount => _index?.Count ?? 0;
     public long CacheUsedBytes => _cache?.UsedBytes ?? 0;
@@ -117,6 +120,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
             Project();
             State = ShareState.Bereit;
+
+            // Vorschaubilder im Hintergrund -- der Nutzer soll nicht darauf warten.
+            _thumbnailJob = Task.Run(() => GenerateThumbnailsAsync(token), token);
 
             await ApplyModeAsync(token);
         }
@@ -278,6 +284,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _mount.Connect();
         _mount.ProjectPlaceholders();
 
+        _thumbnails = new ThumbnailStore(Path.Combine(_app.HomeDirectory, "thumbs"));
+
         _cache.ReconcileWithDisk();
         CacheChanged?.Invoke();
     }
@@ -337,6 +345,74 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             : $"[{FolderId}] {_cache.FileCount} Dateien lokal, " +
               $"{_cache.UsedBytes / (1024.0 * 1024.0):0.0} MB" +
               (_cache.MaxBytes > 0 ? $" von {_cache.MaxBytes / (1024.0 * 1024.0):0.0} MB" : "");
+
+
+    // ------------------------------------------------------------ Vorschaubilder
+
+    /// <summary>
+    /// Holt fuer jedes Bild den Dateikopf und legt die darin eingebettete
+    /// Vorschau ab. Ein Kopf ist genau ein Block -- bei 510 Fotos kostet das
+    /// rund 64 MB statt der 943 MB, die die vollen Dateien haetten.
+    /// </summary>
+    private async Task GenerateThumbnailsAsync(CancellationToken ct)
+    {
+        if (_thumbnails is null || !_config.GenerateThumbnails) return;
+
+        var pending = Enumerate()
+            .Where(e => !e.IsDirectory && e.Size > 0 && ExifThumbnail.LooksLikeJpeg(e.RelativePath))
+            .Where(e => !_thumbnails.Has(FolderId, e.RelativePath))
+            .ToList();
+
+        if (pending.Count == 0) return;
+        _log($"[{FolderId}] erzeuge Vorschaubilder fuer {pending.Count} Bilder ...");
+
+        var done = 0;
+        var made = 0;
+
+        // Absichtlich genuegsam: das laeuft nebenher und darf einen
+        // Doppelklick des Nutzers nicht ausbremsen.
+        await Parallel.ForEachAsync(
+            pending,
+            new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
+            async (entry, token) =>
+            {
+                try
+                {
+                    if (!_index!.TryGet(entry.RelativePath, out var file)) return;
+
+                    var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, entry.Size);
+
+                    // Direkt ueber BEP, nicht ueber das Dateisystem: der
+                    // Platzhalter bleibt dabei dehydriert.
+                    var head = await FileFetcher.FetchRangeAsync(
+                        _connection!, FolderId, file, 0, wanted, _app.Parallelism, ct: token)
+                        .ConfigureAwait(false);
+
+                    var thumbnail = ExifThumbnail.TryExtract(head);
+                    if (thumbnail is not null)
+                    {
+                        _thumbnails.Save(FolderId, entry.RelativePath, thumbnail);
+                        Interlocked.Increment(ref made);
+                    }
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    _log($"  Vorschau fuer \"{entry.RelativePath}\": {ex.Message}");
+                }
+
+                var count = Interlocked.Increment(ref done);
+                if (count % 25 == 0 || count == pending.Count)
+                {
+                    ThumbnailProgress?.Invoke(count, pending.Count);
+                    _log($"[{FolderId}] Vorschaubilder: {count}/{pending.Count}");
+                }
+            });
+
+        _log($"[{FolderId}] {made} Vorschaubilder erzeugt.");
+    }
+
+    public (int Count, long Bytes) ThumbnailUsage() => _thumbnails?.Usage() ?? (0, 0);
 
     // ------------------------------------------------------------ IContentSource
 

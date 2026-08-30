@@ -41,6 +41,12 @@ public sealed class ShareConfig
     /// </summary>
     public long CacheMaxBytes { get; set; }
 
+    /// <summary>
+    /// Vorschaubilder im Hintergrund vorbereiten. Kostet je Bild einen Block
+    /// von 128 KiB -- ohne sie zeigt der Explorer nur ein Ersatzsymbol.
+    /// </summary>
+    public bool GenerateThumbnails { get; set; } = true;
+
     public bool Includes(string relativePath)
     {
         if (Included.Count == 0) return true;

@@ -9,6 +9,44 @@ var configPath = Arg("--config") ?? "synct.json";
 
 // --- Wartungsbefehle ---------------------------------------------------------
 
+// Prueft, ob sich aus dem Kopf einer Datei ein Vorschaubild gewinnen laesst.
+if (Arg("--thumbtest") is { } thumbTarget)
+{
+    var files = Directory.Exists(thumbTarget)
+        ? Directory.EnumerateFiles(thumbTarget, "*.jp*g", SearchOption.AllDirectories).Take(40).ToList()
+        : [thumbTarget];
+
+    int hit = 0, miss = 0, unread = 0, skipped = 0;
+    foreach (var file in files)
+    {
+        try
+        {
+            // Dehydrierte Platzhalter auslassen -- sie zu lesen wuerde einen
+            // Download ausloesen, und beim Testen will niemand fremde Dateien
+            // vom Server holen.
+            const uint recallOnDataAccess = 0x0040_0000;
+            if (((uint)new FileInfo(file).Attributes & recallOnDataAccess) != 0) { skipped++; continue; }
+
+            var prefix = new byte[ExifThumbnail.RequiredPrefixBytes];
+            using var stream = File.OpenRead(file);
+            var read = stream.ReadAtLeast(prefix, Math.Min(prefix.Length, (int)stream.Length), false);
+
+            var thumbnail = ExifThumbnail.TryExtract(prefix.AsSpan(0, read));
+            if (thumbnail is null) { miss++; Console.WriteLine($"  --      {Path.GetFileName(file)}"); }
+            else { hit++; Console.WriteLine($"  {thumbnail.Length,6} B  {Path.GetFileName(file)}"); }
+        }
+        catch (Exception ex)
+        {
+            unread++;
+            Console.WriteLine($"  Fehler  {Path.GetFileName(file)}: {ex.Message}");
+        }
+    }
+
+    Console.WriteLine();
+    Console.WriteLine($"{hit} mit Vorschau, {miss} ohne, {unread} nicht lesbar, {skipped} nicht lokal (uebersprungen).");
+    return 0;
+}
+
 if (args.Contains("--clean-winrt")) return CleanWinRt();
 if (Arg("--reset") is { } pathToReset) return Reset(pathToReset);
 if (Arg("--unregister") is { } pathToRelease)
