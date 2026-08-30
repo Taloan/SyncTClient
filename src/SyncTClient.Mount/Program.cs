@@ -16,6 +16,30 @@ var parallelism = int.Parse(Arg("--par") ?? "8");
 var waitSeconds = double.Parse(Arg("--wait") ?? "20");
 var cleanup = args.Contains("--cleanup");
 
+// Aufraeumen eines haengengebliebenen Sync-Roots. Der Cloud-Filter-Treiber
+// gibt Platzhalter nur frei, solange ein Anbieter verbunden ist -- also
+// verbinden wir kurz einen leeren, loeschen, und melden ab.
+if (Arg("--reset") is { } pathToReset)
+{
+    try
+    {
+        SyncRoot.Register(pathToReset, providerName: "SyncTClient", providerVersion: "0.1");
+        using (var repair = new CloudFilterMount(pathToReset, new EmptySource(), Console.WriteLine))
+        {
+            repair.Connect();
+            Directory.Delete(pathToReset, recursive: true);
+        }
+        Console.WriteLine($"Geloescht: {pathToReset}");
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Reset fehlgeschlagen: {ex.Message}");
+    }
+
+    try { SyncRoot.Unregister(pathToReset); } catch { /* schon weg */ }
+    return Directory.Exists(pathToReset) ? 1 : 0;
+}
+
 // Abmelden und beenden -- ohne das laesst sich ein Sync-Root nicht loeschen.
 if (Arg("--unregister") is { } pathToRelease)
 {
@@ -131,4 +155,14 @@ static (string Host, int Port) SplitHostPort(string address)
 {
     var colon = address.LastIndexOf(':');
     return colon < 0 ? (address, 22000) : (address[..colon], int.Parse(address[(colon + 1)..]));
+}
+
+
+/// <summary>Leere Quelle fuer den Reparaturmodus -- es soll nichts projiziert werden.</summary>
+file sealed class EmptySource : IContentSource
+{
+    public IReadOnlyList<VirtualEntry> Enumerate() => [];
+
+    public Task<byte[]> ReadAsync(string relativePath, long offset, long length, CancellationToken ct)
+        => throw new FileNotFoundException(relativePath);
 }
