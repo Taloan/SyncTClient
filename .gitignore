@@ -21,3 +21,5 @@ synct-home/
 *.fetched
 bild-p*.jpg
 synct.json
+src/SyncTClient.ThumbProvider/bin/
+src/SyncTClient.ThumbProvider/obj/

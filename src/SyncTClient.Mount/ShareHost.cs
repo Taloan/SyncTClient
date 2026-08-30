@@ -45,6 +45,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     private ShareState _state = ShareState.Gestoppt;
     private ThumbnailStore? _thumbnails;
     private Task? _thumbnailJob;
+    private string? _syncRootId;
 
     private readonly SemaphoreSlim _indexArrived = new(0);
     private TaskCompletionSource<ClusterConfig> _clusterConfig =
@@ -118,7 +119,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             await NegotiateIndexAsync(token);
             await CollectIndexAsync(token);
 
-            Project();
+            await ProjectAsync();
             State = ShareState.Bereit;
 
             // Vorschaubilder im Hintergrund -- der Nutzer soll nicht darauf warten.
@@ -271,10 +272,15 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     // ------------------------------------------------------------ Platzhalter
 
-    private void Project()
+    private async Task ProjectAsync()
     {
         _log($"[{FolderId}] registriere Sync-Root: {_config.LocalPath}");
-        SyncRoot.Register(_config.LocalPath, "SyncTClient", "0.1");
+
+        // Ueber StorageProviderSyncRootManager statt CfRegisterSyncRoot: nur
+        // dieser Weg legt den Registry-Schluessel an, an dem die
+        // Vorschau-Erweiterung haengt. Nebenbei erscheint der Ordner mit Namen
+        // und Symbol in der Navigationsleiste des Explorers.
+        _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {FolderId}", "0.1");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
         var budget = _config.Mode == ShareMode.AlwaysLocal ? 0 : _config.CacheMaxBytes;
@@ -285,9 +291,40 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _mount.ProjectPlaceholders();
 
         _thumbnails = new ThumbnailStore(Path.Combine(_app.HomeDirectory, "thumbs"));
+        RegisterThumbnailProvider();
 
         _cache.ReconcileWithDisk();
         CacheChanged?.Invoke();
+    }
+
+
+    /// <summary>
+    /// Meldet die Shell-Erweiterung an, damit der Explorer die vorbereiteten
+    /// Vorschauen zeigt statt eines Ersatzsymbols.
+    /// </summary>
+    private void RegisterThumbnailProvider()
+    {
+        if (!_config.GenerateThumbnails || _syncRootId is null || _thumbnails is null) return;
+
+        var library = ThumbnailProviderRegistration.FindLibrary();
+        if (library is null)
+        {
+            _log($"[{FolderId}] synctthumbs.dll nicht gefunden -- keine Vorschaubilder im Explorer.");
+            return;
+        }
+
+        try
+        {
+            ThumbnailProviderRegistration.RegisterClass(library, _thumbnails.Directory);
+            if (ThumbnailProviderRegistration.AttachToSyncRoot(_syncRootId))
+                _log($"[{FolderId}] Vorschau-Erweiterung angemeldet.");
+            else
+                _log($"[{FolderId}] Vorschau-Erweiterung liess sich nicht am Sync-Root eintragen.");
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Vorschau-Erweiterung: {ex.Message}");
+        }
     }
 
     private async Task ApplyModeAsync(CancellationToken ct)
@@ -360,7 +397,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
         var pending = Enumerate()
             .Where(e => !e.IsDirectory && e.Size > 0 && ExifThumbnail.LooksLikeJpeg(e.RelativePath))
-            .Where(e => !_thumbnails.Has(FolderId, e.RelativePath))
+            .Where(e => !_thumbnails.Has(LocalPathOf(e.RelativePath)))
             .ToList();
 
         if (pending.Count == 0) return;
@@ -391,7 +428,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
                     var thumbnail = ExifThumbnail.TryExtract(head);
                     if (thumbnail is not null)
                     {
-                        _thumbnails.Save(FolderId, entry.RelativePath, thumbnail);
+                        _thumbnails.Save(LocalPathOf(entry.RelativePath), thumbnail);
                         Interlocked.Increment(ref made);
                     }
                 }
@@ -411,6 +448,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
         _log($"[{FolderId}] {made} Vorschaubilder erzeugt.");
     }
+
+    private string LocalPathOf(string relativePath)
+        => Path.Combine(_config.LocalPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
     public (int Count, long Bytes) ThumbnailUsage() => _thumbnails?.Usage() ?? (0, 0);
 

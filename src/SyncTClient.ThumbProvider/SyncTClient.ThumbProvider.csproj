@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Library</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Native DLL ohne .NET-Laufzeit: sie wird in explorer.exe geladen,
+         wo keine Laufzeit vorausgesetzt werden darf. -->
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <AssemblyName>synctthumbs</AssemblyName>
+    <RootNamespace>SyncTClient.ThumbProvider</RootNamespace>
+    <Platforms>x64</Platforms>
+    <EnableComHosting>false</EnableComHosting>
+  </PropertyGroup>
+
+</Project>
