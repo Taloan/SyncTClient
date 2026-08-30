@@ -90,48 +90,17 @@ blockweise geladen und verifiziert.
 - Oberfläche als Sync-Dienst: Server verwalten, angebotene Ordner übernehmen,
   Bindungen lösen, Teilbaum-Auswahl, Übertragungen mit Fortschritt, Protokoll
 - Vorschaubilder aus dem Dateikopf gewinnen — ein Block je Bild, ohne Hydration
-- Vorschau-Anbieter, den die Shell erfolgreich aufruft: als DLL im Prozess, im
-  DLL-Surrogat und aus dem laufenden Client heraus
+- Vorschaubilder im Explorer, ohne die Dateien zu holen: 445 Dateien in einem
+  Ordner bedient, 1.032 MB logischer Inhalt, 0 Byte auf der Platte
 - Messwerkzeuge für die Vorschaukette: `--providertest`, `--cachecheck`,
   `--shellprops`, `--pin`, `--register-thumbs`
 
 **Offen:**
 
-- *Vorschaubilder im Explorer.* Die Kette funktioniert nachweislich, nur der
-  Explorer nimmt sie nicht. Über `IThumbnailCache` mit `WTS_FORCEEXTRACTION`
-  liefert unser Anbieter für einen dehydrierten Platzhalter eine echte Vorschau
-  (256x171, ohne Hydration); die Bildpunkte unterscheiden sich je Datei, es ist
-  also kein hochskaliertes Symbol. Explorer selbst fragt trotzdem nie.
-
-  Gemessen und ausgeschlossen als Ursache: MSIX (Nextcloud arbeitet
-  nachweislich unverpackt -- `GetPackageFullName` meldet
-  `APPMODEL_ERROR_NO_PACKAGE` -- und wird vom Explorer bedient); der
-  Anheft-Zustand; die Dateiattribute (auf `0x401620` angeglichen); der
-  Sync-Root-Status `IDLE`; die Ordnermarkierung mit `Desktop.ini` und
-  System-Bit; ein fehlender `CustomStateHandler`; der Trennstrich in
-  `UserSyncRoots`; ein Neustart der Shell; eine bilderarme Ansicht.
-
-  Die Shell erkennt unsere Dateien vollständig: `System.StorageProviderId` ist
-  `SyncTClient`, `System.FilePlaceholderStatus` ist 8 -- beides identisch zu
-  Nextcloud.
-
-  Der eine unerklärte Befund: `CoCreateInstance` mit `CLSCTX_LOCAL_SERVER`
-  gelingt für Nextclouds CLSID und scheitert mit `REGDB_E_CLASSNOTREG` für
-  jede von uns angelegte -- auch für eine frisch erfundene, die auf Nextclouds
-  eigene DLL mit Nextclouds eigener AppID zeigt. Registrierung, Hive und
-  Zugriffsrechte sind dabei Feld für Feld gleich. Das deutet auf einen
-  Zwischenspeicher, den COM beim Anmelden aufbaut; die Vermutung lässt sich
-  mit einem Neustart prüfen -- danach wäre der erste Griff:
-
-  ```
-  synctmount --providertest <bild> --ctx local
-  ```
-
-  Kommt dort eine Vorschau statt `0x80040154`, war es der Zwischenspeicher.
-
-  Microsofts CloudMirror-Beispiel hilft nur halb weiter: es deklariert seine
-  Handler im `Package.appxmanifest` und läuft verpackt. Übernommen haben wir
-  daraus die Laufzeit-Anmeldung mit `CoRegisterClassObject` aus dem
-  Anbieterprozess -- damit gelingt die Aktivierung über `LOCAL_SERVER`.
+- *Teilweises Laden beim Oeffnen.* Die Vorschauen kosten den Tausch der
+  Hydrations-Richtlinie auf `CF_HYDRATION_POLICY_FULL`: wer eine Datei
+  oeffnet, bekommt sie ganz statt in Stuecken. Das ist der Preis dafuer, dass
+  die Shell nicht mehr selbst hineinliest -- Nextcloud zahlt ihn genauso. Ob
+  sich beides verbinden laesst, ist offen.
 - *Schreibweg.* Der Client ist rein lesend; eigene Ordner anbieten geht nicht.
 - *CustomStateHandler* für die Spalten „Status" und „Verfügbarkeit".

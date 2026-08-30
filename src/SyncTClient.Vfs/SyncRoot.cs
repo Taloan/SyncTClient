@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Storage.CloudFilters;
 
@@ -37,17 +37,26 @@ public static class SyncRoot
             var policies = new CF_SYNC_POLICIES
             {
                 StructSize = (uint)sizeof(CF_SYNC_POLICIES),
-                // PARTIAL erlaubt teilweise gefuellte Dateien -- allein reicht
-                // das aber nicht: Windows fordert trotzdem die ganze Datei an,
-                // sobald jemand auch nur die ersten Bytes liest. Erst
-                // STREAMING_ALLOWED laesst Lesezugriffe aus einem noch
-                // unvollstaendigen Platzhalter bedienen. Das ist der
-                // Unterschied zwischen "Thumbnail kostet 128 KiB" und
-                // "Thumbnail kostet die ganze Datei".
+                // FULL statt PARTIAL, und das ist ein bewusster Tausch.
+                //
+                // PARTIAL sagt Windows zu, dass Lesezugriffe auf einen noch
+                // unvollstaendigen Platzhalter bedient werden. Klingt
+                // sparsamer -- ist es aber nicht, denn die Shell nimmt das
+                // Angebot an: fuer ein Vorschaubild liest sie die Datei
+                // einfach selbst, statt den angemeldeten Vorschau-Erzeuger zu
+                // fragen. Gemessen am Explorer: beim blossen Durchblaettern
+                // eines Ordners wuchs der Cache auf 79 MB, und der Erzeuger
+                // wurde kein einziges Mal aufgerufen.
+                //
+                // FULL heisst dagegen: jeder Zugriff kostet die ganze Datei.
+                // Damit kann die Shell nicht mehr eben mal hineinlesen und
+                // greift auf die Anbieterkette zurueck -- also auf unseren
+                // Vorrat aus den Dateikoepfen, der ohne Netz auskommt.
+                // Nextcloud macht es genauso (vfs_cfapi, CfApiWrapper).
                 Hydration = new CF_HYDRATION_POLICY
                 {
-                    Primary = CF_HYDRATION_POLICY_PRIMARY.CF_HYDRATION_POLICY_PARTIAL,
-                    Modifier = CF_HYDRATION_POLICY_MODIFIER.CF_HYDRATION_POLICY_MODIFIER_STREAMING_ALLOWED
+                    Primary = CF_HYDRATION_POLICY_PRIMARY.CF_HYDRATION_POLICY_FULL,
+                    Modifier = CF_HYDRATION_POLICY_MODIFIER.CF_HYDRATION_POLICY_MODIFIER_NONE
                 },
                 // FULL: wir legen alle Platzhalter selbst an, Windows muss
                 // Verzeichnisse nicht bei Bedarf nachfragen.
