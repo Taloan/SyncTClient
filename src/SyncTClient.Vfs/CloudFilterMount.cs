@@ -66,7 +66,8 @@ public sealed class CloudFilterMount : IDisposable
         {
             var result = PInvoke.CfConnectSyncRoot(
                 rootPtr, _callbacks, (void*)GCHandle.ToIntPtr(_self),
-                CF_CONNECT_FLAGS.CF_CONNECT_FLAG_REQUIRE_FULL_FILE_PATH,
+                CF_CONNECT_FLAGS.CF_CONNECT_FLAG_REQUIRE_FULL_FILE_PATH
+                | CF_CONNECT_FLAGS.CF_CONNECT_FLAG_REQUIRE_PROCESS_INFO,
                 keyPtr);
             Marshal.ThrowExceptionForHR(result);
         }
@@ -225,13 +226,24 @@ public sealed class CloudFilterMount : IDisposable
 
             // Die Zeiger gelten nur waehrend des Rueckrufs. Alles Noetige
             // kopieren, bevor wir asynchron werden.
+            // Wer fragt? Bei voller Hydration trotz PARTIAL-Politik ist die
+            // erste Frage, ob ueberhaupt der Nutzer der Ausloeser ist -- ein
+            // Virenscanner liest die Datei beim Oeffnen komplett.
+            var caller = info->ProcessInfo is null
+                ? "(unbekannt)"
+                : $"{Marshal.PtrToStringUni((nint)info->ProcessInfo->ImagePath.Value) ?? "?"} " +
+                  $"(PID {info->ProcessInfo->ProcessId})";
+
             var request = new HydrationRequest(
                 info->ConnectionKey,
                 info->TransferKey,
                 Marshal.PtrToStringUni((nint)info->FileIdentity) ?? string.Empty,
                 parameters->Anonymous.FetchData.RequiredFileOffset,
                 parameters->Anonymous.FetchData.RequiredLength,
-                info->FileSize);
+                info->FileSize,
+                caller,
+                parameters->Anonymous.FetchData.OptionalFileOffset,
+                parameters->Anonymous.FetchData.OptionalLength);
 
             // Der Rueckruf darf nicht blockieren -- Windows wartet sonst auf
             // uns, waehrend wir auf das Netz warten.
@@ -249,7 +261,10 @@ public sealed class CloudFilterMount : IDisposable
         string RelativePath,
         long RequiredOffset,
         long RequiredLength,
-        long FileSize);
+        long FileSize,
+        string Caller,
+        long OptionalOffset,
+        long OptionalLength);
 
     private async Task ServeAsync(HydrationRequest request)
     {
@@ -262,7 +277,10 @@ public sealed class CloudFilterMount : IDisposable
 
         try
         {
-            _log?.Invoke($"Hydration: {request.RelativePath} [{start}..{alignedEnd}) = {length} Bytes");
+            _log?.Invoke($"Hydration: {request.RelativePath}");
+            _log?.Invoke($"  verlangt [{request.RequiredOffset}..{request.RequiredOffset + request.RequiredLength}), " +
+                         $"optional [{request.OptionalOffset}..{request.OptionalOffset + request.OptionalLength})");
+            _log?.Invoke($"  Ausloeser: {request.Caller}");
 
             var data = await _source.ReadAsync(request.RelativePath, start, length, CancellationToken.None)
                 .ConfigureAwait(false);
@@ -314,7 +332,16 @@ public sealed class CloudFilterMount : IDisposable
 
         var result = PInvoke.CfExecute(&operation, &parameters);
         if (result.Failed)
-            _log?.Invoke($"CfExecute schlug fehl: 0x{(uint)result.Value:X8}");
+        {
+            // 0x8007018E: die Anfrage wurde storniert. Das ist der Normalfall,
+            // wenn ein zweiter, groesserer Abruf denselben Bereich schon
+            // gefuellt hat -- kein Fehler, nur vergebene Muehe.
+            const uint requestCanceled = 0x8007018E;
+            if ((uint)result.Value == requestCanceled)
+                _log?.Invoke("  (Anfrage storniert -- Bereich war bereits gefuellt)");
+            else
+                _log?.Invoke($"  CfExecute schlug fehl: 0x{(uint)result.Value:X8}");
+        }
     }
 
     /// <summary>
