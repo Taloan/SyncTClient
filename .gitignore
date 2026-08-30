@@ -1,0 +1,21 @@
+# Build
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.userprefs
+
+# Geraeteidentitaet -- enthaelt den privaten Schluessel, gehoert nie ins Repo
+synct-home/
+*.pfx
+*.key
+
+# Geholte Testdateien
+*.fetched
