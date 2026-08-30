@@ -21,7 +21,6 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     private CloudFilterMount? _mount;
     private HydrationCache? _cache;
     private Task? _readLoop;
-    private string? _winRtId;
 
     private readonly SemaphoreSlim _indexArrived = new(0);
     private readonly TaskCompletionSource<ClusterConfig> _clusterConfig =
@@ -194,9 +193,11 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             {
                 try
                 {
+                    // Ein einziges Byte genuegt: der Lesezugriff loest die
+                    // Hydration der ganzen Datei aus.
                     await using var stream = File.OpenRead(path);
                     var probe = new byte[1];
-                    await stream.ReadAsync(probe, token);
+                    await stream.ReadExactlyAsync(probe, token);
                 }
                 catch (Exception ex)
                 {
@@ -252,11 +253,6 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     {
         _cache?.Save();
         _mount?.Dispose();
-
-        if (_winRtId is not null)
-        {
-            try { WinRtSyncRoot.Unregister(_winRtId); } catch { /* schon weg */ }
-        }
 
         if (_connection is not null) await _connection.DisposeAsync();
         _index?.Dispose();
