@@ -57,27 +57,36 @@ public static class ThumbnailCheck
 
         try
         {
-            foreach (var size in new[] { 96, 256 })
+            // Verschiedene Flag-Kombinationen: THUMBNAILONLY verbietet jeden
+            // Rueckfall und blockiert offenbar auch den Weg ueber den
+            // Sync-Root-Anbieter -- selbst OneDrive scheitert damit. Was der
+            // Explorer wirklich schickt, faellt hier auf.
+            var probes = new (string Name, int Flags)[]
+            {
+                ("Standard        ", 0x00),
+                ("BIGGERSIZEOK    ", 0x01),
+                ("MEMORYONLY      ", 0x02),
+                ("THUMBNAILONLY   ", 0x08),
+                ("INCACHEONLY     ", 0x10),
+                ("SCALEUP         ", 0x100)
+            };
+
+            foreach (var (name, flags) in probes)
             {
                 nint bitmap = 0;
                 try
                 {
-                    // SIIGBF_THUMBNAILONLY (0x08): kein Rueckfall auf ein Symbol.
-                    // Mit 0x04 -- SIIGBF_ICONONLY -- liefert Windows immer ein
-                    // hochskaliertes Standardsymbol und ruft keinen
-                    // Vorschau-Erzeuger auf. Genau darauf bin ich
-                    // hereingefallen.
-                    factory.GetImage(new Size { Width = size, Height = size }, 0x08, out bitmap);
+                    factory.GetImage(new Size { Width = 256, Height = 256 }, flags, out bitmap);
 
-                    if (bitmap == 0) { Console.WriteLine($"  {size,3} px  ->  keine Vorschau"); continue; }
+                    if (bitmap == 0) { Console.WriteLine($"  {name} -> nichts"); continue; }
 
                     var info = new BitmapInfo();
                     GetObject(bitmap, Marshal.SizeOf<BitmapInfo>(), ref info);
-                    Console.WriteLine($"  {size,3} px  ->  Vorschau {info.Width}x{info.Height}, {info.BitsPerPixel} bpp");
+                    Console.WriteLine($"  {name} -> {info.Width}x{info.Height}, {info.BitsPerPixel} bpp");
                 }
                 catch (COMException ex)
                 {
-                    Console.WriteLine($"  {size,3} px  ->  0x{(uint)ex.HResult:X8} {ex.Message.Split('\n')[0].Trim()}");
+                    Console.WriteLine($"  {name} -> 0x{(uint)ex.HResult:X8}");
                 }
                 finally
                 {
