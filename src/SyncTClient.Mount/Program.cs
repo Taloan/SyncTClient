@@ -15,6 +15,30 @@ var root = Arg("--root");
 var parallelism = int.Parse(Arg("--par") ?? "8");
 var waitSeconds = double.Parse(Arg("--wait") ?? "20");
 var cleanup = args.Contains("--cleanup");
+var useWinRt = args.Contains("--winrt");
+
+// Alle ueber WinRT angemeldeten Roots auflisten und abmelden. Sie ueberleben
+// das Loeschen des Verzeichnisses, weil die Registrierung davon unabhaengig ist.
+if (args.Contains("--clean-winrt"))
+{
+    var found = 0;
+    foreach (var (id, rootPath) in WinRtSyncRoot.ListOwn())
+    {
+        found++;
+        var exists = Directory.Exists(rootPath) ? "" : " (Verzeichnis weg)";
+        try
+        {
+            WinRtSyncRoot.Unregister(id);
+            Console.WriteLine($"abgemeldet: {rootPath}{exists}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"bleibt:     {rootPath} -- {ex.Message}");
+        }
+    }
+    if (found == 0) Console.WriteLine("Keine eigenen WinRT-Sync-Roots angemeldet.");
+    return 0;
+}
 
 // Aufraeumen eines haengengebliebenen Sync-Roots. Der Cloud-Filter-Treiber
 // gibt Platzhalter nur frei, solange ein Anbieter verbunden ist -- also
@@ -62,6 +86,8 @@ if (address is null || target is null || folderId is null)
           --par <n>           Parallele Block-Requests (Standard: 8)
           --wait <sekunden>   Wartezeit auf den Index (Standard: 20)
           --cleanup           Beim Beenden Sync-Root abmelden und loeschen
+          --winrt             Sync-Root ueber StorageProviderSyncRootManager
+                              anmelden statt ueber CfRegisterSyncRoot
         """);
     return 2;
 }
@@ -115,7 +141,17 @@ Console.WriteLine($"{index.Count} Eintraege im Index.");
 // --- Ab hier wird es sichtbar ------------------------------------------------
 
 Console.WriteLine($"Registriere Sync-Root: {root}");
-SyncRoot.Register(root, providerName: "SyncTClient", providerVersion: "0.1");
+string? winRtId = null;
+if (useWinRt)
+{
+    winRtId = await WinRtSyncRoot.RegisterAsync(root, $"SyncT {folderId}", "0.1");
+    Console.WriteLine($"  ueber StorageProviderSyncRootManager, Id={winRtId}");
+}
+else
+{
+    SyncRoot.Register(root, providerName: "SyncTClient", providerVersion: "0.1");
+    Console.WriteLine("  ueber CfRegisterSyncRoot");
+}
 
 var source = new BepContentSource(connection, index, folderId, parallelism, Console.WriteLine);
 using var mount = new CloudFilterMount(root, source, Console.WriteLine);
@@ -137,7 +173,8 @@ mount.Dispose();
 if (cleanup)
 {
     Console.WriteLine("Melde Sync-Root ab und raeume auf.");
-    SyncRoot.Unregister(root);
+    if (winRtId is not null) WinRtSyncRoot.Unregister(winRtId);
+    else SyncRoot.Unregister(root);
     try { Directory.Delete(root, recursive: true); }
     catch (Exception ex) { Console.Error.WriteLine($"Aufraeumen: {ex.Message}"); }
 }
