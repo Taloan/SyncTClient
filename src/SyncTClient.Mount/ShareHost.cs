@@ -6,24 +6,46 @@ using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 
 namespace SyncTClient.Mount;
 
+public enum ShareState
+{
+    Gestoppt,
+    Verbindet,
+    Bereit,
+    Pausiert,
+    Fehler
+}
+
 /// <summary>
 /// Ein Share von Anfang bis Ende: Verbindung, Index, Platzhalter, Cache.
 /// </summary>
 public sealed class ShareHost : IAsyncDisposable, IContentSource
 {
+    /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS -- Inhalt liegt noch nicht lokal.</summary>
+    private const uint RecallOnDataAccess = 0x0040_0000;
+
+    /// <summary>
+    /// Wieviele Dateien gleichzeitig geholt werden. Der Rest wartet sichtbar --
+    /// ohne diese Schranke gaebe es keine Warteschlange, sondern nur einen
+    /// Schwarm, der sich gegenseitig die Bandbreite wegnimmt.
+    /// </summary>
+    private const int ConcurrentHydrations = 3;
+
     private readonly ShareConfig _config;
     private readonly AppConfig _app;
     private readonly DeviceIdentity _identity;
     private readonly Action<string> _log;
+    private readonly SemaphoreSlim _hydrationGate = new(ConcurrentHydrations);
 
     private BepConnection? _connection;
     private PersistentFolderIndex? _index;
     private CloudFilterMount? _mount;
     private HydrationCache? _cache;
     private Task? _readLoop;
+    private CancellationTokenSource? _cts;
+    private ShareState _state = ShareState.Gestoppt;
 
     private readonly SemaphoreSlim _indexArrived = new(0);
-    private readonly TaskCompletionSource<ClusterConfig> _clusterConfig =
+    private TaskCompletionSource<ClusterConfig> _clusterConfig =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ShareHost(ShareConfig config, AppConfig app, DeviceIdentity identity, Action<string> log)
@@ -34,34 +56,120 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _log = log;
     }
 
-    /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS -- Inhalt liegt noch nicht lokal.</summary>
-    private const uint RecallOnDataAccess = 0x0040_0000;
-
     public string FolderId => _config.FolderId;
 
-    public async Task StartAsync(CancellationToken ct)
+    public ShareConfig Config => _config;
+
+    public string PeerName { get; private set; } = "";
+
+    public ShareState State
     {
-        var (host, port) = SplitHostPort(_app.Peer.Address);
-        _log($"[{FolderId}] verbinde mit {host}:{port} ...");
+        get => _state;
+        private set { _state = value; StateChanged?.Invoke(value); }
+    }
 
-        _connection = await BepConnection.ConnectAsync(
-            host, port, _identity, DeviceId.Parse(_app.Peer.DeviceId), ct: ct);
-        _log($"[{FolderId}] verbunden mit {_connection.PeerHello.DeviceName}");
+    /// <summary>Angehalten: Platzhalter bleiben, aber es wird nichts mehr geholt.</summary>
+    public bool IsPaused { get; private set; }
 
-        var databasePath = Path.Combine(_app.HomeDirectory, $"index-{FolderId}.db");
-        _index = new PersistentFolderIndex(databasePath, FolderId);
+    public event Action<ShareState>? StateChanged;
+    public event Action<TransferInfo>? TransferStarted;
+    public event Action<TransferInfo>? TransferFinished;
+    public event Action? CacheChanged;
 
-        _connection.ClusterConfigReceived += cc => _clusterConfig.TrySetResult(cc);
-        _connection.IndexReceived += m => Absorb(m.Folder, m.Files);
-        _connection.IndexUpdateReceived += m => Absorb(m.Folder, m.Files);
+    public int IndexCount => _index?.Count ?? 0;
+    public long CacheUsedBytes => _cache?.UsedBytes ?? 0;
+    public long CacheMaxBytes => _cache?.MaxBytes ?? 0;
+    public int CacheFileCount => _cache?.FileCount ?? 0;
 
-        _readLoop = _connection.RunAsync(ct);
+    // ------------------------------------------------------------ Start und Stopp
 
-        await NegotiateIndexAsync(ct);
-        await CollectIndexAsync(ct);
+    public async Task StartAsync(CancellationToken ct = default)
+    {
+        if (State is ShareState.Bereit or ShareState.Verbindet) return;
 
-        Project();
-        await ApplyModeAsync(ct);
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var token = _cts.Token;
+        _clusterConfig = new TaskCompletionSource<ClusterConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
+        IsPaused = false;
+        State = ShareState.Verbindet;
+
+        try
+        {
+            var (host, port) = SplitHostPort(_app.Peer.Address);
+            _log($"[{FolderId}] verbinde mit {host}:{port} ...");
+
+            _connection = await BepConnection.ConnectAsync(
+                host, port, _identity, DeviceId.Parse(_app.Peer.DeviceId), ct: token);
+            PeerName = _connection.PeerHello.DeviceName;
+            _log($"[{FolderId}] verbunden mit {PeerName}");
+
+            var databasePath = Path.Combine(_app.HomeDirectory, $"index-{FolderId}.db");
+            _index ??= new PersistentFolderIndex(databasePath, FolderId);
+
+            _connection.ClusterConfigReceived += cc => _clusterConfig.TrySetResult(cc);
+            _connection.IndexReceived += m => Absorb(m.Folder, m.Files);
+            _connection.IndexUpdateReceived += m => Absorb(m.Folder, m.Files);
+
+            _readLoop = _connection.RunAsync(token);
+
+            await NegotiateIndexAsync(token);
+            await CollectIndexAsync(token);
+
+            Project();
+            State = ShareState.Bereit;
+
+            await ApplyModeAsync(token);
+        }
+        catch (Exception ex)
+        {
+            State = ShareState.Fehler;
+            _log($"[{FolderId}] Fehler: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>Trennt die Verbindung und meldet den Sync-Root ab. Der Index bleibt.</summary>
+    public async Task StopAsync()
+    {
+        if (State == ShareState.Gestoppt) return;
+
+        _cache?.Save();
+        _mount?.Dispose();
+        _mount = null;
+
+        if (_cts is not null) await _cts.CancelAsync();
+
+        if (_connection is not null)
+        {
+            await _connection.DisposeAsync();
+            _connection = null;
+        }
+
+        _readLoop = null;
+        IsPaused = false;
+        State = ShareState.Gestoppt;
+        _log($"[{FolderId}] gestoppt.");
+    }
+
+    /// <summary>
+    /// Haelt an, ohne die Platzhalter aufzugeben. Anfragen werden abgewiesen
+    /// statt liegengelassen -- ein wartender Zugriff wuerde den Explorer
+    /// blockieren, bis Windows von selbst aufgibt.
+    /// </summary>
+    public void Pause()
+    {
+        if (State != ShareState.Bereit) return;
+        IsPaused = true;
+        State = ShareState.Pausiert;
+        _log($"[{FolderId}] angehalten -- Zugriffe werden abgewiesen.");
+    }
+
+    public void Resume()
+    {
+        if (State != ShareState.Pausiert) return;
+        IsPaused = false;
+        State = ShareState.Bereit;
+        _log($"[{FolderId}] fortgesetzt.");
     }
 
     // ------------------------------------------------------------ Index
@@ -131,7 +239,10 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         // Geaenderte Dateien duerfen nicht mit alten Bytes im Cache bleiben.
         // Das ist Korrektheit, nicht Cache-Politik.
         if (changed.Count > 0 && _cache is not null)
-            _cache.Invalidate(changed.Where(_config.Includes));
+        {
+            if (_cache.Invalidate(changed.Where(_config.Includes)) > 0)
+                CacheChanged?.Invoke();
+        }
     }
 
     private async Task CollectIndexAsync(CancellationToken ct)
@@ -147,7 +258,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
         if (_index!.Count == 0)
             throw new InvalidOperationException(
-                $"[{FolderId}] kein Index empfangen -- Geraet freigegeben und Ordner geteilt?");
+                $"kein Index empfangen -- Geraet freigegeben und Ordner geteilt?");
 
         _log($"[{FolderId}] {_index.Count} Eintraege im Index.");
     }
@@ -168,6 +279,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _mount.ProjectPlaceholders();
 
         _cache.ReconcileWithDisk();
+        CacheChanged?.Invoke();
     }
 
     private async Task ApplyModeAsync(CancellationToken ct)
@@ -212,7 +324,12 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>Haelt das Cache-Budget ein; wird regelmaessig aufgerufen.</summary>
-    public Task EnforceBudgetAsync() => _cache?.EnforceBudgetAsync() ?? Task.CompletedTask;
+    public async Task EnforceBudgetAsync()
+    {
+        if (_cache is null) return;
+        await _cache.EnforceBudgetAsync();
+        CacheChanged?.Invoke();
+    }
 
     public string Stats()
         => _cache is null
@@ -232,31 +349,64 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     public async Task<byte[]> ReadAsync(string relativePath, long offset, long length, CancellationToken ct)
     {
+        if (IsPaused)
+            throw new InvalidOperationException($"\"{FolderId}\" ist angehalten.");
+
         if (!_index!.TryGet(relativePath, out var file))
             throw new FileNotFoundException($"\"{relativePath}\" ist nicht im Index.");
 
-        var data = await FileFetcher.FetchRangeAsync(
-            _connection!, FolderId, file, offset, length, _app.Parallelism, ct: ct);
+        var transfer = new TransferInfo(FolderId, relativePath, length);
+        TransferStarted?.Invoke(transfer);
 
-        _cache?.NoteHydrated(relativePath, data.Length);
+        // Ab hier steht der Auftrag in der Warteschlange, bis ein Platz frei wird.
+        await _hydrationGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            transfer.State = TransferState.Laeuft;
 
-        // Nach dem Zuwachs pruefen, ob das Budget noch stimmt -- im Hintergrund,
-        // damit der Hydrations-Rueckruf nicht darauf wartet.
-        _ = Task.Run(() => EnforceBudgetAsync(), CancellationToken.None);
+            var blockSize = Math.Max(file.BlockSize, 1);
+            var progress = new Progress<int>(blocks =>
+                transfer.DoneBytes = Math.Min((long)blocks * blockSize, length));
 
-        return data;
+            var data = await FileFetcher.FetchRangeAsync(
+                _connection!, FolderId, file, offset, length, _app.Parallelism, progress, ct)
+                .ConfigureAwait(false);
+
+            transfer.DoneBytes = data.Length;
+            transfer.State = TransferState.Fertig;
+
+            _cache?.NoteHydrated(relativePath, data.Length);
+            CacheChanged?.Invoke();
+
+            // Nach dem Zuwachs pruefen, ob das Budget noch stimmt -- im
+            // Hintergrund, damit der Hydrations-Rueckruf nicht darauf wartet.
+            _ = Task.Run(EnforceBudgetAsync, CancellationToken.None);
+
+            return data;
+        }
+        catch (Exception ex)
+        {
+            transfer.State = TransferState.Fehler;
+            transfer.Error = ex.Message;
+            throw;
+        }
+        finally
+        {
+            _hydrationGate.Release();
+            TransferFinished?.Invoke(transfer);
+        }
     }
 
     // ------------------------------------------------------------ Ende
 
     public async ValueTask DisposeAsync()
     {
-        _cache?.Save();
-        _mount?.Dispose();
-
-        if (_connection is not null) await _connection.DisposeAsync();
+        await StopAsync();
         _index?.Dispose();
+        _index = null;
         _indexArrived.Dispose();
+        _hydrationGate.Dispose();
+        _cts?.Dispose();
     }
 
     private static (string Host, int Port) SplitHostPort(string address)

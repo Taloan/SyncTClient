@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using SyncTClient.Bep;
 using SyncTClient.Mount;
 
@@ -8,8 +10,17 @@ namespace SyncTClient.Gui;
 
 public partial class MainWindow : Window
 {
+    /// <summary>Wieviele abgeschlossene Übertragungen sichtbar bleiben.</summary>
+    private const int KeepFinished = 25;
+
     private readonly string _configPath;
+    private readonly ObservableCollection<TransferInfo> _transfers = [];
+    private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(2) };
+
     private AppConfig _config = new();
+    private DeviceIdentity? _identity;
+    private readonly Dictionary<string, ShareHost> _hosts = new(StringComparer.Ordinal);
+
     private ShareConfig? _current;
     private FolderNode? _tree;
     private bool _loading;
@@ -18,12 +29,19 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Die Oberflaeche startet im eigenen Ausgabeverzeichnis, die
-        // Konfiguration liegt aber beim Client. Von dort aus nach oben suchen.
+        // Meldungen kommen aus dem Threadpool; Bindungen wollen den
+        // Oberflaechen-Thread.
+        TransferInfo.UiContext = SynchronizationContext.Current;
+
+        TransferList.ItemsSource = _transfers;
+        _refresh.Tick += (_, _) => RefreshStatus();
+        _refresh.Start();
+
         _configPath = FindConfig() ?? Path.GetFullPath("synct.json");
         ConfigPathBox.Text = _configPath;
 
         Load();
+        UpdateButtons();
     }
 
     private static string? FindConfig()
@@ -37,19 +55,24 @@ public partial class MainWindow : Window
         return null;
     }
 
+    private ShareHost? CurrentHost
+        => _current is not null && _hosts.TryGetValue(_current.FolderId, out var host) ? host : null;
+
     // ------------------------------------------------------------ Laden
 
     private void Load()
     {
         if (!File.Exists(_configPath))
         {
-            Status($"Keine Konfiguration gefunden. Erst \"synctmount --init\" ausführen.");
+            Status("Keine Konfiguration gefunden. Erst \"synctmount --init\" ausführen.");
             return;
         }
 
         try
         {
             _config = AppConfig.Load(_configPath);
+            _identity = DeviceIdentity.LoadOrCreate(
+                Path.Combine(Path.GetDirectoryName(_configPath)!, _config.HomeDirectory));
         }
         catch (Exception ex)
         {
@@ -57,14 +80,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        ShareList.ItemsSource = _config.Shares;
-        if (_config.Shares.Count > 0) ShareList.SelectedIndex = 0;
-        Status($"{_config.Shares.Count} Freigabe(n) geladen.");
+        ShareBox.ItemsSource = _config.Shares;
+        if (_config.Shares.Count > 0) ShareBox.SelectedIndex = 0;
+        Status($"Bereit. Eigene Device-ID: {_identity!.Id}");
     }
 
     private void OnShareSelected(object sender, SelectionChangedEventArgs e)
     {
-        _current = ShareList.SelectedItem as ShareConfig;
+        _current = ShareBox.SelectedItem as ShareConfig;
         DetailPanel.IsEnabled = _current is not null;
         if (_current is null) return;
 
@@ -76,7 +99,181 @@ public partial class MainWindow : Window
         _loading = false;
 
         LoadTree(_current);
+        RefreshStatus();
+        UpdateButtons();
     }
+
+    // ------------------------------------------------------------ Steuerung
+
+    private async void OnStart(object sender, RoutedEventArgs e)
+    {
+        if (_current is null || _identity is null) return;
+
+        var host = CurrentHost;
+        if (host is null)
+        {
+            var home = Path.Combine(Path.GetDirectoryName(_configPath)!, _config.HomeDirectory);
+            var app = new AppConfig
+            {
+                HomeDirectory = home,
+                Peer = _config.Peer,
+                Parallelism = _config.Parallelism,
+                Shares = _config.Shares
+            };
+
+            host = new ShareHost(_current, app, _identity, AppendLog);
+            host.StateChanged += _ => Dispatcher.Invoke(() => { UpdateButtons(); RefreshStatus(); });
+            host.TransferStarted += t => Dispatcher.Invoke(() => AddTransfer(t));
+            host.TransferFinished += _ => Dispatcher.Invoke(TrimTransfers);
+            host.CacheChanged += () => Dispatcher.Invoke(RefreshStatus);
+            _hosts[_current.FolderId] = host;
+        }
+
+        if (host.State == ShareState.Pausiert) { host.Resume(); return; }
+
+        SetBusy(true);
+        try
+        {
+            await host.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Status($"Start fehlgeschlagen: {ex.Message}");
+        }
+        finally
+        {
+            SetBusy(false);
+            UpdateButtons();
+            RefreshStatus();
+        }
+    }
+
+    private void OnPause(object sender, RoutedEventArgs e)
+    {
+        var host = CurrentHost;
+        if (host is null) return;
+
+        if (host.State == ShareState.Pausiert) host.Resume();
+        else host.Pause();
+
+        UpdateButtons();
+        RefreshStatus();
+    }
+
+    private async void OnStop(object sender, RoutedEventArgs e)
+    {
+        var host = CurrentHost;
+        if (host is null) return;
+
+        SetBusy(true);
+        try { await host.StopAsync(); }
+        catch (Exception ex) { Status($"Stoppen fehlgeschlagen: {ex.Message}"); }
+        finally { SetBusy(false); UpdateButtons(); RefreshStatus(); }
+    }
+
+    private void SetBusy(bool busy)
+    {
+        StartButton.IsEnabled = PauseButton.IsEnabled = StopButton.IsEnabled = !busy;
+        Cursor = busy ? System.Windows.Input.Cursors.Wait : null;
+    }
+
+    private void UpdateButtons()
+    {
+        var state = CurrentHost?.State ?? ShareState.Gestoppt;
+
+        StartButton.IsEnabled = state is ShareState.Gestoppt or ShareState.Fehler or ShareState.Pausiert;
+        PauseButton.IsEnabled = state is ShareState.Bereit or ShareState.Pausiert;
+        StopButton.IsEnabled = state is not ShareState.Gestoppt;
+
+        PauseButton.Content = state == ShareState.Pausiert ? "Fortsetzen" : "Anhalten";
+    }
+
+    // ------------------------------------------------------------ Anzeige
+
+    private void AddTransfer(TransferInfo transfer)
+    {
+        _transfers.Insert(0, transfer);
+        TrimTransfers();
+    }
+
+    private void TrimTransfers()
+    {
+        // Laufende bleiben, von den abgeschlossenen nur die letzten paar.
+        var finished = _transfers
+            .Where(t => t.State is TransferState.Fertig or TransferState.Fehler)
+            .Skip(KeepFinished)
+            .ToList();
+
+        foreach (var stale in finished) _transfers.Remove(stale);
+        RefreshQueueText();
+    }
+
+    private void RefreshQueueText()
+    {
+        var running = _transfers.Count(t => t.State == TransferState.Laeuft);
+        var waiting = _transfers.Count(t => t.State == TransferState.Wartet);
+        QueueText.Text = running + waiting == 0
+            ? "nichts unterwegs"
+            : $"{running} aktiv, {waiting} in der Warteschlange";
+    }
+
+    private void RefreshStatus()
+    {
+        var host = CurrentHost;
+
+        if (host is null)
+        {
+            StateText.Text = "Gestoppt";
+            StateDetail.Text = _current is null ? "" : $"{_current.LocalPath}";
+            CacheText.Text = "—";
+            CacheBar.Value = 0;
+            IndexText.Text = "";
+            RefreshQueueText();
+            return;
+        }
+
+        StateText.Text = host.State switch
+        {
+            ShareState.Verbindet => "Verbindet ...",
+            ShareState.Bereit => "Bereit",
+            ShareState.Pausiert => "Angehalten",
+            ShareState.Fehler => "Fehler",
+            _ => "Gestoppt"
+        };
+
+        StateDetail.Text = host.State == ShareState.Bereit || host.State == ShareState.Pausiert
+            ? $"{host.PeerName} · {host.Config.LocalPath}"
+            : host.Config.LocalPath;
+
+        var used = host.CacheUsedBytes;
+        var max = host.CacheMaxBytes;
+
+        if (max > 0)
+        {
+            CacheBar.Value = Math.Min(100, 100.0 * used / max);
+            CacheText.Text = $"{host.CacheFileCount} Dateien · " +
+                             $"{used / (1024.0 * 1024.0):0.#} von {max / (1024.0 * 1024.0):0.#} MB";
+        }
+        else
+        {
+            CacheBar.Value = 0;
+            CacheText.Text = $"{host.CacheFileCount} Dateien · {used / (1024.0 * 1024.0):0.#} MB (kein Budget)";
+        }
+
+        IndexText.Text = host.IndexCount > 0 ? $"{host.IndexCount} Einträge im Index" : "";
+        RefreshQueueText();
+    }
+
+    private void AppendLog(string line)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            LogBox.AppendText($"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
+            LogBox.ScrollToEnd();
+        });
+    }
+
+    // ------------------------------------------------------------ Baum
 
     private void LoadTree(ShareConfig share)
     {
@@ -88,13 +285,13 @@ public partial class MainWindow : Window
 
         if (!File.Exists(databasePath))
         {
-            TreeStatus.Text = "Noch kein Index — den Client einmal laufen lassen.";
+            TreeStatus.Text = "Noch kein Index — die Freigabe einmal starten.";
             return;
         }
 
         try
         {
-            // WAL-Modus erlaubt das Mitlesen, auch waehrend der Client laeuft.
+            // WAL-Modus erlaubt das Mitlesen, auch waehrend die Freigabe laeuft.
             using var index = new PersistentFolderIndex(databasePath, share.FolderId);
             var entries = index.EnumerateLight()
                 .Select(e => (e.Name, e.Size, e.IsDirectory))
@@ -126,7 +323,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // ------------------------------------------------------------ Bedienung
+    // ------------------------------------------------------------ Einstellungen
 
     private void OnModeChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -189,10 +386,8 @@ public partial class MainWindow : Window
         try
         {
             _config.Save(_configPath);
-            var scope = _current.Included.Count == 0
-                ? "alles"
-                : $"{_current.Included.Count} Zweig(e)";
-            Status($"Gespeichert — {scope} ausgewählt. Der Client übernimmt es beim nächsten Start.");
+            var scope = _current.Included.Count == 0 ? "alles" : $"{_current.Included.Count} Zweig(e)";
+            Status($"Gespeichert — {scope} ausgewählt. Wirksam nach Stoppen und Starten der Freigabe.");
         }
         catch (Exception ex)
         {
@@ -210,4 +405,19 @@ public partial class MainWindow : Window
     }
 
     private void Status(string message) => StatusBar.Text = message;
+
+    // ------------------------------------------------------------ Ende
+
+    private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        _refresh.Stop();
+
+        // Ohne sauberes Abmelden bleiben die Platzhalter zurueck, ohne dass
+        // jemand sie bedienen koennte.
+        foreach (var host in _hosts.Values)
+        {
+            try { await host.DisposeAsync(); }
+            catch { /* beim Beenden ist ein Fehler hier belanglos */ }
+        }
+    }
 }
