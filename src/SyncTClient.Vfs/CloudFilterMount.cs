@@ -99,19 +99,29 @@ public sealed class CloudFilterMount : IDisposable
             }
         }
 
-        var children = entries
-            .Where(e => !string.IsNullOrEmpty(e.RelativePath))
+        // Verzeichnisse werden echte Verzeichnisse, keine Platzhalter. Sie
+        // haben keinen Inhalt zum Nachladen, und ein frisch angelegter
+        // Verzeichnis-Platzhalter nimmt nicht zuverlaessig sofort Kinder auf --
+        // CfCreatePlaceholders quittiert das mit ERROR_CLOUD_FILE_METADATA_CORRUPT
+        // fuer den gesamten Stapel. Dass Windows uns nicht nach Population
+        // fragt, regelt die Politik des Sync-Roots (Population = FULL).
+        foreach (var directory in directories.OrderBy(d => d.Count(c => c == '/')))
+        {
+            if (string.IsNullOrEmpty(directory)) continue;
+            Directory.CreateDirectory(
+                Path.Combine(_rootPath, directory.Replace('/', Path.DirectorySeparatorChar)));
+        }
+
+        var files = entries
+            .Where(e => !e.IsDirectory && !string.IsNullOrEmpty(e.RelativePath))
             .GroupBy(e => ParentOf(e.RelativePath))
             .ToDictionary(g => g.Key, g => g.ToList());
 
         var created = 0;
-        foreach (var directory in directories.OrderBy(d => d.Count(c => c == '/')).ThenBy(d => d, StringComparer.Ordinal))
-        {
-            if (!children.TryGetValue(directory, out var kids) || kids.Count == 0) continue;
+        foreach (var (directory, kids) in files)
             created += CreatePlaceholders(directory, kids);
-        }
 
-        _log?.Invoke($"{created} Platzhalter angelegt (0 Bytes belegt).");
+        _log?.Invoke($"{directories.Count - 1} Verzeichnisse, {created} Platzhalter angelegt (0 Bytes belegt).");
     }
 
     private unsafe int CreatePlaceholders(string directory, List<VirtualEntry> entries)
@@ -161,39 +171,39 @@ public sealed class CloudFilterMount : IDisposable
                     },
                     // MARK_IN_SYNC: der Eintrag gilt sofort als abgeglichen,
                     // sonst zeigt der Explorer dauerhaft ein Sync-Symbol.
-                    // DISABLE_ON_DEMAND_POPULATION: wir fuellen Verzeichnisse
-                    // selbst, Windows muss nicht danach fragen.
+                    //
+                    // DISABLE_ON_DEMAND_POPULATION wird hier bewusst NICHT
+                    // gesetzt: es erklaert ein Verzeichnis fuer vollstaendig
+                    // befuellt. Da wir die Kinder erst danach anlegen, wertet
+                    // Windows das als Widerspruch und liefert fuer den ganzen
+                    // Stapel ERROR_CLOUD_FILE_METADATA_CORRUPT. Dass Windows
+                    // uns trotzdem nicht nach Population fragt, regelt die
+                    // Politik des Sync-Roots (Population = FULL).
                     Flags = CF_PLACEHOLDER_CREATE_FLAGS.CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC
-                          | (entry.IsDirectory
-                                ? CF_PLACEHOLDER_CREATE_FLAGS.CF_PLACEHOLDER_CREATE_FLAG_DISABLE_ON_DEMAND_POPULATION
-                                : CF_PLACEHOLDER_CREATE_FLAGS.CF_PLACEHOLDER_CREATE_FLAG_NONE)
                 };
             }
 
             uint processed;
+            HRESULT callResult;
             fixed (CF_PLACEHOLDER_CREATE_INFO* infoPtr = infos)
             fixed (char* basePtr = baseDirectory)
             {
-                PInvoke.CfCreatePlaceholders(
+                callResult = PInvoke.CfCreatePlaceholders(
                     basePtr, infoPtr, (uint)infos.Length,
                     CF_CREATE_FLAGS.CF_CREATE_FLAG_NONE, &processed);
             }
 
-            // CfAPI legt das Ergebnis je Eintrag ab. Einzelne Fehlschlaege sind
-            // hinnehmbar (etwa weil der Platzhalter schon existiert) -- aber wir
-            // wollen wissen, welche und warum.
-            var failures = new Dictionary<uint, (int Count, string Sample)>();
-            for (var i = 0; i < infos.Length; i++)
+            // CfAPI haelt beim ersten fehlerhaften Eintrag an. Nicht angefasste
+            // Eintraege behalten Result = S_OK, sind also nicht von Erfolgen zu
+            // unterscheiden -- allein EntriesProcessed sagt, wie weit es kam.
+            if (processed < entries.Count)
             {
-                if (!infos[i].Result.Failed) continue;
-                var code = (uint)infos[i].Result.Value;
-                failures[code] = failures.TryGetValue(code, out var seen)
-                    ? (seen.Count + 1, seen.Sample)
-                    : (1, entries[i].RelativePath);
+                var stuck = entries[(int)processed];
+                var code = (uint)infos[(int)processed].Result.Value;
+                _log?.Invoke($"  ABBRUCH in \"{directory}\" nach {processed}/{entries.Count}: " +
+                             $"\"{stuck.RelativePath}\" -> Eintrag 0x{code:X8}, " +
+                             $"Aufruf 0x{(uint)callResult.Value:X8}");
             }
-
-            foreach (var (code, (count, sample)) in failures)
-                _log?.Invoke($"  0x{code:X8} bei {count} Eintraegen in \"{directory}\", z.B. \"{sample}\"");
 
             return (int)processed;
         }
