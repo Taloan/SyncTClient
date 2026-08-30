@@ -1,0 +1,105 @@
+<Window x:Class="SyncTClient.Gui.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SyncTClient — Einstellungen"
+        Height="680" Width="980"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <!-- Konfigurationsdatei -->
+    <DockPanel Grid.Row="0" Margin="0,0,0,10">
+      <Label DockPanel.Dock="Left" Content="Konfiguration:" VerticalAlignment="Center" />
+      <Button DockPanel.Dock="Right" Content="Speichern" Click="OnSave" IsDefault="True" />
+      <Button DockPanel.Dock="Right" Content="Neu laden" Click="OnReload" />
+      <TextBox x:Name="ConfigPathBox" Margin="8,0,8,0" VerticalAlignment="Center" IsReadOnly="True" />
+    </DockPanel>
+
+    <!-- Shares links, Einstellungen rechts -->
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="220" />
+        <ColumnDefinition Width="12" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <DockPanel Grid.Column="0">
+        <Label DockPanel.Dock="Top" Content="Freigaben" />
+        <ListBox x:Name="ShareList" SelectionChanged="OnShareSelected"
+                 DisplayMemberPath="FolderId" />
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" Width="4" HorizontalAlignment="Center"
+                    VerticalAlignment="Stretch" Background="Transparent" />
+
+      <Grid Grid.Column="2" x:Name="DetailPanel" IsEnabled="False">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Grundeinstellungen -->
+        <StackPanel Grid.Row="0">
+          <Label Content="Lokaler Pfad" />
+          <TextBox x:Name="LocalPathBox" />
+
+          <Label Content="Modus" />
+          <ComboBox x:Name="ModeBox" SelectionChanged="OnModeChanged">
+            <ComboBoxItem Content="Bei Bedarf herunterladen (Platzhalter)" Tag="OnDemand" />
+            <ComboBoxItem Content="Vollständig lokal bereithalten" Tag="AlwaysLocal" />
+          </ComboBox>
+
+          <StackPanel x:Name="CachePanel" Orientation="Horizontal">
+            <StackPanel Width="200">
+              <Label Content="Cache-Budget (MB)" />
+              <TextBox x:Name="CacheBudgetBox" />
+            </StackPanel>
+            <TextBlock x:Name="CacheHint" VerticalAlignment="Bottom" Margin="12,0,0,12"
+                       Foreground="Gray" TextWrapping="Wrap" Width="420"
+                       Text="Ist das Budget überschritten, wird freigegeben, was am längsten nicht geöffnet wurde. Angeheftete Dateien bleiben." />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- Baum -->
+        <DockPanel Grid.Row="1" Margin="0,8,0,4">
+          <Label DockPanel.Dock="Left" Content="Was soll überhaupt erscheinen?" />
+          <Button DockPanel.Dock="Right" Content="Nichts" Click="OnSelectNone" Margin="0" />
+          <Button DockPanel.Dock="Right" Content="Alles" Click="OnSelectAll" />
+          <TextBlock x:Name="TreeStatus" VerticalAlignment="Center" Margin="10,0"
+                     Foreground="Gray" />
+        </DockPanel>
+
+        <Border Grid.Row="2" BorderBrush="#CCC" BorderThickness="1">
+          <TreeView x:Name="FolderTree" BorderThickness="0">
+            <TreeView.ItemContainerStyle>
+              <Style TargetType="TreeViewItem">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+              </Style>
+            </TreeView.ItemContainerStyle>
+            <TreeView.ItemTemplate>
+              <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                <StackPanel Orientation="Horizontal" Margin="0,1">
+                  <!-- IsThreeState bleibt aus: der unbestimmte Zustand ergibt
+                       sich aus den Kindern, anklicken laesst er sich nicht. -->
+                  <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                            IsThreeState="False" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Summary}" Margin="10,0,0,0"
+                             Foreground="Gray" VerticalAlignment="Center" />
+                </StackPanel>
+              </HierarchicalDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </Border>
+      </Grid>
+    </Grid>
+
+    <TextBlock x:Name="StatusBar" Grid.Row="2" Margin="0,10,0,0" Foreground="Gray" />
+  </Grid>
+</Window>

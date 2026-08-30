@@ -52,6 +52,8 @@ src/SyncTClient.Bep/       Protokollbibliothek (plattformunabhängig)
   FileFetcher.cs           blockweises Laden mit Hash-Prüfung
 
 src/SyncTClient.Probe/     Konsolenwerkzeug zum Nachweis
+src/SyncTClient.Mount/     der Client: hängt Freigaben als Platzhalter ein
+src/SyncTClient.Gui/       Einstellungen: Modus, Cache-Budget, Auswahlbaum
 ```
 
 Später kommt `src/SyncTClient.Vfs/` dazu: der CfAPI-Provider, der den Index als

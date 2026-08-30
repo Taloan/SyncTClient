@@ -9,6 +9,15 @@
     ]
   },
   {
+    "Name": "Einstellungen (GUI)",
+    "Projects": [
+      {
+        "Path": "src\\SyncTClient.Gui\\SyncTClient.Gui.csproj",
+        "Action": "Start"
+      }
+    ]
+  },
+  {
     "Name": "Diagnose (Probe)",
     "Projects": [
       {
