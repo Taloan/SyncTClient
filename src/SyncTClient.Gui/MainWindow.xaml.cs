@@ -105,31 +105,46 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------ Steuerung
 
-    private async void OnStart(object sender, RoutedEventArgs e)
+    private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        if (_current is null || _identity is null) return;
+        // Die Oberflaeche ist der Sync-Dienst: wer sie oeffnet, will in aller
+        // Regel, dass es laeuft. Beendet wird beim Schliessen des Fensters.
+        foreach (var share in _config.Shares.Where(s => s.AutoStart).ToList())
+            await StartShareAsync(share);
+    }
 
-        var host = CurrentHost;
-        if (host is null)
+    private ShareHost EnsureHost(ShareConfig share)
+    {
+        if (_hosts.TryGetValue(share.FolderId, out var existing)) return existing;
+
+        var home = Path.Combine(Path.GetDirectoryName(_configPath)!, _config.HomeDirectory);
+        var app = new AppConfig
         {
-            var home = Path.Combine(Path.GetDirectoryName(_configPath)!, _config.HomeDirectory);
-            var app = new AppConfig
-            {
-                HomeDirectory = home,
-                Peer = _config.Peer,
-                Parallelism = _config.Parallelism,
-                Shares = _config.Shares
-            };
+            HomeDirectory = home,
+            Peer = _config.Peer,
+            Parallelism = _config.Parallelism,
+            Shares = _config.Shares
+        };
 
-            host = new ShareHost(_current, app, _identity, AppendLog);
-            host.StateChanged += _ => Dispatcher.Invoke(() => { UpdateButtons(); RefreshStatus(); });
-            host.TransferStarted += t => Dispatcher.Invoke(() => AddTransfer(t));
-            host.TransferFinished += _ => Dispatcher.Invoke(TrimTransfers);
-            host.CacheChanged += () => Dispatcher.Invoke(RefreshStatus);
-            _hosts[_current.FolderId] = host;
-        }
+        var host = new ShareHost(share, app, _identity!, AppendLog);
+        host.StateChanged += _ => Dispatcher.Invoke(() => { UpdateButtons(); RefreshStatus(); });
+        host.TransferStarted += t => Dispatcher.Invoke(() => AddTransfer(t));
+        host.TransferFinished += _ => Dispatcher.Invoke(TrimTransfers);
+        host.CacheChanged += () => Dispatcher.Invoke(RefreshStatus);
+        host.ThumbnailProgress += (done, total) => Dispatcher.Invoke(() =>
+            Status($"Vorschaubilder: {done} von {total}"));
 
+        _hosts[share.FolderId] = host;
+        return host;
+    }
+
+    private async Task StartShareAsync(ShareConfig share)
+    {
+        if (_identity is null) return;
+
+        var host = EnsureHost(share);
         if (host.State == ShareState.Pausiert) { host.Resume(); return; }
+        if (host.State is ShareState.Bereit or ShareState.Verbindet) return;
 
         SetBusy(true);
         try
@@ -138,7 +153,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Status($"Start fehlgeschlagen: {ex.Message}");
+            Status($"[{share.FolderId}] Start fehlgeschlagen: {ex.Message}");
         }
         finally
         {
@@ -146,6 +161,11 @@ public partial class MainWindow : Window
             UpdateButtons();
             RefreshStatus();
         }
+    }
+
+    private async void OnStart(object sender, RoutedEventArgs e)
+    {
+        if (_current is not null) await StartShareAsync(_current);
     }
 
     private void OnPause(object sender, RoutedEventArgs e)
