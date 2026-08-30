@@ -79,20 +79,26 @@ blockweise geladen und verifiziert.
 
 ## Stand
 
-- [x] BEP-Verbindung, Hello, ClusterConfig
-- [x] Index empfangen samt Blocklisten
-- [x] Blöcke gezielt anfordern, Hashes prüfen
-- [x] gegen Syncthing v2.1.3 verifiziert: 263 Blöcke, gleicher SHA-256 wie
-      der Go-Vorläufer, 32 MB/s ab 8 parallelen Requests
-- [x] Index persistiert in SQLite, mit Wiederaufnahme: beim Neustart nennt der
-      Client seine höchste Sequenznummer und bekommt nur Änderungen
-- [x] Cache mit Budget, Verdrängung nach letztem Zugriff, Invalidierung bei
-      Änderung; angeheftete Dateien bleiben verschont
-- [x] Konfigurationsdatei mit Teilbaum-Auswahl und Modus je Share
-- [x] CfAPI-Platzhalter im Explorer: 35 Verzeichnisse und 544 Platzhalter aus
-      579 Index-Einträgen; 994,7 MB logisch, 252 KB auf der Platte. Lesezugriff
-      hydriert und liefert den erwarteten Hash
-- [ ] Volle Hydration beim Öffnen vermeiden — partielle Hydration funktioniert
-      nachweislich, aber der Virenscanner liest die Datei beim Öffnen komplett
-- [ ] Schreibweg: lokale Änderungen ankündigen und ausliefern
-- [ ] Umbenennen, Löschen und Konflikte
+**Läuft:**
+
+- BEP-Protokoll in C#: Rahmung, Hello, Geräte-ID, Index, blockweiser Abruf
+- Platzhalter im Explorer über die Cloud-Filter-API, Inhalte beim Zugriff
+- Überlagerungssymbole — Wolke, Kringel, grüner Haken — über den Anheft-Zustand
+- Cache mit Budget, Verdrängung nach letztem Zugriff, Invalidierung bei Änderung
+- Index in SQLite mit Wiederaufnahme: beim Neustart kommen nur Änderungen
+- Eine Verbindung je Gegenstelle, die alle ihre Ordner trägt
+- Oberfläche als Sync-Dienst: Server verwalten, angebotene Ordner übernehmen,
+  Bindungen lösen, Teilbaum-Auswahl, Übertragungen mit Fortschritt, Protokoll
+- Vorschaubilder aus dem Dateikopf gewinnen — ein Block je Bild, ohne Hydration
+
+**Offen:**
+
+- *Vorschaubilder im Explorer.* Der Vorrat lässt sich erzeugen, aber Windows
+  fragt den registrierten Anbieter nicht. Geprüft und ausgeschlossen: DLL im
+  Prozess wie eigenständiges Programm, `IInitializeWithFile` wie
+  `IInitializeWithItem`, Sync-Root verbunden wie getrennt, Shell neu gestartet,
+  Zwischenspeicher geleert. Die Quellenlage widerspricht sich: Seafiles
+  Entwickler hält MSIX für zwingend, Simon Mourier nennt den unverpackten Weg,
+  den wir gehen. Nächster Schritt wäre ein Vergleich mit dem CloudMirror-Beispiel.
+- *Schreibweg.* Der Client ist rein lesend; eigene Ordner anbieten geht nicht.
+- *CustomStateHandler* für die Spalten „Status" und „Verfügbarkeit".
