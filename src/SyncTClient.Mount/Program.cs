@@ -50,6 +50,9 @@ if (Arg("--thumbtest") is { } thumbTarget)
 // Fragt Windows nach der Vorschau -- pruet die Shell-Erweiterung von aussen.
 if (Arg("--thumbcheck") is { } checkTarget) return ThumbnailCheck.Run(checkTarget);
 
+// Erzeugt die Vorschau-Erweiterung direkt ueber COM.
+if (args.Contains("--comtest")) return ComCheck.Run();
+
 if (args.Contains("--clean-winrt")) return CleanWinRt();
 if (Arg("--reset") is { } pathToReset) return Reset(pathToReset);
 if (Arg("--unregister") is { } pathToRelease)
