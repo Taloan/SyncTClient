@@ -62,9 +62,12 @@ public static class ThumbnailCheck
                 nint bitmap = 0;
                 try
                 {
-                    // SIIGBF_THUMBNAILONLY: kein Rueckfall auf ein Symbol, damit
-                    // sichtbar wird, ob wirklich eine Vorschau geliefert wurde.
-                    factory.GetImage(new Size { Width = size, Height = size }, 0x04, out bitmap);
+                    // SIIGBF_THUMBNAILONLY (0x08): kein Rueckfall auf ein Symbol.
+                    // Mit 0x04 -- SIIGBF_ICONONLY -- liefert Windows immer ein
+                    // hochskaliertes Standardsymbol und ruft keinen
+                    // Vorschau-Erzeuger auf. Genau darauf bin ich
+                    // hereingefallen.
+                    factory.GetImage(new Size { Width = size, Height = size }, 0x08, out bitmap);
 
                     if (bitmap == 0) { Console.WriteLine($"  {size,3} px  ->  keine Vorschau"); continue; }
 

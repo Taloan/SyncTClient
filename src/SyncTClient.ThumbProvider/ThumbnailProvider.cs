@@ -50,6 +50,7 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IThu
     public int Initialize(string filePath, uint mode)
     {
         _filePath = filePath;
+        Trace.Write($"Initialize: {filePath}");
         return Ok;
     }
 
@@ -63,15 +64,50 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IThu
             if (string.IsNullOrEmpty(_filePath)) return Fail;
 
             var cached = Store.PathFor(_filePath);
-            if (cached is null || !File.Exists(cached)) return NoThumbnail;
+            if (cached is null)
+            {
+                Trace.Write("  kein Vorrat-Verzeichnis hinterlegt");
+                return NoThumbnail;
+            }
 
-            return Gdi.LoadAsBitmap(cached, requestedSize, out bitmap) ? Ok : NoThumbnail;
+            if (!File.Exists(cached))
+            {
+                Trace.Write($"  keine Vorschau unter {cached}");
+                return NoThumbnail;
+            }
+
+            var ok = Gdi.LoadAsBitmap(cached, requestedSize, out bitmap);
+            Trace.Write($"  {requestedSize} px -> {(ok ? "geliefert" : "GDI+ fehlgeschlagen")}");
+            return ok ? Ok : NoThumbnail;
         }
-        catch
+        catch (Exception ex)
         {
             // Aus einer Shell-Erweiterung darf niemals etwas herausfliegen.
+            Trace.Write("  Ausnahme: " + ex.Message);
             return NoThumbnail;
         }
+    }
+}
+
+
+/// <summary>
+/// Ein Protokoll fuer die Fehlersuche. Die Erweiterung laeuft in einem
+/// fremden Prozess, in den man nicht hineinsehen kann -- ohne Spur bliebe
+/// unklar, ob Windows sie ueberhaupt aufruft.
+/// </summary>
+internal static class Trace
+{
+    private static readonly string Path =
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "synctthumbs.log");
+
+    public static void Write(string line)
+    {
+        try
+        {
+            File.AppendAllText(Path,
+                $"{DateTime.Now:HH:mm:ss.fff}  {Environment.ProcessId,6}  {line}{Environment.NewLine}");
+        }
+        catch { /* die Fehlersuche darf nie stoeren */ }
     }
 }
 
