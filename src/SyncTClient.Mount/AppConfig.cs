@@ -13,10 +13,38 @@ public enum ShareMode
     AlwaysLocal
 }
 
+/// <summary>Eine Gegenstelle -- ein Server oder ein anderer Rechner.</summary>
+public sealed class PeerConfig
+{
+    /// <summary>Anzeigename. Leer heisst: den nehmen, den die Gegenstelle nennt.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>Adresse, etwa "192.168.1.42:22000".</summary>
+    public string Address { get; set; } = "";
+
+    /// <summary>Erwartete Device-ID der Gegenstelle.</summary>
+    public string DeviceId { get; set; } = "";
+
+    /// <summary>Beim Start der Oberflaeche automatisch verbinden.</summary>
+    public bool AutoConnect { get; set; } = true;
+
+    [JsonIgnore]
+    public string ShortId => DeviceId.Length >= 7 ? DeviceId[..7] : DeviceId;
+
+    [JsonIgnore]
+    public string Display => string.IsNullOrWhiteSpace(Name) ? ShortId : Name;
+}
+
 public sealed class ShareConfig
 {
     /// <summary>Die Folder-ID aus Syncthing.</summary>
     public string FolderId { get; set; } = "";
+
+    /// <summary>Von welcher Gegenstelle dieser Ordner kommt.</summary>
+    public string PeerDeviceId { get; set; } = "";
+
+    /// <summary>Anzeigename; die Gegenstelle nennt meist einen.</summary>
+    public string Label { get; set; } = "";
 
     /// <summary>Wo der Ordner im Explorer erscheint.</summary>
     public string LocalPath { get; set; } = "";
@@ -29,7 +57,7 @@ public sealed class ShareConfig
     /// </summary>
     /// <remarks>
     /// Das ist die Datenseite dessen, was in der Oberflaeche der aufklappbare
-    /// Baum wird. Ausgeschlossene Verzeichnisse bekommen nicht einmal einen
+    /// Baum ist. Ausgeschlossene Verzeichnisse bekommen nicht einmal einen
     /// Platzhalter -- sie tauchen im Explorer gar nicht auf und kosten auch
     /// keinen Index-Speicher.
     /// </remarks>
@@ -53,6 +81,9 @@ public sealed class ShareConfig
     /// </summary>
     public bool GenerateThumbnails { get; set; } = true;
 
+    [JsonIgnore]
+    public string Display => string.IsNullOrWhiteSpace(Label) ? FolderId : $"{Label} ({FolderId})";
+
     public bool Includes(string relativePath)
     {
         if (Included.Count == 0) return true;
@@ -70,36 +101,59 @@ public sealed class ShareConfig
     }
 }
 
-public sealed class PeerConfig
-{
-    /// <summary>Adresse des Peers, etwa "192.168.1.42:22000".</summary>
-    public string Address { get; set; } = "";
-
-    /// <summary>Erwartete Device-ID des Peers.</summary>
-    public string DeviceId { get; set; } = "";
-}
-
 public sealed class AppConfig
 {
     /// <summary>Verzeichnis fuer Geraetezertifikat, Index-Datenbanken und Cache-Zustand.</summary>
     public string HomeDirectory { get; set; } = "synct-home";
 
-    public PeerConfig Peer { get; set; } = new();
+    public List<PeerConfig> Peers { get; set; } = [];
 
     public List<ShareConfig> Shares { get; set; } = [];
 
     /// <summary>Parallele Block-Requests je Hydration.</summary>
     public int Parallelism { get; set; } = 8;
 
+    /// <summary>
+    /// Aeltere Fassungen kannten genau eine Gegenstelle. Beim Laden wird sie in
+    /// die Liste ueberfuehrt, damit bestehende Konfigurationen weiterlaufen.
+    /// </summary>
+    public PeerConfig? Peer { get; set; }
+
+    public PeerConfig? PeerFor(ShareConfig share)
+        => Peers.FirstOrDefault(p => p.DeviceId == share.PeerDeviceId) ?? Peers.FirstOrDefault();
+
+    public IEnumerable<ShareConfig> SharesOf(PeerConfig peer)
+        => Shares.Where(s => s.PeerDeviceId == peer.DeviceId);
+
     private static readonly JsonSerializerOptions Format = new()
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() }
+        Converters = { new JsonStringEnumConverter() },
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     public static AppConfig Load(string path)
-        => JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), Format)
-           ?? throw new InvalidDataException($"\"{path}\" enthaelt keine gueltige Konfiguration.");
+    {
+        var config = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), Format)
+                     ?? throw new InvalidDataException($"\"{path}\" enthaelt keine gueltige Konfiguration.");
+        config.Migrate();
+        return config;
+    }
+
+    /// <summary>Hebt eine Konfiguration der alten Form auf die neue.</summary>
+    private void Migrate()
+    {
+        if (Peer is not null && Peers.Count == 0)
+        {
+            Peers.Add(Peer);
+            Peer = null;
+        }
+
+        var fallback = Peers.FirstOrDefault()?.DeviceId ?? "";
+        foreach (var share in Shares)
+            if (string.IsNullOrEmpty(share.PeerDeviceId))
+                share.PeerDeviceId = fallback;
+    }
 
     public void Save(string path)
         => File.WriteAllText(path, JsonSerializer.Serialize(this, Format));
@@ -107,12 +161,13 @@ public sealed class AppConfig
     /// <summary>Eine Vorlage zum Ausfuellen.</summary>
     public static AppConfig Template(string address, string deviceId, string folderId) => new()
     {
-        Peer = new PeerConfig { Address = address, DeviceId = deviceId },
+        Peers = [new PeerConfig { Address = address, DeviceId = deviceId }],
         Shares =
         [
             new ShareConfig
             {
                 FolderId = folderId,
+                PeerDeviceId = deviceId,
                 LocalPath = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SyncT", folderId),
                 Mode = ShareMode.OnDemand,

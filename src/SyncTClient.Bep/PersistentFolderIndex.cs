@@ -62,6 +62,10 @@ public sealed class PersistentFolderIndex : IDisposable
 
     public int Count => (int)(long)(Scalar("SELECT COUNT(*) FROM files WHERE deleted = 0") ?? 0L);
 
+    /// <summary>Summe der Dateigroessen -- fuer die Anzeige.</summary>
+    public long TotalBytes =>
+        (long)(Scalar("SELECT COALESCE(SUM(size), 0) FROM files WHERE deleted = 0 AND kind = 0") ?? 0L);
+
     /// <summary>
     /// Die hoechste bisher empfangene Sequenznummer. Wird dem Peer im
     /// ClusterConfig genannt, damit er nur Neueres schickt.
