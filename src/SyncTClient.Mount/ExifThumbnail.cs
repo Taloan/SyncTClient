@@ -32,10 +32,19 @@ public static class ExifThumbnail
     /// </summary>
     public static byte[]? TryExtract(ReadOnlySpan<byte> jpegPrefix)
     {
-        var exif = FindExifSegment(jpegPrefix);
-        if (exif.IsEmpty) return null;
+        // Ein Byte-Parser auf abgeschnittenen Daten stolpert frueher oder
+        // spaeter ueber eine Laengenangabe, die nicht mehr passt. Das ist kein
+        // Fehler, sondern der Normalfall bei unvollstaendigen Dateien -- dann
+        // gibt es eben keine Vorschau.
+        try
+        {
+            var exif = FindExifSegment(jpegPrefix);
+            if (exif.IsEmpty) return null;
 
-        return TryReadFromTiff(exif, jpegPrefix);
+            return TryReadFromTiff(exif, jpegPrefix);
+        }
+        catch (ArgumentOutOfRangeException) { return null; }
+        catch (IndexOutOfRangeException) { return null; }
     }
 
     /// <summary>Sucht den APP1-Abschnitt mit der Kennung "Exif\0\0".</summary>

@@ -7,6 +7,9 @@
     <Project Path="src/SyncTClient.Gui/SyncTClient.Gui.csproj" />
     <Project Path="src/SyncTClient.Probe/SyncTClient.Probe.csproj" />
     <Project Path="src/SyncTClient.Bep/SyncTClient.Bep.csproj" />
+    <Project Path="src/SyncTClient.ThumbProvider/SyncTClient.ThumbProvider.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="src/SyncTClient.Vfs/SyncTClient.Vfs.csproj" />
   </Folder>
 </Solution>
