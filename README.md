@@ -80,6 +80,8 @@ blockweise geladen und verifiziert.
 - [x] BEP-Verbindung, Hello, ClusterConfig
 - [x] Index empfangen samt Blocklisten
 - [x] Blöcke gezielt anfordern, Hashes prüfen
+- [x] gegen Syncthing v2.1.3 verifiziert: 263 Blöcke, gleicher SHA-256 wie
+      der Go-Vorläufer, 32 MB/s ab 8 parallelen Requests
 - [ ] Index persistieren (100k Dateien ≈ 128 MB Blockhashes — gehört auf Platte)
 - [ ] CfAPI-Platzhalter im Explorer
 - [ ] Cache-Verwaltung mit Größenlimit und Verdrängung
