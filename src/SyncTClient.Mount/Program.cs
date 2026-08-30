@@ -94,9 +94,9 @@ if (!File.Exists(configPath))
 // --- Betrieb -----------------------------------------------------------------
 
 var config = AppConfig.Load(configPath);
-if (config.Shares.Count == 0)
+if (config.Peers.Count == 0)
 {
-    Console.Error.WriteLine("Die Konfiguration enthaelt keine Shares.");
+    Console.Error.WriteLine("Die Konfiguration enthaelt keine Gegenstellen.");
     return 2;
 }
 
@@ -105,18 +105,36 @@ Console.WriteLine($"Eigene Device-ID: {identity.Id}");
 Console.WriteLine();
 
 using var cts = new CancellationTokenSource();
-var hosts = new List<ShareHost>();
+var peers = new List<PeerHost>();
 var exitCode = 0;
 
 try
 {
-    foreach (var share in config.Shares)
+    foreach (var peerConfig in config.Peers)
     {
-        var host = new ShareHost(share, config, identity, Console.WriteLine);
-        hosts.Add(host);
-        await host.StartAsync(cts.Token);
-        Console.WriteLine($"[{share.FolderId}] bereit unter {share.LocalPath}");
+        var peer = new PeerHost(peerConfig, config, identity, Console.WriteLine);
+        peers.Add(peer);
+
+        try
+        {
+            await peer.ConnectAsync(config.SharesOf(peerConfig), cts.Token);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[{peer.Display}] nicht verbunden: {ex.Message}");
+            continue;
+        }
+
+        foreach (var offered in peer.Offered.Where(o => !o.Accepted))
+            Console.WriteLine($"  angeboten, nicht uebernommen: {offered.Display}");
+
         Console.WriteLine();
+    }
+
+    if (peers.All(p => p.State != PeerState.Verbunden))
+    {
+        Console.Error.WriteLine("Keine Gegenstelle erreichbar.");
+        return 1;
     }
 
     Console.WriteLine("Laeuft. Strg+C zum Beenden.");
@@ -130,7 +148,7 @@ try
     {
         var tick = await Task.WhenAny(stop.Task, Task.Delay(TimeSpan.FromMinutes(1), cts.Token));
         if (tick == stop.Task) break;
-        foreach (var host in hosts) await host.EnforceBudgetAsync();
+        foreach (var share in peers.SelectMany(p => p.Shares)) await share.EnforceBudgetAsync();
     }
 }
 catch (Exception ex)
@@ -141,11 +159,12 @@ catch (Exception ex)
 }
 finally
 {
-    Console.WriteLine("\nBeende ...");
-    foreach (var host in hosts)
+    Console.WriteLine();
+    Console.WriteLine("Beende ...");
+    foreach (var peer in peers)
     {
-        Console.WriteLine("  " + host.Stats());
-        await host.DisposeAsync();
+        foreach (var share in peer.Shares) Console.WriteLine("  " + share.Stats());
+        await peer.DisposeAsync();
     }
     cts.Cancel();
 }

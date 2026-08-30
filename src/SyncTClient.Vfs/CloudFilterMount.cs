@@ -206,6 +206,16 @@ public sealed class CloudFilterMount : IDisposable
                              $"Aufruf 0x{(uint)callResult.Value:X8}");
             }
 
+            // Windows leitet die Ueberlagerungssymbole -- Wolke, Kringel,
+            // gruener Haken -- aus dem Anheft-Zustand ab. Ohne ihn zeigt es
+            // gar keines. "Nicht angeheftet" heisst: darf verdraengt werden,
+            // und genau das ist bei uns der Normalfall.
+            for (var i = 0; i < (int)processed && i < entries.Count; i++)
+            {
+                if (entries[i].IsDirectory) continue;
+                MarkUnpinned(Path.Combine(baseDirectory, LeafOf(entries[i].RelativePath)));
+            }
+
             return (int)processed;
         }
         finally
@@ -213,6 +223,27 @@ public sealed class CloudFilterMount : IDisposable
             foreach (var allocation in allocations)
                 Marshal.FreeHGlobal(allocation);
         }
+    }
+
+
+    /// <summary>
+    /// Setzt den Anheft-Zustand auf "nicht angeheftet". Angeheftete Dateien
+    /// waeren solche, die Windows immer lokal halten soll -- unsere sollen
+    /// bei Bedarf kommen und wieder gehen duerfen.
+    /// </summary>
+    private unsafe void MarkUnpinned(string fullPath)
+    {
+        try
+        {
+            using var handle = File.OpenHandle(fullPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            var result = PInvoke.CfSetPinState(
+                handle, CF_PIN_STATE.CF_PIN_STATE_UNPINNED, CF_SET_PIN_FLAGS.CF_SET_PIN_FLAG_NONE, null);
+
+            if (result.Failed)
+                _log?.Invoke($"  Anheft-Zustand fuer \"{Path.GetFileName(fullPath)}\": 0x{(uint)result.Value:X8}");
+        }
+        catch (IOException) { /* in Benutzung -- beim naechsten Start erneut */ }
+        catch (UnauthorizedAccessException) { }
     }
 
     // ------------------------------------------------------------ Hydration
