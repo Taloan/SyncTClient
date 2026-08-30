@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/SyncTClient.Bep/SyncTClient.Bep.csproj" />
+    <!-- Mount steht bewusst zuerst: Visual Studio waehlt sonst das erste
+         Projekt als Startprojekt, und das waere eine Klassenbibliothek. -->
     <Project Path="src/SyncTClient.Mount/SyncTClient.Mount.csproj" />
     <Project Path="src/SyncTClient.Probe/SyncTClient.Probe.csproj" />
+    <Project Path="src/SyncTClient.Bep/SyncTClient.Bep.csproj" />
     <Project Path="src/SyncTClient.Vfs/SyncTClient.Vfs.csproj" />
   </Folder>
 </Solution>
