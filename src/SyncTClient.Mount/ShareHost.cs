@@ -760,12 +760,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Erst pruefen, ob der Platz ueberhaupt reicht. Wird erst geladen und
         // danach aufgeraeumt, ist die Uebertragung bereits gelaufen.
         var limit = _cache is null ? CacheBudget.Limit.None : _app.Cache.CanHold(totalLength, _config.LocalPath);
+        var grenzen = _app.Cache.LimitsFor(_config.LocalPath);
         if (limit != CacheBudget.Limit.None)
         {
             var hit = new CacheLimitHit(
                 FolderId, relativePath, totalLength,
                 limit == CacheBudget.Limit.Budget,
-                limit == CacheBudget.Limit.Budget ? _app.Cache.MaxBytes : _app.Cache.MinimumFreeBytes);
+                limit == CacheBudget.Limit.Budget ? grenzen.MaxBytes : grenzen.MinimumFreeBytes);
 
             LimitReached?.Invoke(hit);
             throw new IOException(

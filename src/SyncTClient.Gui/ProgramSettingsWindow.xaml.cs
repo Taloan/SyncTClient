@@ -35,7 +35,21 @@ public partial class ProgramSettingsWindow : Window
     private readonly ObservableCollection<VolumeRow> _rows = [];
 
     /// <summary>Eine Zeile je Datentraeger, so wie sie im Fenster steht.</summary>
-    private sealed record VolumeRow(string Text, string ButtonText, string Root, bool CanRelease);
+    /// <remarks>
+    /// Die beiden Grenzen stehen hier als Text und nicht als Zahl. Waehrend
+    /// jemand tippt, ist das Feld zwischendurch leer oder unvollstaendig; eine
+    /// Zahl muesste dann raten, was gemeint ist. Geprueft wird beim Speichern.
+    /// </remarks>
+    private sealed class VolumeRow
+    {
+        public string Text { get; init; } = "";
+        public string EvictText { get; init; } = "";
+        public string ButtonText { get; init; } = "";
+        public string Root { get; init; } = "";
+        public bool CanRelease { get; init; }
+        public string MaxGb { get; set; } = "";
+        public string MinFreeGb { get; set; } = "";
+    }
 
     /// <param name="volumes">Was auf welchem Datentraeger liegt.</param>
     /// <param name="release">Gibt einen Datentraeger frei und meldet das Ergebnis.</param>
@@ -137,16 +151,23 @@ public partial class ProgramSettingsWindow : Window
         {
             var frei = volume.FreeBytes < 0 ? App.S("G.FreeUnknown") : Format.Bytes(volume.FreeBytes);
 
-            _rows.Add(new VolumeRow(
-                App.S("M.VolumeLine",
-                    volume.Root, frei,
-                    Format.Bytes(volume.UsedBytes), Format.Count(volume.Files),
+            _rows.Add(new VolumeRow
+            {
+                Text = App.S("M.VolumeLine",
+                    volume.Root, Format.Bytes(volume.UsedBytes),
+                    Format.Count(volume.Files), frei),
+                EvictText = App.S("M.VolumeEvictable",
                     Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
-                App.S("M.VolumeRelease",
+                ButtonText = App.S("M.VolumeRelease",
                     Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
-                volume.Root,
-                volume.EvictableFiles > 0));
+                Root = volume.Root,
+                CanRelease = volume.EvictableFiles > 0,
+                MaxGb = (volume.MaxBytes / Gigabyte).ToString(),
+                MinFreeGb = (volume.MinimumFreeBytes / Gigabyte).ToString()
+            });
         }
+
+        NoVolumes.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         var (dateien, bytes) = _thumbUsage();
         ThumbUsageText.Text = App.S("M.ThumbUsage", Format.Count(dateien), Format.Bytes(bytes));
@@ -219,6 +240,22 @@ public partial class ProgramSettingsWindow : Window
             return;
         }
 
+        // Erst pruefen, dann setzen: eine halb uebernommene Liste waere
+        // schlimmer als eine abgelehnte.
+        var grenzen = new List<(string Root, long Max, long Free)>();
+
+        foreach (var zeile in _rows)
+        {
+            if (!long.TryParse(zeile.MaxGb.Trim(), out var max) || max < 1 ||
+                !long.TryParse(zeile.MinFreeGb.Trim(), out var free) || free < 0)
+            {
+                Hint.Text = App.S("G.VolumeInvalid", zeile.Root);
+                return;
+            }
+
+            grenzen.Add((zeile.Root, max * Gigabyte, free * Gigabyte));
+        }
+
         if (!int.TryParse(ParallelismBox.Text.Trim(), out var parallelism) || parallelism < 1)
         {
             Hint.Text = App.S("G.ParallelInvalid");
@@ -251,6 +288,16 @@ public partial class ProgramSettingsWindow : Window
         _config.GenerateThumbnails = ThumbsBox.IsChecked == true;
         _config.CacheMaxBytes = gigabytes * Gigabyte;
         _config.MinimumFreeBytes = freeGigabytes * Gigabyte;
+
+        // Nur was von der Vorgabe abweicht, kommt in die Datei. Sonst stuende
+        // dort nach dem ersten Speichern jedes Laufwerk, das gerade sichtbar
+        // war -- und eine spaeter geaenderte Vorgabe wuerde nirgends mehr
+        // wirken.
+        foreach (var (root, max, free) in grenzen)
+            if (max == _config.CacheMaxBytes && free == _config.MinimumFreeBytes)
+                _config.VolumeLimits.RemoveAll(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase));
+            else
+                _config.SetLimits(root, max, free);
         _config.Parallelism = parallelism;
         _config.Listen = ListenBox.IsChecked == true;
         _config.ListenPort = listenPort;

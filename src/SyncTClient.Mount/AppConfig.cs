@@ -178,6 +178,25 @@ public sealed class ShareConfig
     }
 }
 
+/// <summary>Die Grenzen eines Datentraegers, wie sie in der Datei stehen.</summary>
+/// <remarks>
+/// Es gibt hier bewusst keinen Eintrag fuer jedes Laufwerk des Rechners,
+/// sondern nur fuer die, an denen jemand etwas geaendert hat. Ein Laufwerk
+/// kann verschwinden -- ein Wechseldatentraeger, ein getrenntes Netzlaufwerk
+/// --, und ein Eintrag dafuer soll niemanden stoeren, wenn es wiederkommt.
+/// </remarks>
+public sealed class VolumeLimitConfig
+{
+    /// <summary>Die Laufwerkswurzel, etwa <c>C:\</c>.</summary>
+    public string Root { get; set; } = "";
+
+    /// <summary>Hoechstens so viel darf hier belegt sein. 0 = kein Limit.</summary>
+    public long MaxBytes { get; set; }
+
+    /// <summary>So viel soll hier frei bleiben. 0 = unbeachtet.</summary>
+    public long MinimumFreeBytes { get; set; }
+}
+
 public sealed class AppConfig
 {
     /// <summary>
@@ -237,8 +256,7 @@ public sealed class AppConfig
     public string SharesRoot { get; set; } = "";
 
     /// <summary>
-    /// Budget des lokalen Caches in Bytes. Es gilt fuer alle Freigaben
-    /// zusammen.
+    /// Die Vorgabe fuer Datentraeger, fuer die noch nichts eingestellt wurde.
     /// </summary>
     /// <remarks>
     /// Der Cache hat kein eigenes Verzeichnis. Zwischengespeichert ist eine
@@ -254,14 +272,41 @@ public sealed class AppConfig
     public long CacheMaxBytes { get; set; } = 2L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// So viel Platz soll auf dem Laufwerk des Caches frei bleiben. 0 schaltet
-    /// diese Grenze ab.
+    /// Die Vorgabe dafuer, wie viel auf einem Datentraeger frei bleiben soll.
+    /// 0 schaltet diese Grenze ab.
     /// </summary>
     /// <remarks>
     /// Die zweite Grenze neben <see cref="CacheMaxBytes"/>. Es greift die
     /// Grenze, die zuerst erreicht wird.
     /// </remarks>
     public long MinimumFreeBytes { get; set; } = 10L * 1024 * 1024 * 1024;
+
+    /// <summary>Was auf einzelnen Datentraegern abweichend gilt.</summary>
+    public List<VolumeLimitConfig> VolumeLimits { get; set; } = [];
+
+    /// <summary>Die Grenzen einer Laufwerkswurzel, sonst die Vorgabe.</summary>
+    public VolumeLimits LimitsFor(string root)
+    {
+        var eigen = VolumeLimits.FirstOrDefault(
+            v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase));
+
+        return eigen is null
+            ? new VolumeLimits(CacheMaxBytes, MinimumFreeBytes)
+            : new VolumeLimits(eigen.MaxBytes, eigen.MinimumFreeBytes);
+    }
+
+    /// <summary>Legt die Grenzen eines Datentraegers fest.</summary>
+    public void SetLimits(string root, long maxBytes, long minimumFreeBytes)
+    {
+        var eigen = VolumeLimits.FirstOrDefault(
+            v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase));
+
+        if (eigen is null)
+            VolumeLimits.Add(eigen = new VolumeLimitConfig { Root = root });
+
+        eigen.MaxBytes = maxBytes;
+        eigen.MinimumFreeBytes = minimumFreeBytes;
+    }
 
     public List<PeerConfig> Peers { get; set; } = [];
 
@@ -402,10 +447,14 @@ public sealed class AppConfig
 
     private CacheBudget? _budget;
 
-    /// <summary>Das Budget, das fuer alle Freigaben gemeinsam gilt.</summary>
+    /// <summary>Die Ueberwachung des belegten Platzes.</summary>
+    /// <remarks>
+    /// Das Budget bekommt die Grenzen nicht mitgegeben, sondern fragt sie hier
+    /// nach. So wirkt eine Aenderung in den Einstellungen sofort und nicht
+    /// erst beim naechsten Start.
+    /// </remarks>
     [JsonIgnore]
-    public CacheBudget Cache => _budget ??=
-        new CacheBudget(CacheMaxBytes, MinimumFreeBytes);
+    public CacheBudget Cache => _budget ??= new CacheBudget(LimitsFor);
 
     [JsonIgnore]
     public string SharesRootOrDefault => string.IsNullOrWhiteSpace(SharesRoot)

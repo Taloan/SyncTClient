@@ -1,4 +1,9 @@
-namespace SyncTClient.Vfs;
+﻿namespace SyncTClient.Vfs;
+
+/// <summary>Die Grenzen eines einzelnen Datenträgers.</summary>
+/// <param name="MaxBytes">Höchstens so viel darf belegt sein. 0 = kein Limit.</param>
+/// <param name="MinimumFreeBytes">So viel soll frei bleiben. 0 = unbeachtet.</param>
+public sealed record VolumeLimits(long MaxBytes, long MinimumFreeBytes);
 
 /// <summary>Was auf einem Datenträger liegt und was davon weichen dürfte.</summary>
 /// <param name="Root">Die Wurzel, etwa <c>C:\</c>.</param>
@@ -7,13 +12,17 @@ namespace SyncTClient.Vfs;
 /// <param name="FreeBytes">Freier Platz, oder -1 wenn nicht feststellbar.</param>
 /// <param name="EvictableBytes">Davon freigebbar.</param>
 /// <param name="EvictableFiles">Wie viele Dateien das sind.</param>
+/// <param name="MaxBytes">Das Limit dieses Datenträgers. 0 = keines.</param>
+/// <param name="MinimumFreeBytes">Was hier frei bleiben soll. 0 = unbeachtet.</param>
 public sealed record VolumeUsage(
     string Root,
     long UsedBytes,
     int Files,
     long FreeBytes,
     long EvictableBytes,
-    int EvictableFiles);
+    int EvictableFiles,
+    long MaxBytes,
+    long MinimumFreeBytes);
 
 /// <summary>
 /// Wacht darüber, wie viel Platz die Inhalte der Freigaben belegen.
@@ -29,6 +38,10 @@ public sealed record VolumeUsage(
 /// weil eine andere volläuft. Der freie Platz ist ohnehin eine Eigenschaft
 /// des Datenträgers, nicht des Programms.
 ///
+/// Auch die Grenzen selbst gehören dem Datenträger. Eine Zahl für alle wäre
+/// nutzlos, wenn die Laufwerke verschieden groß sind: 2 GB sind auf einer
+/// halbleeren Platte nichts und auf einem kleinen Datenträger alles.
+///
 /// Freigegeben wird nach Zugriffszeit, über alle Freigaben desselben
 /// Datenträgers hinweg. Zuerst weicht, was seit Monaten niemand geöffnet hat,
 /// und nicht das, was zur gerade wachsenden Freigabe gehört.
@@ -38,28 +51,17 @@ public sealed class CacheBudget
     private readonly List<HydrationCache> _caches = [];
     private readonly SemaphoreSlim _evictionLock = new(1, 1);
 
-    public CacheBudget(long maxBytes, long minimumFreeBytes)
-    {
-        MaxBytes = maxBytes;
-        MinimumFreeBytes = minimumFreeBytes;
-    }
+    private readonly Func<string, VolumeLimits> _limits;
 
-    /// <summary>
-    /// Höchstens so viel darf auf <em>jedem</em> Datenträger belegt sein.
-    /// 0 oder kleiner bedeutet: kein Limit.
-    /// </summary>
-    public long MaxBytes { get; }
+    /// <param name="limits">
+    /// Nennt zu einer Laufwerkswurzel die Grenzen, die dort gelten. Die
+    /// Grenzen werden nicht mitgegeben, sondern erfragt: sie ändern sich in
+    /// den Einstellungen, und ein einmal gemerkter Wert wäre danach falsch.
+    /// </param>
+    public CacheBudget(Func<string, VolumeLimits> limits) => _limits = limits;
 
-    /// <summary>
-    /// So viel soll auf <em>jedem</em> Datenträger frei bleiben. 0 bedeutet,
-    /// dass der freie Platz nicht berücksichtigt wird.
-    /// </summary>
-    /// <remarks>
-    /// Die zweite Grenze. Ein Limit allein reicht nicht, wenn andere Programme
-    /// die Platte füllen: die Freigaben halten dann ihr Limit ein, und die
-    /// Platte ist trotzdem voll.
-    /// </remarks>
-    public long MinimumFreeBytes { get; }
+    /// <summary>Was auf dem Datenträger dieses Pfades gilt.</summary>
+    public VolumeLimits LimitsFor(string path) => _limits(RootOf(path));
 
     /// <summary>Wohin die Bilanz gemeldet wird.</summary>
     public Action<string>? Log { get; set; }
@@ -105,6 +107,7 @@ public sealed class CacheBudget
                 .Select(g =>
                 {
                     var kandidaten = g.SelectMany(c => c.EvictionCandidates()).ToList();
+                    var grenzen = _limits(g.Key);
 
                     return new VolumeUsage(
                         g.Key,
@@ -112,7 +115,9 @@ public sealed class CacheBudget
                         g.Sum(c => c.FileCount),
                         FreeBytesOn(g.Key),
                         kandidaten.Sum(e => e.Bytes),
-                        kandidaten.Count);
+                        kandidaten.Count,
+                        grenzen.MaxBytes,
+                        grenzen.MinimumFreeBytes);
                 })];
         }
     }
@@ -147,20 +152,22 @@ public sealed class CacheBudget
     /// </remarks>
     public Limit CanHold(long bytes, string targetPath)
     {
+        var root = RootOf(targetPath);
+        var grenzen = _limits(root);
+
         // Eine Datei, die allein schon größer ist als das Limit, kann nie
         // bleiben. Daran ändert auch Freigeben nichts.
-        if (MaxBytes > 0 && bytes > MaxBytes) return Limit.Budget;
-        if (MinimumFreeBytes <= 0) return Limit.None;
+        if (grenzen.MaxBytes > 0 && bytes > grenzen.MaxBytes) return Limit.Budget;
+        if (grenzen.MinimumFreeBytes <= 0) return Limit.None;
 
         var free = FreeBytesOn(targetPath);
         if (free < 0) return Limit.None;
 
-        var root = RootOf(targetPath);
         var freigebbar = Volumes.FirstOrDefault(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase))
             ?.EvictableBytes ?? 0;
 
         // Freigebbares zählt als Reserve. Es würde beim Holen ohnehin weichen.
-        return free + freigebbar - bytes < MinimumFreeBytes ? Limit.FreeSpace : Limit.None;
+        return free + freigebbar - bytes < grenzen.MinimumFreeBytes ? Limit.FreeSpace : Limit.None;
     }
 
     // ------------------------------------------------------------ Anmeldung
@@ -218,12 +225,12 @@ public sealed class CacheBudget
     /// <summary>Bis wohin dieser Datenträger schrumpfen muss.</summary>
     private long LimitFor(VolumeUsage volume)
     {
-        var limit = MaxBytes > 0 ? MaxBytes : long.MaxValue;
+        var limit = volume.MaxBytes > 0 ? volume.MaxBytes : long.MaxValue;
 
-        if (MinimumFreeBytes <= 0 || volume.FreeBytes < 0) return limit;
+        if (volume.MinimumFreeBytes <= 0 || volume.FreeBytes < 0) return limit;
 
         // Jedes freigegebene Byte ist ein Byte mehr frei.
-        var fehlend = MinimumFreeBytes - volume.FreeBytes;
+        var fehlend = volume.MinimumFreeBytes - volume.FreeBytes;
         return fehlend <= 0 ? limit : Math.Min(limit, Math.Max(0, volume.UsedBytes - fehlend));
     }
 
