@@ -26,6 +26,57 @@ public partial class App : Application
         // bevor die Einstellung gelesen ist.
         ApplyTheme(null);
         ApplyLanguage(null);
+
+        // Legt die Zustandsplaketten als Bild ab und beendet sich wieder.
+        // Ohne das laesst sich ihre Lesbarkeit nur im Infobereich beurteilen,
+        // also erst nachdem jemand das Programm gestartet hat.
+        if (e.Args.FirstOrDefault() == "--badges")
+        {
+            SchreibePlakettenbild(e.Args.ElementAtOrDefault(1) ?? "plaketten.png");
+            Shutdown();
+        }
+    }
+
+    /// <summary>Alle Zustaende in allen Groessen, hell und dunkel hinterlegt.</summary>
+    private static void SchreibePlakettenbild(string pfad)
+    {
+        var zustaende = Enum.GetValues<TrayStatus>();
+        var groessen = new[] { 16, 20, 24, 32, 48 };
+
+        var spalte = 70;
+        var breite = 90 + zustaende.Length * spalte;
+        var hoehe = groessen.Sum(g => g + 26) + 20;
+
+        using var bild = new System.Drawing.Bitmap(breite, hoehe);
+        using var g2 = System.Drawing.Graphics.FromImage(bild);
+        using var schrift = new System.Drawing.Font("Segoe UI", 8);
+
+        g2.Clear(System.Drawing.Color.FromArgb(246, 246, 246));
+        g2.FillRectangle(System.Drawing.Brushes.Black, 90 + (zustaende.Length * spalte) / 2, 0,
+                         breite, hoehe);
+
+        using var plaketten = new TrayBadge();
+        var y = 10;
+
+        foreach (var kante in groessen)
+        {
+            g2.DrawString($"{kante} px", schrift, System.Drawing.Brushes.Gray, 8, y + kante / 2 - 8);
+
+            var x = 90;
+            foreach (var zustand in zustaende)
+            {
+                using var symbol = plaketten.For(zustand, kante).ToBitmap();
+                g2.DrawImage(symbol, x, y, kante, kante);
+                if (kante == groessen[0])
+                    g2.DrawString(zustand.ToString(), schrift, System.Drawing.Brushes.Gray, x - 6, y - 2 + kante);
+
+                x += spalte;
+            }
+
+            y += kante + 26;
+        }
+
+        bild.Save(System.IO.Path.GetFullPath(pfad), System.Drawing.Imaging.ImageFormat.Png);
     }
 
     /// <summary>Setzt das Farbschema. Leer bedeutet: der Einstellung des Systems folgen.</summary>

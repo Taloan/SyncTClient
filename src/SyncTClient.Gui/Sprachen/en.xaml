@@ -297,4 +297,9 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Tray.Paused">SyncTClient – paused</s:String>
   <s:String x:Key="S.Tray.Failed">SyncTClient – error</s:String>
   <s:String x:Key="S.Tray.Offline">SyncTClient – not connected</s:String>
+  <s:String x:Key="S.Tray.Resume">Resume syncing</s:String>
+  <s:String x:Key="S.Main.PauseAll">Pause all</s:String>
+  <s:String x:Key="S.Main.ResumeAll">Resume</s:String>
+  <s:String x:Key="M.PausedAll">Syncing is paused. Placeholders stay; contents are no longer fetched.</s:String>
+  <s:String x:Key="M.ResumedAll">Syncing has resumed.</s:String>
 </ResourceDictionary>

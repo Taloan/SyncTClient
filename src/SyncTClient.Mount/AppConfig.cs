@@ -191,6 +191,20 @@ public sealed class AppConfig
     /// </remarks>
     public string DeviceName { get; set; } = Environment.MachineName;
 
+    /// <summary>
+    /// Der Abgleich ist angehalten.
+    /// </summary>
+    /// <remarks>
+    /// Ein Modus und keine einmalige Handlung: er gilt auch fuer Freigaben,
+    /// die erst spaeter bereit werden, und er ueberlebt einen Neustart. Wer
+    /// anhaelt, weil die Leitung gebraucht wird, will nicht, dass das naechste
+    /// Hochfahren die Entscheidung stillschweigend zuruecknimmt.
+    ///
+    /// Sichtbar bleibt er trotzdem: das Zeichen im Infobereich steht dann auf
+    /// orange, und die Schaltflaeche heisst "Fortsetzen".
+    /// </remarks>
+    public bool Paused { get; set; }
+
     /// <summary>Verzeichnis fuer Geraetezertifikat, Index-Datenbanken und Cache-Zustand.</summary>
     public string HomeDirectory { get; set; } = "synct-home";
 

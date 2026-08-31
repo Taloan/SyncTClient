@@ -1,4 +1,4 @@
-<Window x:Class="SyncTClient.Gui.MainWindow"
+﻿<Window x:Class="SyncTClient.Gui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:SyncTClient.Gui"
@@ -38,6 +38,8 @@
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Device}" Click="OnShowDevice" Margin="0" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Peers}" Click="OnManagePeers" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Settings}" Click="OnShowProgramSettings" />
+      <Button x:Name="PauseAllButton" DockPanel.Dock="Left"
+              Content="{DynamicResource S.Main.PauseAll}" Click="OnTogglePauseAll" />
       <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Gedaempft}"
                  Text="{DynamicResource S.Main.MenuHint}" />
     </DockPanel>

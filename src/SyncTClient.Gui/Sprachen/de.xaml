@@ -289,4 +289,9 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Tray.Paused">SyncTClient – angehalten</s:String>
   <s:String x:Key="S.Tray.Failed">SyncTClient – Fehler</s:String>
   <s:String x:Key="S.Tray.Offline">SyncTClient – keine Verbindung</s:String>
+  <s:String x:Key="S.Tray.Resume">Abgleich fortsetzen</s:String>
+  <s:String x:Key="S.Main.PauseAll">Alles anhalten</s:String>
+  <s:String x:Key="S.Main.ResumeAll">Fortsetzen</s:String>
+  <s:String x:Key="M.PausedAll">Der Abgleich ist angehalten. Platzhalter bleiben, Inhalte werden nicht mehr geholt.</s:String>
+  <s:String x:Key="M.ResumedAll">Der Abgleich läuft wieder.</s:String>
 </ResourceDictionary>
