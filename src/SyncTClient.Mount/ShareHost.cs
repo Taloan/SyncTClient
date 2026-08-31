@@ -577,6 +577,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (State != ShareState.Bereit) return;
         IsPaused = true;
+        _log($"[{FolderId}] angehalten: keine Uebertragung, keine Aenderung im Ordner.");
         State = ShareState.Pausiert;
     }
 
@@ -585,6 +586,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (State != ShareState.Pausiert) return;
         IsPaused = false;
         State = ShareState.Bereit;
+        _log($"[{FolderId}] fortgesetzt.");
+
+        // Was waehrend der Pause angekuendigt wurde, liegt noch in der
+        // Schlange. Der Hintergrundlauf soll es gleich sehen und nicht erst
+        // beim naechsten Takt.
+        Wake();
     }
 
     // ------------------------------------------------------------ Platzhalter
@@ -831,6 +838,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (_thumbnails is null || _index is null || _connection is null) return false;
 
+        // Ein Vorschaubild ist ein Dateikopf und damit Uebertragung.
+        if (IsPaused) return false;
+
         var local = LocalPathOf(relativePath);
         if (_thumbnails.Has(local)) return true;
         if (!_index.TryGet(relativePath, out var file) || file.Size <= 0) return false;
@@ -877,6 +887,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public async Task EnforceLimitsAsync()
     {
+        // Angehalten wird kein Platz freigegeben. Verdraengen loescht lokalen
+        // Inhalt, und genau davor soll das Anhalten schuetzen.
+        if (IsPaused) return;
+
         if (_cache is null) return;
         await _cache.EnforceLimitsAsync();
         CacheChanged?.Invoke();
