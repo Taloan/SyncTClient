@@ -378,9 +378,13 @@ public sealed partial class ShareHost
                 found++;
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
-            _log($"[{FolderId}] der Durchgang ueber \"{root}\" brach ab: {ex.Message}");
+            // Auch alles andere. Ein Durchgang ueber den Ordner ist eine
+            // Bestandsaufnahme; scheitert sie, ist das eine Meldung wert,
+            // aber kein Grund, die Freigabe in den Fehlerzustand zu setzen
+            // und damit auch das Ausliefern von Dateien zu beenden.
+            _log($"[{FolderId}] der Durchgang ueber \"{root}\" brach ab: {Herkunft(ex)}");
             return;
         }
 
@@ -446,10 +450,12 @@ public sealed partial class ShareHost
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Eine Zahl fuer die Anzeige. Sie ist es nicht wert, den
-            // Hintergrundlauf abzubrechen.
+            // Hintergrundlauf abzubrechen -- aber sie ist es wert, dass man
+            // erfaehrt, warum sie fehlt.
+            _log($"[{FolderId}] Rueckstand liess sich nicht bestimmen: {Herkunft(ex)}");
             return;
         }
 

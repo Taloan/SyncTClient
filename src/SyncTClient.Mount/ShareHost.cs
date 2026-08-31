@@ -505,11 +505,31 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
     }
 
+    /// <summary>
+    /// Der Abbruch, mit Herkunft.
+    /// </summary>
+    /// <remarks>
+    /// Frueher stand hier nur die Meldung. "Index was out of range" ohne
+    /// Angabe der Stelle ist keine Auskunft, sondern eine Aufforderung zum
+    /// Raten. Art und die obersten Stufen des Aufrufwegs stehen jetzt dabei;
+    /// der ganze Weg waere im Protokollfenster unlesbar.
+    /// </remarks>
     private void Fail(Exception exception)
     {
         State = ShareState.Fehler;
         SetPhase(SyncPhase.Ruht);
-        _log($"[{FolderId}] {exception.Message}");
+        _log($"[{FolderId}] {Herkunft(exception)}");
+    }
+
+    internal static string Herkunft(Exception exception)
+    {
+        var stellen = (exception.StackTrace ?? "")
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .Select(z => z.Trim())
+            .Take(4);
+
+        return $"{exception.GetType().Name}: {exception.Message}" +
+               string.Concat(stellen.Select(z => Environment.NewLine + "    " + z));
     }
 
     private async Task WaitForIndexAsync(CancellationToken ct)
