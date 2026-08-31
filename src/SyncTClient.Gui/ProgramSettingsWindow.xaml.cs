@@ -43,7 +43,6 @@ public partial class ProgramSettingsWindow : Window
     private sealed class VolumeRow
     {
         public string Text { get; init; } = "";
-        public string EvictText { get; init; } = "";
         public string ButtonText { get; init; } = "";
         public string Root { get; init; } = "";
         public bool CanRelease { get; init; }
@@ -154,9 +153,8 @@ public partial class ProgramSettingsWindow : Window
             _rows.Add(new VolumeRow
             {
                 Text = App.S("M.VolumeLine",
-                    volume.Root, Format.Bytes(volume.UsedBytes),
-                    Format.Count(volume.Files), frei),
-                EvictText = App.S("M.VolumeEvictable",
+                    volume.Root, frei,
+                    Format.Bytes(volume.UsedBytes), Format.Count(volume.Files),
                     Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
                 ButtonText = App.S("M.VolumeRelease",
                     Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
@@ -167,7 +165,6 @@ public partial class ProgramSettingsWindow : Window
             });
         }
 
-        NoVolumes.Visibility = _rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         var (dateien, bytes) = _thumbUsage();
         ThumbUsageText.Text = App.S("M.ThumbUsage", Format.Count(dateien), Format.Bytes(bytes));
