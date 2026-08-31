@@ -1,4 +1,4 @@
-using Google.Protobuf;
+﻿using Google.Protobuf;
 using SyncTClient.Bep;
 using SyncTClient.Bep.Proto;
 
@@ -73,6 +73,10 @@ public sealed class PeerHost : IAsyncDisposable
     public IReadOnlyList<OfferedFolder> Offered { get; private set; } = [];
 
     public IReadOnlyCollection<ShareHost> Shares => _shares.Values;
+
+    /// <summary>Bytes, die seit dem Verbinden ueber diese Leitung gingen.</summary>
+    public (long Read, long Written) Wire =>
+        _connection is null ? (0, 0) : (_connection.BytesRead, _connection.BytesWritten);
 
     public event Action<PeerState>? StateChanged;
     public event Action? OfferedChanged;

@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
@@ -27,6 +27,9 @@ public sealed class BepConnection : IAsyncDisposable
 
     private readonly TcpClient _tcp;
     private readonly SslStream _tls;
+
+    /// <summary>Zaehlt, was ueber diese Verbindung geht.</summary>
+    private readonly CountingStream _wire;
     private readonly ConcurrentDictionary<int, TaskCompletionSource<Response>> _pending = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private int _nextRequestId;
@@ -35,12 +38,19 @@ public sealed class BepConnection : IAsyncDisposable
     {
         _tcp = tcp;
         _tls = tls;
+        _wire = new CountingStream(tls);
         PeerId = peerId;
         PeerHello = peerHello;
     }
 
     public DeviceId PeerId { get; }
     public Hello PeerHello { get; }
+
+    /// <summary>Bytes, die seit dem Verbinden ueber die Leitung kamen.</summary>
+    public long BytesRead => _wire.BytesRead;
+
+    /// <summary>Bytes, die seit dem Verbinden hinausgingen.</summary>
+    public long BytesWritten => _wire.BytesWritten;
 
     public event Action<ClusterConfig>? ClusterConfigReceived;
     public event Action<Proto.Index>? IndexReceived;
@@ -112,7 +122,7 @@ public sealed class BepConnection : IAsyncDisposable
         {
             while (!ct.IsCancellationRequested)
             {
-                var (type, payload) = await BepFraming.ReadMessageAsync(_tls, ct).ConfigureAwait(false);
+                var (type, payload) = await BepFraming.ReadMessageAsync(_wire, ct).ConfigureAwait(false);
 
                 switch (type)
                 {
@@ -218,7 +228,7 @@ public sealed class BepConnection : IAsyncDisposable
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await BepFraming.WriteMessageAsync(_tls, type, message, ct).ConfigureAwait(false);
+            await BepFraming.WriteMessageAsync(_wire, type, message, ct).ConfigureAwait(false);
         }
         finally
         {

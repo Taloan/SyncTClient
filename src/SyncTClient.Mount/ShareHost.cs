@@ -14,6 +14,25 @@ public enum ShareState
 }
 
 /// <summary>
+/// Woran eine Freigabe beim Hochfahren gerade arbeitet.
+/// </summary>
+/// <remarks>
+/// Der Abgleich nach einem Neustart dauert bei grossen Freigaben lange, und
+/// die Teilschritte sind ungleich lang. Ohne Benennung waere ein
+/// Fortschrittsbalken irrefuehrend: er stuende scheinbar still, waehrend in
+/// Wahrheit ein anderer Schritt laeuft.
+/// </remarks>
+public enum SyncPhase
+{
+    Ruht,
+    Index,
+    Platzhalter,
+    Cache,
+    Inhalte,
+    Fertig
+}
+
+/// <summary>
 /// Ein Share: Index, Platzhalter, Cache, Vorschaubilder.
 /// </summary>
 /// <remarks>
@@ -85,6 +104,33 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>Meldet, wie viele Vorschauen bisher auf Zuruf entstanden sind.</summary>
     public event Action<int>? ThumbnailProduced;
 
+    /// <summary>Meldet den Fortschritt des Abgleichs.</summary>
+    public event Action? SyncProgressChanged;
+
+    public SyncPhase Phase { get; private set; } = SyncPhase.Ruht;
+
+    /// <summary>Erledigte Einheiten der laufenden Phase.</summary>
+    public int PhaseDone { get; private set; }
+
+    /// <summary>
+    /// Erwartete Einheiten der laufenden Phase, oder 0 wenn unbekannt.
+    /// </summary>
+    /// <remarks>
+    /// Beim ersten Abgleich weiss niemand vorab, wie viele Eintraege der
+    /// Index enthaelt -- er kommt in Stapeln. Statt eine Zahl zu erfinden,
+    /// steht hier 0, und die Oberflaeche zeigt dafuer einen unbestimmten
+    /// Balken.
+    /// </remarks>
+    public int PhaseTotal { get; private set; }
+
+    private void SetPhase(SyncPhase phase, int done = 0, int total = 0)
+    {
+        Phase = phase;
+        PhaseDone = done;
+        PhaseTotal = total;
+        SyncProgressChanged?.Invoke();
+    }
+
     // ------------------------------------------------------------ Zahlen
 
     public int IndexCount => _index?.Count ?? 0;
@@ -95,6 +141,26 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     public long CacheMaxBytes => _cache?.MaxBytes ?? 0;
     public int CacheFileCount => _cache?.FileCount ?? 0;
     public (int Count, long Bytes) ThumbnailUsage() => _thumbnails?.Usage() ?? (0, 0);
+
+    /// <summary>Was diese Freigabe seit dem Start empfangen hat.</summary>
+    /// <remarks>
+    /// Die Verbindung zaehlt nur je Gegenstelle. Fuer eine Spalte je Freigabe
+    /// braucht es diesen Zaehler hier -- er enthaelt Hydration und
+    /// Vorschau-Koepfe, also alles, was wegen dieser Freigabe ueber die
+    /// Leitung kam.
+    /// </remarks>
+    public long BytesReceived => Interlocked.Read(ref _bytesReceived);
+
+    /// <summary>Wann zuletzt etwas fuer diese Freigabe ankam.</summary>
+    public DateTime? LastTransfer { get; private set; }
+
+    private long _bytesReceived;
+
+    private void NoteReceived(long bytes)
+    {
+        Interlocked.Add(ref _bytesReceived, bytes);
+        LastTransfer = DateTime.Now;
+    }
 
     // ------------------------------------------------------------ Index
 
@@ -127,6 +193,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         var changed = _index!.Absorb(files);
         _indexArrived.Release();
 
+        if (Phase == SyncPhase.Index) SetPhase(SyncPhase.Index, _index.Count);
+
         // Geaenderte Dateien duerfen nicht mit alten Bytes im Cache bleiben.
         // Das ist Korrektheit, nicht Cache-Politik.
         if (changed.Count > 0 && _cache is not null && _cache.Invalidate(
@@ -150,10 +218,12 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             State = ShareState.Bereit;
 
             await ApplyModeAsync(ct);
+            SetPhase(SyncPhase.Fertig);
         }
         catch (Exception ex)
         {
             State = ShareState.Fehler;
+            SetPhase(SyncPhase.Ruht);
             _log($"[{FolderId}] {ex.Message}");
             throw;
         }
@@ -161,7 +231,10 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     private async Task WaitForIndexAsync(CancellationToken ct)
     {
-        if (_index!.Count > 0) return;
+        // Nach einem Neustart liegt der Index bereits vor -- dann ist diese
+        // Phase in dem Moment vorbei, in dem sie beginnt.
+        SetPhase(SyncPhase.Index, _index!.Count);
+        if (_index.Count > 0) return;
 
         _log($"[{FolderId}] warte auf den Index ...");
         var deadline = DateTime.UtcNow.AddSeconds(30);
@@ -235,8 +308,11 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
         _mount = new CloudFilterMount(_config.LocalPath, this, _log);
         _mount.Connect();
-        _mount.ProjectPlaceholders();
 
+        SetPhase(SyncPhase.Platzhalter);
+        _mount.ProjectPlaceholders((done, total) => SetPhase(SyncPhase.Platzhalter, done, total));
+
+        SetPhase(SyncPhase.Cache);
         _cache.ReconcileWithDisk();
         CacheChanged?.Invoke();
     }
@@ -291,6 +367,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _log($"[{FolderId}] Modus AlwaysLocal: hole {pending.Count} noch fehlende Dateien ...");
 
         var done = 0;
+        SetPhase(SyncPhase.Inhalte, 0, pending.Count);
         await Parallel.ForEachAsync(
             pending,
             new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
@@ -309,8 +386,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
                     _log($"  {Path.GetFileName(path)}: {ex.Message}");
                 }
 
-                if (Interlocked.Increment(ref done) % 50 == 0)
-                    _log($"[{FolderId}] {done}/{pending.Count} geholt.");
+                var fertig = Interlocked.Increment(ref done);
+                SetPhase(SyncPhase.Inhalte, fertig, pending.Count);
+                if (fertig % 50 == 0) _log($"[{FolderId}] {fertig}/{pending.Count} geholt.");
             });
 
         _log($"[{FolderId}] vollstaendig lokal.");
@@ -418,6 +496,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
                 _connection, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
                 .ConfigureAwait(false);
 
+            NoteReceived(head.Length);
+
             var thumbnail = ExifThumbnail.TryExtract(head);
             if (thumbnail is null)
             {
@@ -497,6 +577,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
             transfer.DoneBytes = data.Length;
             transfer.State = TransferState.Fertig;
+            NoteReceived(data.Length);
 
             _cache?.NoteHydrated(relativePath, data.Length);
             CacheChanged?.Invoke();
