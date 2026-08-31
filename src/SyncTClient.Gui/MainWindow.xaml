@@ -37,6 +37,15 @@
     </Style>
 
     <BooleanToVisibilityConverter x:Key="Sichtbar" />
+
+    <!-- Der Inhalt einer Textspalte. VerticalContentAlignment an der Zelle
+         reicht nicht: DataGridTextColumn setzt dem TextBlock eine eigene
+         Vorlage auf, und die gewinnt. Die Ausrichtung muss also dort stehen,
+         wo der TextBlock entsteht. -->
+    <Style x:Key="ZelleMitte" TargetType="TextBlock">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
   </Window.Resources>
 
   <Grid>
@@ -359,7 +368,7 @@
         <!-- Pfeil statt Wort: die Spalte traegt eine kurze Zahl, eine
              Ueberschrift aus einem ganzen Wort waere breiter als ihr Inhalt.
              Die Bedeutung steht im Tooltip und im Spaltenmenue. -->
-        <DataGridTextColumn x:Name="ColReceived" Width="80"
+        <DataGridTextColumn x:Name="ColReceived" ElementStyle="{StaticResource ZelleMitte}" Width="80"
                             Binding="{Binding ReceivedText}" SortMemberPath="ReceivedValue">
           <DataGridTextColumn.Header>
             <TextBlock Text="&#x2193;" FontSize="14" FontWeight="Bold"
@@ -368,7 +377,7 @@
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
 
-        <DataGridTextColumn x:Name="ColSent" Width="80"
+        <DataGridTextColumn x:Name="ColSent" ElementStyle="{StaticResource ZelleMitte}" Width="80"
                             Binding="{Binding SentText}" SortMemberPath="SentValue">
           <DataGridTextColumn.Header>
             <TextBlock Text="&#x2191;" FontSize="14" FontWeight="Bold"
@@ -378,10 +387,10 @@
         </DataGridTextColumn>
 
 
-        <DataGridTextColumn x:Name="ColSize" Header="{DynamicResource S.Col.Size}" Width="95"
+        <DataGridTextColumn x:Name="ColSize" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Size}" Width="95"
                             Binding="{Binding SizeText}" SortMemberPath="SizeValue" />
 
-        <DataGridTextColumn x:Name="ColLocalFiles" Width="85"
+        <DataGridTextColumn x:Name="ColLocalFiles" ElementStyle="{StaticResource ZelleMitte}" Width="85"
                             Binding="{Binding LocalFilesText}" SortMemberPath="LocalFilesValue">
           <DataGridTextColumn.Header>
             <StackPanel Orientation="Horizontal" Background="Transparent"
@@ -398,7 +407,7 @@
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
 
-        <DataGridTextColumn x:Name="ColLocalSize" Width="95" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColLocalSize" ElementStyle="{StaticResource ZelleMitte}" Width="95" Visibility="Collapsed"
                             Binding="{Binding LocalSizeText}" SortMemberPath="LocalSizeValue">
           <DataGridTextColumn.Header>
             <StackPanel Orientation="Horizontal" Background="Transparent"
@@ -414,19 +423,19 @@
             </StackPanel>
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
-        <DataGridTextColumn x:Name="ColFiles" Header="{DynamicResource S.Col.Files}" Width="90" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColFiles" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Files}" Width="90" Visibility="Collapsed"
                             Binding="{Binding FilesText}" SortMemberPath="FilesValue" />
-        <DataGridTextColumn x:Name="ColThumbs" Header="{DynamicResource S.Col.Thumbs}" Width="110" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColThumbs" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Thumbs}" Width="110" Visibility="Collapsed"
                             Binding="{Binding ThumbsText}" SortMemberPath="ThumbsValue" />
-        <DataGridTextColumn x:Name="ColLimit" Header="{DynamicResource S.Col.Limit}" Width="110" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColLimit" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Limit}" Width="110" Visibility="Collapsed"
                             Binding="{Binding LimitText}" SortMemberPath="LimitValue" />
-        <DataGridTextColumn x:Name="ColMode" Header="{DynamicResource S.Col.Mode}" Width="130" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColMode" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Mode}" Width="130" Visibility="Collapsed"
                             Binding="{Binding ModeText}" />
-        <DataGridTextColumn x:Name="ColLast" Header="{DynamicResource S.Col.LastTransfer}" Width="130" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColLast" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.LastTransfer}" Width="130" Visibility="Collapsed"
                             Binding="{Binding LastTransferText}" SortMemberPath="LastTransferValue" />
-        <DataGridTextColumn x:Name="ColPeer" Header="{DynamicResource S.Col.Peer}" Width="150" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColPeer" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Peer}" Width="150" Visibility="Collapsed"
                             Binding="{Binding PeerText}" />
-        <DataGridTextColumn x:Name="ColFolderId" Header="{DynamicResource S.Col.FolderId}" Width="120" Visibility="Collapsed"
+        <DataGridTextColumn x:Name="ColFolderId" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.FolderId}" Width="120" Visibility="Collapsed"
                             Binding="{Binding FolderId}" />
         <DataGridTemplateColumn x:Name="ColPath" Header="{DynamicResource S.Col.Folder}" Width="*"
                                 SortMemberPath="PathText" CanUserSort="True">
