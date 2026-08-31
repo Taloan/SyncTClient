@@ -1,7 +1,8 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using Windows.Win32;
 using Windows.Win32.Storage.CloudFilters;
+using Windows.Win32.Storage.FileSystem;
 
 namespace SyncTClient.Vfs;
 
@@ -53,6 +54,19 @@ public sealed class HydrationCache
 
     /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
     public long MaxBytes { get; }
+
+    /// <summary>
+    /// Zweite Meinung, bevor eine Datei verdraengt wird.
+    /// </summary>
+    /// <remarks>
+    /// Der Cache kennt nur Groessen und Zugriffszeiten. Ob es die letzte
+    /// Kopie einer Datei im Netz ist, weiss allein die Freigabe -- sie sieht
+    /// die Indizes der Gegenstellen. Verdraengen heisst Bytes wegwerfen, und
+    /// das darf nur, wer sie wiederbeschaffen kann.
+    ///
+    /// Ohne gesetzte Meinung wird verdraengt wie bisher.
+    /// </remarks>
+    public Func<string, bool>? MayEvict { get; set; }
 
     public long UsedBytes => _entries.Values.Sum(e => e.Bytes);
 
@@ -122,6 +136,7 @@ public sealed class HydrationCache
 
             var candidates = _entries
                 .Where(e => !IsPinned(e.Key))
+                .Where(e => MayEvict?.Invoke(e.Key) ?? true)
                 .OrderBy(e => e.Value.LastAccess)
                 .ToList();
 
@@ -209,6 +224,20 @@ public sealed class HydrationCache
             // Schreibzugriff ist noetig; ReadWrite-Freigabe, damit ein Leser
             // die Datei nicht blockiert.
             using var handle = File.OpenHandle(full, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+
+            // Eine lokal geaenderte Datei ist nicht mehr abgeglichen, und
+            // Dehydrieren wuerde die Aenderung verwerfen. Windows lehnt das
+            // von sich aus ab -- aber die Absage kaeme im selben Zweig an wie
+            // "gerade in Benutzung, spaeter noch einmal", und dann wuesste
+            // niemand, dass hier eine Aenderung liegt, die nirgends hingeht.
+            if (IsInSync(handle) == false)
+            {
+                _log?.Invoke($"  \"{relativePath}\" ist lokal geaendert und bleibt liegen " +
+                             $"({reason}). Der Schreibweg fehlt noch -- die Aenderung erreicht " +
+                             "die Gegenstelle nicht.");
+                return false;
+            }
+
             unsafe
             {
                 // Laenge -1 heisst: die ganze Datei.
@@ -233,6 +262,36 @@ public sealed class HydrationCache
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Ist die Datei mit der Gegenstelle abgeglichen?
+    /// </summary>
+    /// <returns>
+    /// <c>false</c> nur, wenn Windows das ausdruecklich verneint;
+    /// <c>true</c> auch dann, wenn sich die Frage nicht beantworten liess --
+    /// die eigentliche Sicherung ist die Weigerung der Cloud-Filter-Schicht,
+    /// diese Pruefung macht sie nur sichtbar.
+    /// </returns>
+    private unsafe bool IsInSync(Microsoft.Win32.SafeHandles.SafeFileHandle handle)
+    {
+        var info = new FILE_ATTRIBUTE_TAG_INFO();
+
+        if (!PInvoke.GetFileInformationByHandleEx(
+                handle, FILE_INFO_BY_HANDLE_CLASS.FileAttributeTagInfo,
+                &info, (uint)sizeof(FILE_ATTRIBUTE_TAG_INFO)))
+        {
+            return true;
+        }
+
+        var state = PInvoke.CfGetPlaceholderStateFromFileInfo(
+            &info, FILE_INFO_BY_HANDLE_CLASS.FileAttributeTagInfo);
+
+        // Was kein Platzhalter ist, hat auch keinen Abgleichzustand -- eine
+        // gewoehnliche Datei im Ordner geht uns nichts an.
+        if ((state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER) == 0) return true;
+
+        return (state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC) != 0;
     }
 
     private bool IsPinned(string relativePath)

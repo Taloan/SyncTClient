@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SyncTClient.Mount;
@@ -50,6 +50,21 @@ public sealed class ShareConfig
     public string LocalPath { get; set; } = "";
 
     public ShareMode Mode { get; set; } = ShareMode.OnDemand;
+
+    /// <summary>
+    /// Wie viele andere Knoten eine Datei vollstaendig fuehren muessen, bevor
+    /// wir unsere Kopie verdraengen duerfen.
+    /// </summary>
+    /// <remarks>
+    /// Verdraengen ist eine einseitige Wette: die Bytes sind weg, und ab dann
+    /// haengt die Datei an einem anderen. Mit einer einzigen Gegenstelle --
+    /// dem Normalfall gegen einen Server -- ist 1 die einzig sinnvolle
+    /// Vorgabe. Wer mehrere Knoten hat und seine Fotos nicht an einem
+    /// einzigen Notebook haengen lassen will, setzt 2.
+    ///
+    /// 0 schaltet die Pruefung ab und verdraengt wie frueher.
+    /// </remarks>
+    public int MinimumCopies { get; set; } = 1;
 
     /// <summary>
     /// Teilbaum-Auswahl: nur diese Pfade werden ueberhaupt projiziert. Leer

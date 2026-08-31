@@ -28,12 +28,18 @@
           <Label Content="Cache-Budget (MB)" />
           <TextBox x:Name="CacheBudgetBox" />
         </StackPanel>
+        <StackPanel Width="200" Margin="16,0,0,0" x:Name="CopiesPanel">
+          <Label Content="Erst freigeben ab … Kopien" />
+          <TextBox x:Name="MinimumCopiesBox" />
+        </StackPanel>
         <StackPanel Margin="16,0,0,0" VerticalAlignment="Bottom">
           <CheckBox x:Name="ThumbsBox" Content="Vorschaubilder bei Bedarf erzeugen" Margin="0,0,0,6" />
           <CheckBox x:Name="AutoStartBox" Content="Beim Start automatisch hochfahren" Margin="0,0,0,12" />
         </StackPanel>
       </StackPanel>
-      <TextBlock x:Name="CacheHint" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8" />
+      <TextBlock x:Name="CacheHint" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,4" />
+      <TextBlock Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8"
+                 Text="Verdrängen heißt Bytes wegwerfen. Eine Datei wird erst freigegeben, wenn so viele andere Knoten sie vollständig führen. Gegen einen Server ist 1 richtig; wer mehrere Knoten hat, kann 2 verlangen. 0 schaltet die Prüfung ab." />
     </StackPanel>
 
     <DockPanel Grid.Row="1" Margin="0,8,0,4">

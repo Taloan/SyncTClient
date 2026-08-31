@@ -57,6 +57,38 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public string PeerText => Peer.Display;
 
+    // ------------------------------------------------------- Vollständige Kopien
+
+    /// <summary>
+    /// Wie viele erreichbare Knoten den Inhalt tragen -- wir selbst nicht
+    /// mitgezählt.
+    /// </summary>
+    public int Copies => Share?.ReachableCopies ?? 0;
+
+    public string CopiesText => Accepted ? Copies.ToString() : "—";
+
+    /// <summary>
+    /// Warnt, wenn die Platzhalter an einem seidenen Faden hängen.
+    /// </summary>
+    /// <remarks>
+    /// Ein Platzhalter ist ein Versprechen auf eine Datei. Hält niemand mehr
+    /// den Inhalt, ist das Versprechen wertlos -- und das sieht man dem
+    /// Ordner nicht an, weil die Namen weiter dastehen.
+    ///
+    /// Die Zahl ist eine Untergrenze: über Knoten, mit denen wir gerade nicht
+    /// verbunden sind, wissen wir nichts.
+    /// </remarks>
+    public bool CopiesAtRisk => Accepted && Copies < 1;
+
+    public string CopiesHint => !Accepted
+        ? "Noch nicht übernommen."
+        : Copies == 0
+            ? "Kein erreichbarer Knoten führt diesen Ordner — Platzhalter lassen sich " +
+              "gerade nicht öffnen. Ob verdrängt werden darf, entscheidet weiterhin die " +
+              "zuletzt empfangene Ankündigung, nicht die Erreichbarkeit."
+            : $"{Copies} erreichbarer Knoten führt den Inhalt. Über nicht verbundene " +
+              "Knoten wissen wir nichts — die Zahl ist eine Untergrenze.";
+
     // ------------------------------------------------------------ Fortschritt
 
     /// <summary>
@@ -135,6 +167,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                  {
                      nameof(Name), nameof(StatusText), nameof(Ready), nameof(Accepted),
                      nameof(PeersText), nameof(PeerOnline), nameof(PeerText),
+                     nameof(Copies), nameof(CopiesText), nameof(CopiesAtRisk), nameof(CopiesHint),
                      nameof(Busy), nameof(Indeterminate), nameof(Percent), nameof(ProgressText),
                      nameof(ReceivedText), nameof(SizeText), nameof(LocalSizeText),
                      nameof(FilesText), nameof(LocalFilesText), nameof(ThumbsText),

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using SyncTClient.Bep;
@@ -26,6 +26,7 @@ public partial class ShareSettingsWindow : Window
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
         CacheBudgetBox.Text = (share.CacheMaxBytes / (1024 * 1024)).ToString();
+        MinimumCopiesBox.Text = share.MinimumCopies.ToString();
         ThumbsBox.IsChecked = share.GenerateThumbnails;
         AutoStartBox.IsChecked = share.AutoStart;
         UpdateCacheEnabled();
@@ -85,6 +86,10 @@ public partial class ShareSettingsWindow : Window
         // Bei "vollstaendig lokal" gibt es nichts zu verdraengen.
         var onDemand = ModeBox.SelectedIndex == 0;
         CachePanel.IsEnabled = onDemand;
+
+        // Bei "vollstaendig lokal" wird nie verdraengt -- dann gibt es auch
+        // nichts, wofuer eine Mindestzahl an Kopien gelten koennte.
+        CopiesPanel.IsEnabled = onDemand;
         CacheHint.Text = onDemand
             ? "Ist das Budget überschritten, wird freigegeben, was am längsten nicht geöffnet wurde. Angeheftete Dateien bleiben."
             : "In diesem Modus wird alles lokal vorgehalten; ein Budget gilt nicht.";
@@ -108,6 +113,13 @@ public partial class ShareSettingsWindow : Window
             return;
         }
 
+        if (!int.TryParse(MinimumCopiesBox.Text.Trim(), out var copies) || copies < 0)
+        {
+            SaveHint.Text = "Die Anzahl Kopien muss eine Zahl ab 0 sein.";
+            return;
+        }
+
+        _share.MinimumCopies = copies;
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.CacheMaxBytes = megabytes * 1024 * 1024;
