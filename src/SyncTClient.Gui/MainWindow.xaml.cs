@@ -330,10 +330,32 @@ public partial class MainWindow : Window
         _renameTimer.Start();
     }
 
+    /// <summary>Die Zelle, in der ein Klick gelandet ist.</summary>
+    /// <remarks>
+    /// Nicht jeder Klick landet auf einem Element des Sichtbaums. Ein
+    /// Hyperlink ist ein ContentElement -- er steht in einem Textfluss und
+    /// nicht in der Zeichenordnung. VisualTreeHelper.GetParent wirft fuer
+    /// ihn, und der Klick auf die Knotenspalte oder den Ordnerpfad beendete
+    /// damit das Programm.
+    ///
+    /// Der Weg nach oben nimmt deshalb, was zur jeweiligen Art passt: den
+    /// Sichtbaum fuer das Sichtbare, den Textfluss fuer das Geschriebene.
+    /// </remarks>
     private static DataGridCell? FindCell(DependencyObject? source)
     {
         while (source is not null and not DataGridCell)
-            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        {
+            source = source switch
+            {
+                System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                    => System.Windows.Media.VisualTreeHelper.GetParent(source),
+
+                ContentElement content
+                    => ContentOperations.GetParent(content) ?? LogicalTreeHelper.GetParent(content),
+
+                _ => LogicalTreeHelper.GetParent(source)
+            };
+        }
 
         return source as DataGridCell;
     }
