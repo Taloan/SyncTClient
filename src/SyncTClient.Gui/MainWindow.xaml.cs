@@ -381,9 +381,12 @@ public partial class MainWindow : Window
     /// Haelt den Abgleich an oder setzt ihn fort.
     /// </summary>
     /// <remarks>
-    /// Angehalten heisst: keine Inhalte mehr holen. Die Platzhalter bleiben
-    /// stehen, der Index laeuft weiter mit -- sonst waere nach dem Fortsetzen
-    /// erst einmal ein voller Abgleich faellig.
+    /// Angehalten heisst: keine Uebertragung und keine Aenderung im Ordner.
+    /// Die Platzhalter bleiben stehen und der Ordner bleibt eingehaengt.
+    ///
+    /// Die Leitung wird nur hier getrennt und wieder aufgebaut, nicht in
+    /// <see cref="ApplyPause"/>: das laeuft im Sekundentakt mit, und ein
+    /// Verbindungsaufbau je Sekunde waere keiner.
     /// </remarks>
     private void OnTogglePauseAll(object? sender = null, RoutedEventArgs? e = null)
     {
@@ -391,6 +394,7 @@ public partial class MainWindow : Window
         Persist();
 
         ApplyPause();
+        _ = ApplyPauseToPeersAsync();
         RefreshRows();
 
         Status(App.S(_config.Paused ? "M.PausedAll" : "M.ResumedAll"));
@@ -414,7 +418,6 @@ public partial class MainWindow : Window
         }
 
         PauseAllButton.Content = App.S(_config.Paused ? "S.Main.ResumeAll" : "S.Main.PauseAll");
-        _ = ApplyPauseToPeersAsync();
     }
 
     /// <summary>
@@ -450,8 +453,6 @@ public partial class MainWindow : Window
                 Status($"[{item.Display}] {ex.Message}");
             }
         }
-
-        RebuildRows();
     }
 
     /// <summary>Klappt die Zeile auf oder zu.</summary>
