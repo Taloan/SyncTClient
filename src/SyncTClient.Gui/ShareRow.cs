@@ -191,6 +191,43 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public string LastTransferText => Share?.LastTransfer is { } t ? t.ToString("HH:mm:ss") : "—";
 
+    // ------------------------------------------------------- Aufgeklappt
+
+    /// <summary>
+    /// Was die Gegenstelle fuehrt: Dateien und Groesse.
+    /// </summary>
+    /// <remarks>
+    /// Der Gegenstand des Vergleichs. Ohne diese Zeile liesse sich der
+    /// Rueckstand darunter nicht einordnen -- 444 offene Dateien sind bei
+    /// 500 etwas anderes als bei 150.000.
+    /// </remarks>
+    public string GlobalText => Share is null
+        ? "—"
+        : App.S("R.CountAndSize", Format.Count(Share.IndexCount), Format.Bytes(Share.IndexBytes));
+
+    /// <summary>Was davon lokal liegt, mit Inhalt.</summary>
+    public string LocalText => Share is null
+        ? "—"
+        : App.S("R.CountAndSize", Format.Count(Share.CacheFileCount), Format.Bytes(Share.CacheUsedBytes));
+
+    public string OutstandingText => Share is null
+        ? "—"
+        : Share.Outstanding == 0
+            ? App.S("R.NothingOutstanding")
+            : App.S("R.CountAndSize", Format.Count(Share.Outstanding), Format.Bytes(Share.OutstandingBytes));
+
+    public string LastScanText => Share is { LastScan.Year: > 1 }
+        ? Share.LastScan.ToString("HH:mm:ss")
+        : "—";
+
+    public string FolderIdText => Share?.FolderId ?? FolderId;
+
+    public string ThumbDetailText => Share is null
+        ? "—"
+        : App.S("R.CountAndSize",
+            Format.Count(Share.ThumbnailUsage().Count),
+            Format.Bytes(Share.ThumbnailUsage().Bytes));
+
     // Rohwerte zum Sortieren. Die Textspalten zeigen "9,4 MB" und "944 MB".
     // Alphabetisch sortiert stuende der kleinere Wert hinten.
     public long ReceivedValue => Share?.BytesReceived ?? -1;
@@ -229,7 +266,9 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                      nameof(PathText), nameof(ModeText), nameof(LimitText), nameof(LastTransferText),
                      nameof(ReceivedValue), nameof(SentValue), nameof(SizeValue), nameof(LocalSizeValue),
                      nameof(FilesValue), nameof(LocalFilesValue), nameof(ThumbsValue),
-                     nameof(LimitValue), nameof(LastTransferValue)
+                     nameof(LimitValue), nameof(LastTransferValue),
+                     nameof(GlobalText), nameof(LocalText), nameof(OutstandingText),
+                     nameof(LastScanText), nameof(FolderIdText), nameof(ThumbDetailText)
                  })
         {
             Notify(name);

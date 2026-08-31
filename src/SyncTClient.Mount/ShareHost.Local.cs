@@ -348,16 +348,25 @@ public sealed partial class ShareHost
 
         var found = 0;
 
+        // Was im Ordner steht, mit Groesse und Zeit. Platzhalter gehoeren
+        // dazu: fuer den Rueckstand zaehlt, ob der Eintrag da ist und zum
+        // Index passt, nicht ob sein Inhalt lokal liegt.
+        var vorhanden = new Dictionary<string, (long Size, long ModifiedS)>(StringComparer.Ordinal);
+
         try
         {
             foreach (var info in new DirectoryInfo(root).EnumerateFiles("*", options))
             {
+                if (NameOf(info.FullName) is not { } name) continue;
+                if (!_config.Includes(name)) continue;
+
+                vorhanden[name] = (
+                    info.Length,
+                    new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds());
+
                 // Ein Platzhalter ist nicht vollstaendig hier. Angekuendigt
                 // wird nur, was wir ganz haben.
                 if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
-
-                if (NameOf(info.FullName) is not { } name) continue;
-                if (!_config.Includes(name)) continue;
 
                 var known = LocalCopy(name);
                 if (known is not null && !known.Deleted &&
@@ -372,13 +381,64 @@ public sealed partial class ShareHost
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _log($"[{FolderId}] der Durchgang ueber \"{root}\" brach ab: {ex.Message}");
+            return;
         }
+
+        LastScan = DateTime.Now;
+        MeasureOutstanding(vorhanden);
 
         if (found == 0) return;
 
         if (found > 0 && !quiet) _log($"[{FolderId}] {found} lokale Dateien sind zu pruefen.");
         if (found > 0 && quiet) _log($"[{FolderId}] {found} neue oder geaenderte Dateien gefunden.");
         Wake();
+    }
+
+    /// <summary>
+    /// Zaehlt, was die Gegenstelle fuehrt und hier noch nicht so dasteht.
+    /// </summary>
+    /// <remarks>
+    /// Dieselbe Bedingung, nach der auch uebernommen wird: eine Datei gilt als
+    /// abgeglichen, wenn sie da ist und Groesse und Zeit zum Index passen. Ob
+    /// ihr Inhalt lokal liegt, spielt keine Rolle -- ein Platzhalter ist der
+    /// erwuenschte Zustand und kein Rueckstand.
+    ///
+    /// Gerechnet wird auf dem Verzeichnis, das der Durchgang ohnehin gelesen
+    /// hat. Ein eigener Lauf ueber den Index mit einem Zugriff je Datei waere
+    /// dieselbe Auskunft zum doppelten Preis.
+    /// </remarks>
+    private void MeasureOutstanding(Dictionary<string, (long Size, long ModifiedS)> vorhanden)
+    {
+        var offen = 0;
+        long bytes = 0;
+
+        try
+        {
+            lock (_indexGate)
+            {
+                if (_index is null) return;
+
+                foreach (var (name, size, modifiedS, isDirectory) in _index.EnumerateLight())
+                {
+                    if (isDirectory || !_config.Includes(name)) continue;
+                    if (vorhanden.TryGetValue(name, out var da)
+                        && da.Size == size && da.ModifiedS == modifiedS) continue;
+
+                    offen++;
+                    bytes += size;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Eine Zahl fuer die Anzeige. Sie ist es nicht wert, den
+            // Hintergrundlauf abzubrechen.
+            return;
+        }
+
+        Outstanding = offen;
+        OutstandingBytes = bytes;
+        UpdateOutstandingPhase();
     }
 
     // ------------------------------------------------------------ Hintergrundlauf

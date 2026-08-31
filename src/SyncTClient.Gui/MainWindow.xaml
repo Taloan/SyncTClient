@@ -22,6 +22,19 @@
       <Setter Property="FontSize" Value="11" />
       <Setter Property="Foreground" Value="{DynamicResource Gedaempft}" />
     </Style>
+
+    <!-- Merkmal und Wert der aufgeklappten Zeile. Das Merkmal tritt zurueck,
+         damit beim Ueberfliegen die Zahlen stehenbleiben und nicht ihre
+         Benennungen. -->
+    <Style x:Key="Merkmal" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="{DynamicResource Gedaempft}" />
+      <Setter Property="Margin" Value="0,0,14,4" />
+    </Style>
+    <Style x:Key="Wert" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
   </Window.Resources>
 
   <Grid>
@@ -52,7 +65,81 @@
               GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource RahmenFein}"
               BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" RowHeight="30"
               SelectionChanged="OnShareSelected" MouseDoubleClick="OnGridDoubleClick"
-              PreviewMouseRightButtonDown="OnGridRightClick">
+              PreviewMouseRightButtonDown="OnGridRightClick"
+              RowDetailsVisibilityMode="VisibleWhenSelected">
+
+      <!-- Aufgeklappt steht in der Zeile, was in keine Spalte passt. Nicht
+           alles davon gehoert nebeneinander: die Zahlen sind ein Vergleich
+           und werden untereinander gelesen. Sichtbar wird es an der
+           ausgewaehlten Zeile, denn mehrere gleichzeitig aufgeklappt waeren
+           dieselbe Unuebersichtlichkeit, die die Spalten schon haben. -->
+      <DataGrid.RowDetailsTemplate>
+        <DataTemplate>
+          <Border Background="{DynamicResource Feld}" BorderBrush="{DynamicResource RahmenFein}"
+                  BorderThickness="0,1,0,1" Padding="16,10">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="24" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+              </Grid.RowDefinitions>
+
+              <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Global}" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource Wert}"
+                         Text="{Binding GlobalText}" />
+              <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Local}" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Wert}"
+                         Text="{Binding LocalText}" />
+              <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Outstanding}" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource Wert}"
+                         Text="{Binding OutstandingText}" />
+              <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Thumbs}" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource Wert}"
+                         Text="{Binding ThumbDetailText}" />
+              <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Transfer}" />
+              <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource Wert}">
+                <Run Text="&#x2193; " Foreground="{DynamicResource Gedaempft}" /><Run Text="{Binding ReceivedText, Mode=OneWay}" /><Run Text="   &#x2191; " Foreground="{DynamicResource Gedaempft}" /><Run Text="{Binding SentText, Mode=OneWay}" />
+              </TextBlock>
+
+              <TextBlock Grid.Row="0" Grid.Column="3" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.FolderId}" />
+              <TextBlock Grid.Row="0" Grid.Column="4" Style="{StaticResource Wert}"
+                         Text="{Binding FolderIdText}" />
+              <TextBlock Grid.Row="1" Grid.Column="3" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Path}" />
+              <TextBlock Grid.Row="1" Grid.Column="4" Style="{StaticResource Wert}"
+                         Text="{Binding PathText}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Row="2" Grid.Column="3" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Mode}" />
+              <TextBlock Grid.Row="2" Grid.Column="4" Style="{StaticResource Wert}"
+                         Text="{Binding ModeText}" />
+              <TextBlock Grid.Row="3" Grid.Column="3" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Peers}" />
+              <TextBlock Grid.Row="3" Grid.Column="4" Style="{StaticResource Wert}"
+                         Text="{Binding PeersText}" />
+              <TextBlock Grid.Row="4" Grid.Column="3" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.LastScan}" />
+              <TextBlock Grid.Row="4" Grid.Column="4" Style="{StaticResource Wert}"
+                         Text="{Binding LastScanText}" />
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </DataGrid.RowDetailsTemplate>
+
       <DataGrid.Columns>
 
         <DataGridTemplateColumn x:Name="ColName" Header="{DynamicResource S.Col.Name}" Width="240"

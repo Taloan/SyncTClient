@@ -331,8 +331,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // ueber ausgeschlossene Namen oder alte Fassungen redet, sagt nichts,
         // was uns fehlt -- und "gleicht ab" waere dann genauso falsch wie
         // vorher "abgeglichen".
-        var neu = QueueIncoming(changed);
-        if (neu > 0) PeerBusy(neu);
+        if (QueueIncoming(changed) > 0) PeerBusy();
     }
 
     /// <summary>Wann die Gegenstelle zuletzt etwas zu tun gab.</summary>
@@ -345,69 +344,78 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private static readonly TimeSpan Ruhe = TimeSpan.FromSeconds(10);
 
-    /// <summary>Wie viel dieser Abgleich umfasst und wie viel davon steht.</summary>
+    /// <summary>
+    /// Wie viele Dateien die Gegenstelle fuehrt, die hier noch nicht so
+    /// dastehen, und wie viel das zusammen ist.
+    /// </summary>
     /// <remarks>
-    /// Ein Anteil, kein Versprechen. Die Gesamtzahl waechst, solange die
-    /// Gegenstelle weiter ankuendigt -- wie viel sie insgesamt noch sagen
-    /// will, weiss sie selbst nicht. Sie zaehlt trotzdem: sie sagt, wie viel
-    /// von dem, was bisher hereinkam, schon uebernommen ist.
+    /// Der Arbeitsvorrat, gemessen und nicht geschaetzt. Gezaehlt wird beim
+    /// Durchgang ueber den Ordner; zwischen zwei Durchgaengen zieht jeder
+    /// uebernommene Eintrag die Zahl herunter, damit sie sich bewegt und
+    /// nicht minutenlang steht.
     /// </remarks>
-    private int _abgleichGesamt;
-    private int _abgleichFertig;
+    public int Outstanding { get; private set; }
+
+    public long OutstandingBytes { get; private set; }
+
+    /// <summary>Wann zuletzt ueber den Ordner gegangen wurde.</summary>
+    public DateTime LastScan { get; private set; }
 
     /// <summary>
     /// Die Gegenstelle ist noch nicht fertig -- sie hat angekuendigt oder
     /// laedt selbst noch.
     /// </summary>
-    /// <param name="neu">
-    /// Wie viele Namen dabei neu dazukamen. 0 heisst: sie meldet sich, hat
-    /// uns aber nichts zu uebergeben. Dann gibt es auch keinen Anteil.
-    /// </param>
-    public void PeerBusy(int neu = 0)
+    public void PeerBusy()
     {
         _letzteMeldung = DateTime.UtcNow;
-
-        // Ein neuer Abgleich faengt bei null an. Ohne diesen Schnitt liefe
-        // der Zaehler ueber Stunden weiter und der Anteil stuende immer bei
-        // fast hundert.
-        if (Phase != SyncPhase.Abgleich)
-        {
-            _abgleichGesamt = 0;
-            _abgleichFertig = 0;
-        }
-
-        _abgleichGesamt += neu;
-
-        if (Phase is SyncPhase.Fertig or SyncPhase.Abgleich)
-            SetPhase(SyncPhase.Abgleich, _abgleichFertig, _abgleichGesamt);
+        if (Phase == SyncPhase.Fertig) UpdateOutstandingPhase();
     }
 
-    /// <summary>Meldet, wie viele Namen ein Durchgang abgearbeitet hat.</summary>
-    private void Fortschritt(int verarbeitet)
+    /// <summary>Meldet, wie viele Eintraege ein Durchgang uebernommen hat.</summary>
+    /// <remarks>
+    /// Eine Fortschreibung zwischen zwei Messungen, keine eigene Messung. Sie
+    /// kann daneben liegen; der naechste Durchgang setzt sie gerade.
+    /// </remarks>
+    private void Fortschritt(int uebernommen)
     {
-        if (verarbeitet == 0 || Phase != SyncPhase.Abgleich) return;
+        if (uebernommen <= 0) return;
 
-        _abgleichFertig = Math.Min(_abgleichGesamt, _abgleichFertig + verarbeitet);
-        SetPhase(SyncPhase.Abgleich, _abgleichFertig, _abgleichGesamt);
+        Outstanding = Math.Max(0, Outstanding - uebernommen);
+        UpdateOutstandingPhase();
+    }
+
+    /// <summary>Traegt den Arbeitsvorrat in die Phase ein.</summary>
+    private void UpdateOutstandingPhase()
+    {
+        if (Phase is not (SyncPhase.Fertig or SyncPhase.Abgleich)) return;
+
+        // Erledigte von insgesamt, damit der Balken einen Bezug hat. Ohne
+        // Rueckstand bleibt nur die Frage, ob die Gegenstelle noch redet.
+        if (Outstanding > 0)
+        {
+            var gesamt = IndexCount;
+            SetPhase(SyncPhase.Abgleich, Math.Max(0, gesamt - Outstanding), gesamt);
+            return;
+        }
+
+        if (DateTime.UtcNow - _letzteMeldung < Ruhe) SetPhase(SyncPhase.Abgleich);
     }
 
     /// <summary>
     /// Prueft, ob wieder Ruhe eingekehrt ist.
     /// </summary>
     /// <remarks>
-    /// Zwei Bedingungen, und beide muessen gelten: nichts liegt mehr an, was
-    /// zu uebernehmen waere, und seit der letzten Meldung ist es eine Weile
-    /// still. Die erste allein reichte nicht -- zwischen zwei Stapeln ist die
-    /// Warteschlange auch leer.
+    /// Drei Bedingungen, und alle muessen gelten: nichts liegt mehr an, was
+    /// zu uebernehmen waere, kein Rueckstand gegenueber dem Index, und seit
+    /// der letzten Meldung ist es eine Weile still. Die erste allein reichte
+    /// nicht -- zwischen zwei Stapeln ist die Warteschlange auch leer.
     /// </remarks>
     private void SettlePhase()
     {
         if (Phase != SyncPhase.Abgleich) return;
-        if (!_incoming.IsEmpty) return;
+        if (!_incoming.IsEmpty || Outstanding > 0) return;
         if (DateTime.UtcNow - _letzteMeldung < Ruhe) return;
 
-        _abgleichGesamt = 0;
-        _abgleichFertig = 0;
         SetPhase(SyncPhase.Fertig);
     }
 

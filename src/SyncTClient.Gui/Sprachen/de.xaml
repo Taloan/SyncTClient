@@ -323,4 +323,16 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="M.CacheNone">Noch keine Freigabe.</s:String>
   <s:String x:Key="R.PhaseSyncing">gleicht ab</s:String>
   <s:String x:Key="R.Synced">abgeglichen</s:String>
+  <s:String x:Key="S.Detail.Global">Globaler Status</s:String>
+  <s:String x:Key="S.Detail.Local">Lokaler Status</s:String>
+  <s:String x:Key="S.Detail.Outstanding">Nicht abgeglichen</s:String>
+  <s:String x:Key="S.Detail.Thumbs">Vorschaubilder</s:String>
+  <s:String x:Key="S.Detail.Transfer">Übertragen</s:String>
+  <s:String x:Key="S.Detail.FolderId">Ordnerkennung</s:String>
+  <s:String x:Key="S.Detail.Path">Ordnerpfad</s:String>
+  <s:String x:Key="S.Detail.Mode">Modus für neue Dateien</s:String>
+  <s:String x:Key="S.Detail.Peers">Geteilt mit</s:String>
+  <s:String x:Key="S.Detail.LastScan">Letzter Durchgang</s:String>
+  <s:String x:Key="R.CountAndSize">{0} Dateien · {1}</s:String>
+  <s:String x:Key="R.NothingOutstanding">nichts offen</s:String>
 </ResourceDictionary>

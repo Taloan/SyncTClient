@@ -104,12 +104,10 @@ public sealed partial class ShareHost
         if (_mount is null || _incoming.IsEmpty) return;
 
         var bilanz = new Bilanz();
-        var verarbeitet = 0;
 
         foreach (var name in _incoming.Keys.ToArray())
         {
             _incoming.TryRemove(name, out _);
-            verarbeitet++;
 
             try
             {
@@ -123,7 +121,9 @@ public sealed partial class ShareHost
             }
         }
 
-        Fortschritt(verarbeitet);
+        // Nur was wirklich hergestellt wurde, zieht den Rueckstand herunter.
+        // Ein Name, der schon so dastand, war nie ein Rueckstand.
+        Fortschritt(bilanz.Angelegt + bilanz.Ersetzt + bilanz.Entfernt);
 
         if (!bilanz.Leer) _log($"[{FolderId}] von der Gegenstelle uebernommen: {bilanz}.");
     }
