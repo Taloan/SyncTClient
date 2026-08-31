@@ -94,14 +94,8 @@ public sealed class BepConnection : IAsyncDisposable
                 throw new InvalidDataException(
                     $"Geraete-ID stimmt nicht.\n  erwartet: {expectedPeer}\n  bekommen: {peerId}");
 
-            var peerHello = await HelloExchange.ExchangeAsync(tls, new Hello
-            {
-                DeviceName = deviceName,
-                ClientName = "SyncTClient",
-                ClientVersion = "v0.1",
-                NumConnections = 1,
-                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000
-            }, ct).ConfigureAwait(false);
+            var peerHello = await HelloExchange
+                .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
 
             return new BepConnection(tcp, tls, peerId, peerHello);
         }
@@ -111,6 +105,66 @@ public sealed class BepConnection : IAsyncDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// Nimmt eine Verbindung an, die die Gegenstelle aufgebaut hat: TLS als
+    /// Server, danach derselbe Hello-Austausch.
+    /// </summary>
+    /// <remarks>
+    /// Eine erwartete Geraete-ID gibt es hier nicht -- wer anruft, steht erst
+    /// nach dem Handschlag fest. Ob dieses Geraet willkommen ist, entscheidet
+    /// der Aufrufer anhand von <see cref="PeerId"/>.
+    /// </remarks>
+    public static async Task<BepConnection> AcceptAsync(
+        TcpClient tcp, DeviceIdentity identity,
+        string deviceName = "SyncTClient", CancellationToken ct = default)
+    {
+        try
+        {
+            tcp.NoDelay = true;
+            var tls = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false);
+
+            await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+            {
+                ServerCertificate = identity.Certificate,
+
+                // Ohne Zertifikat der Gegenseite gaebe es keine Geraete-ID --
+                // und ohne die waere die Verbindung nichts wert.
+                ClientCertificateRequired = true,
+                ApplicationProtocols = [new SslApplicationProtocol(BepProtocolName)],
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+                RemoteCertificateValidationCallback = (_, _, _, _) => true
+            }, ct).ConfigureAwait(false);
+
+            if (tls.NegotiatedApplicationProtocol.ToString() != BepProtocolName)
+                throw new InvalidDataException(
+                    $"Anrufer hat \"{tls.NegotiatedApplicationProtocol}\" statt \"{BepProtocolName}\" ausgehandelt.");
+
+            var remoteCert = tls.RemoteCertificate
+                ?? throw new InvalidDataException("Anrufer hat kein Zertifikat geliefert.");
+            var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
+
+            var peerHello = await HelloExchange
+                .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
+
+            return new BepConnection(tcp, tls, peerId, peerHello);
+        }
+        catch
+        {
+            tcp.Dispose();
+            throw;
+        }
+    }
+
+    private static Hello OwnHello(string deviceName) => new()
+    {
+        DeviceName = deviceName,
+        ClientName = "SyncTClient",
+        ClientVersion = "v0.1",
+        NumConnections = 1,
+        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() * 1_000_000
+    };
 
     /// <summary>
     /// Die Leseschleife. Laeuft bis zum Abbruch oder bis der Peer schliesst;

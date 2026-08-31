@@ -13,7 +13,7 @@ public partial class SharePeersWindow : Window
         InitializeComponent();
 
         TitleText.Text = $"Knoten – {row.Name}";
-        SubtitleText.Text = row.Accepted ? row.PathText : "Angeboten, aber nicht übernommen.";
+        SubtitleText.Text = row.Accepted ? row.PathText : App.S("N.NotConnected");
 
         Grid.ItemsSource = new[] { Beschreibe(row) };
     }
@@ -53,7 +53,7 @@ public partial class SharePeersWindow : Window
         if (share.Phase is not (SyncPhase.Fertig or SyncPhase.Ruht))
             return share.PhaseTotal > 0
                 ? $"{share.PhaseDone:N0} von {share.PhaseTotal:N0}"
-                : "läuft …";
+                : App.S("N.Running");
 
         if (share.Config.Mode != ShareMode.AlwaysLocal)
             return "nichts – Inhalte kommen bei Bedarf";

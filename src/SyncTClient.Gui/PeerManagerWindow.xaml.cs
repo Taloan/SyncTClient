@@ -19,12 +19,14 @@ public partial class PeerManagerWindow : Window
     private readonly Func<PeerItem, Task> _connect;
     private readonly Func<PeerItem, Task> _remove;
     private readonly Action _add;
+    private readonly Action<PeerItem> _edit;
 
     private PeerItem? _selected;
 
     public PeerManagerWindow(
         ObservableCollection<PeerItem> peers,
         Action add,
+        Action<PeerItem> edit,
         Func<PeerItem, Task> connect,
         Func<PeerItem, Task> remove)
     {
@@ -32,6 +34,7 @@ public partial class PeerManagerWindow : Window
 
         _peers = peers;
         _add = add;
+        _edit = edit;
         _connect = connect;
         _remove = remove;
 
@@ -49,12 +52,21 @@ public partial class PeerManagerWindow : Window
     private void UpdateButtons()
     {
         ConnectButton.IsEnabled = _selected is not null;
+        EditButton.IsEnabled = _selected is not null;
         ConnectButton.Content = _selected?.Host.State == PeerState.Verbunden ? "Trennen" : "Verbinden";
     }
 
     private void OnAdd(object sender, RoutedEventArgs e)
     {
         _add();
+        Grid.Items.Refresh();
+    }
+
+    private void OnEdit(object sender, RoutedEventArgs e)
+    {
+        if (_selected is null) return;
+
+        _edit(_selected);
         Grid.Items.Refresh();
     }
 

@@ -89,6 +89,53 @@ public sealed class ThumbnailStore(string directory)
         }
     }
 
+    /// <summary>Legt das Verzeichnis an und haelt es aus dem Blickfeld.</summary>
+    /// <remarks>
+    /// Der Vorrat liegt neben den Freigaben -- dort will ihn niemand sehen,
+    /// und anfassen soll ihn auch niemand.
+    /// </remarks>
+    public void Prepare()
+    {
+        try
+        {
+            var info = new DirectoryInfo(Directory);
+            if (info.Exists) return;
+
+            info.Create();
+            info.Attributes |= FileAttributes.Hidden;
+        }
+        catch (IOException) { /* dann eben sichtbar */ }
+        catch (UnauthorizedAccessException) { /* dito */ }
+    }
+
+    /// <summary>
+    /// Wirft den ganzen Vorrat weg. Was gebraucht wird, entsteht neu -- die
+    /// Vorlage dazu liegt bei der Gegenstelle.
+    /// </summary>
+    public (int Count, long Bytes) Clear()
+    {
+        if (!System.IO.Directory.Exists(Directory)) return (0, 0);
+
+        var count = 0;
+        long bytes = 0;
+
+        foreach (var file in System.IO.Directory.EnumerateFiles(Directory, "*", SearchOption.AllDirectories))
+        {
+            long size = 0;
+            try { size = new FileInfo(file).Length; } catch { /* egal */ }
+
+            // Die Shell-Erweiterung liest womoeglich gerade eines davon.
+            try { File.Delete(file); }
+            catch (IOException) { continue; }
+            catch (UnauthorizedAccessException) { continue; }
+
+            if (file.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)) count++;
+            bytes += size;
+        }
+
+        return (count, bytes);
+    }
+
     public (int Count, long Bytes) Usage()
     {
         if (!System.IO.Directory.Exists(Directory)) return (0, 0);

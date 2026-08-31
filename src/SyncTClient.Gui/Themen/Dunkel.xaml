@@ -1,0 +1,40 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Flächen -->
+  <SolidColorBrush x:Key="Flaeche" Color="#1F1F1F" />
+  <SolidColorBrush x:Key="Leiste" Color="#272727" />
+  <SolidColorBrush x:Key="Feld" Color="#1A1A1A" />
+
+  <!-- Linien -->
+  <SolidColorBrush x:Key="Rahmen" Color="#3C3C3C" />
+  <SolidColorBrush x:Key="RahmenFein" Color="#333333" />
+  <SolidColorBrush x:Key="Trenner" Color="#4A4A4A" />
+
+  <!-- Schrift -->
+  <SolidColorBrush x:Key="Text" Color="#E8E8E8" />
+  <SolidColorBrush x:Key="Sekundaer" Color="#C4C4C4" />
+  <SolidColorBrush x:Key="Gedaempft" Color="#9B9B9B" />
+  <SolidColorBrush x:Key="Symbol" Color="#7A7A7A" />
+
+  <!-- Bedeutungen: aufgehellt, sonst versinken sie im dunklen Grund -->
+  <SolidColorBrush x:Key="Ein" Color="#5AA9E6" />
+  <SolidColorBrush x:Key="Aus" Color="#6ABF6E" />
+  <SolidColorBrush x:Key="Gut" Color="#5CBF6A" />
+  <SolidColorBrush x:Key="Warnung" Color="#E0A73C" />
+
+  <!-- Auswahl -->
+  <SolidColorBrush x:Key="AuswahlFlaeche" Color="#2F4B63" />
+  <SolidColorBrush x:Key="AuswahlFlaecheRuhig" Color="#2A3540" />
+  <SolidColorBrush x:Key="AuswahlText" Color="#F2F2F2" />
+
+  <!-- Was Windows selbst faerbt: der Auswahlbalken in Gittern und Listen.
+       Ohne diese Ueberschreibung bliebe er das kraeftige Systemblau, auf dem
+       die eigenen Farben der Zellen nicht mehr zu lesen waeren. -->
+  <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#2F4B63" />
+  <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#F2F2F2" />
+  <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#2A3540" />
+  <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#F2F2F2" />
+
+</ResourceDictionary>
+

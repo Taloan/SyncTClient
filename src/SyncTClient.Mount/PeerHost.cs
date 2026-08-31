@@ -90,55 +90,224 @@ public sealed class PeerHost : IAsyncDisposable
     {
         if (State is PeerState.Verbunden or PeerState.Verbindet) return;
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var token = _cts.Token;
-        _clusterConfig = new TaskCompletionSource<ClusterConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
-        State = PeerState.Verbindet;
-        LastError = null;
+        var token = Begin(ct);
 
         try
         {
-            var (host, port) = SplitHostPort(_config.Address);
-            _log($"[{Display}] verbinde mit {host}:{port} ...");
-
-            _connection = await BepConnection.ConnectAsync(
-                host, port, _identity, DeviceId.Length > 0 ? Bep.DeviceId.Parse(DeviceId) : default, ct: token);
-
-            ReportedName = _connection.PeerHello.DeviceName;
-            ClientVersion = _connection.PeerHello.ClientVersion;
-            _log($"[{Display}] verbunden ({ClientVersion})");
-
-            _connection.ClusterConfigReceived += cc => OnClusterConfig(cc);
-            _connection.IndexReceived += m => Route(m.Folder, m.Files);
-            _connection.IndexUpdateReceived += m => Route(m.Folder, m.Files);
-
-            _readLoop = _connection.RunAsync(token);
-
-            // Die Ordner vorbereiten, bevor wir ankuendigen -- ihr Indexstand
-            // geht in die Ankuendigung ein.
-            foreach (var share in shares)
-            {
-                var host2 = new ShareHost(share, _app, _log);
-                host2.OpenIndex();
-                _shares[share.FolderId] = host2;
-                ShareAdded?.Invoke(host2);
-            }
-
-            await NegotiateAsync(token);
-            State = PeerState.Verbunden;
-
-            foreach (var share in _shares.Values)
-            {
-                try { await share.StartAsync(_connection, token); }
-                catch (Exception ex) { _log($"[{share.FolderId}] {ex.Message}"); }
-            }
+            await RunSessionAsync(await DialAsync(token), shares, token);
         }
         catch (Exception ex)
         {
-            LastError = ex.Message;
-            State = PeerState.Fehler;
-            _log($"[{Display}] Fehler: {ex.Message}");
+            Fail(ex);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Waehlt die Gegenstelle an -- unter der eingetragenen Adresse oder unter
+    /// denen, die die Erkennung nennt.
+    /// </summary>
+    /// <remarks>
+    /// Mehrere Adressen sind der Normalfall: ein Geraet meldet seine lokale,
+    /// seine oeffentliche und die seines Relays. Wir nehmen die erste, die
+    /// traegt.
+    /// </remarks>
+    private async Task<BepConnection> DialAsync(CancellationToken ct)
+    {
+        var expected = DeviceId.Length > 0 ? Bep.DeviceId.Parse(DeviceId) : Bep.DeviceId.Empty;
+        var candidates = await CandidatesAsync(expected, ct);
+
+        if (candidates.Count == 0)
+            throw new InvalidOperationException(
+                "keine Adresse bekannt -- weder eingetragen noch von der Erkennung genannt.");
+
+        Exception? last = null;
+
+        foreach (var candidate in candidates)
+        {
+            if (candidate.StartsWith("relay://", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!_app.Relays || !_config.Relays)
+                {
+                    _log($"[{Display}] Relay uebergangen -- fuer diese Gegenstelle abgeschaltet.");
+                    last ??= new NotSupportedException(
+                        "nur ueber einen Relay zu erreichen, und Relays sind abgeschaltet.");
+                    continue;
+                }
+
+                _log($"[{Display}] {candidate}");
+                last ??= new NotSupportedException(
+                    "die Gegenstelle ist nur ueber einen Relay zu erreichen -- das kann dieser Client noch nicht.");
+                continue;
+            }
+
+            if (candidate.StartsWith("quic://", StringComparison.OrdinalIgnoreCase))
+            {
+                last ??= new NotSupportedException("die Gegenstelle bietet nur QUIC an.");
+                continue;
+            }
+
+            try
+            {
+                var (host, port) = SplitHostPort(Bare(candidate));
+                _log($"[{Display}] verbinde mit {host}:{port} ...");
+                return await BepConnection.ConnectAsync(host, port, _identity, expected, ct: ct);
+            }
+            catch (Exception ex)
+            {
+                last = ex;
+                _log($"[{Display}] {candidate} fuehrt nicht zum Ziel: {ex.Message}");
+            }
+        }
+
+        throw last ?? new IOException("keine der Adressen fuehrte zu einer Verbindung.");
+    }
+
+    /// <summary>Alle Adressen, unter denen die Gegenstelle zu versuchen ist.</summary>
+    private async Task<IReadOnlyList<string>> CandidatesAsync(Bep.DeviceId expected, CancellationToken ct)
+    {
+        // Eine eingetragene Adresse ist eine Ansage: dann wird nicht gesucht.
+        if (!string.IsNullOrWhiteSpace(_config.Address) &&
+            !_config.Address.Equals("dynamic", StringComparison.OrdinalIgnoreCase))
+            return [_config.Address];
+
+        if (expected == Bep.DeviceId.Empty) return [];
+
+        // Erst im eigenen Netz nachsehen: schneller, genauer, und niemand
+        // erfaehrt dabei, wonach wir suchen.
+        var local = _app.Local?.AddressesFor(expected) ?? [];
+        if (local.Count > 0)
+        {
+            _log($"[{Display}] im lokalen Netz gefunden: {string.Join(", ", local)}");
+            return local;
+        }
+
+        if (!_app.Discovery || !_config.Discovery)
+        {
+            _log($"[{Display}] keine Adresse eingetragen, und die Erkennung ist abgeschaltet.");
+            return [];
+        }
+
+        _log($"[{Display}] frage die Erkennung nach {expected.Short()} ...");
+
+        foreach (var server in _app.LookupServers)
+        {
+            try
+            {
+                using var discovery = new GlobalDiscovery(server);
+                var found = await discovery.LookupAsync(expected, ct);
+
+                // Der erste Server, der etwas weiss, hat recht -- die anderen
+                // wuerden dasselbe sagen.
+                if (found.Count == 0) continue;
+
+                _log($"[{Display}] Erkennung nennt {found.Count}: {string.Join(", ", found)}");
+                return found;
+            }
+            catch (Exception ex)
+            {
+                _log($"[{Display}] {Bep.GlobalDiscovery.HostOf(server)} antwortet nicht: {ex.Message}");
+            }
+        }
+
+        _log($"[{Display}] die Erkennung kennt keine Adresse.");
+        return [];
+    }
+
+    /// <summary>Nimmt einer Adresse das Schema und alles hinter dem Host ab.</summary>
+    private static string Bare(string address)
+    {
+        var scheme = address.IndexOf("://", StringComparison.Ordinal);
+        var bare = scheme < 0 ? address : address[(scheme + 3)..];
+
+        var slash = bare.IndexOf('/');
+        return slash < 0 ? bare : bare[..slash];
+    }
+
+    /// <summary>
+    /// Uebernimmt eine Verbindung, die die Gegenstelle aufgebaut hat.
+    /// </summary>
+    /// <remarks>
+    /// Ab dem Hello ist kein Unterschied mehr: welche Seite gewaehlt hat,
+    /// steht in keiner Nachricht des Protokolls. Deshalb faengt hier nur der
+    /// Aufbau anders an -- die Sitzung selbst ist dieselbe.
+    ///
+    /// Nur so erreicht uns eine Gegenstelle, die wir nicht anrufen koennen:
+    /// weil ihre Adresse wechselt oder weil sie hinter einem Router sitzt.
+    /// </remarks>
+    public async Task AcceptAsync(
+        BepConnection connection, IEnumerable<ShareConfig> shares, CancellationToken ct = default)
+    {
+        if (State is PeerState.Verbunden or PeerState.Verbindet)
+        {
+            // Zwei Leitungen zur selben Gegenstelle waeren eine zu viel.
+            await connection.DisposeAsync();
+            return;
+        }
+
+        var token = Begin(ct);
+        _log($"[{Display}] Anruf angenommen.");
+
+        try
+        {
+            await RunSessionAsync(connection, shares, token);
+        }
+        catch (Exception ex)
+        {
+            Fail(ex);
+            throw;
+        }
+    }
+
+    private CancellationToken Begin(CancellationToken ct)
+    {
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _clusterConfig = new TaskCompletionSource<ClusterConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
+        State = PeerState.Verbindet;
+        LastError = null;
+        return _cts.Token;
+    }
+
+    private void Fail(Exception ex)
+    {
+        LastError = ex.Message;
+        State = PeerState.Fehler;
+        _log($"[{Display}] Fehler: {ex.Message}");
+    }
+
+    /// <summary>Alles, was nach dem Hello gleich ist -- gewaehlt oder angenommen.</summary>
+    private async Task RunSessionAsync(
+        BepConnection connection, IEnumerable<ShareConfig> shares, CancellationToken token)
+    {
+        _connection = connection;
+
+        ReportedName = connection.PeerHello.DeviceName;
+        ClientVersion = connection.PeerHello.ClientVersion;
+        _log($"[{Display}] verbunden ({ClientVersion})");
+
+        connection.ClusterConfigReceived += cc => OnClusterConfig(cc);
+        connection.IndexReceived += m => Route(m.Folder, m.Files);
+        connection.IndexUpdateReceived += m => Route(m.Folder, m.Files);
+
+        _readLoop = connection.RunAsync(token);
+
+        // Die Ordner vorbereiten, bevor wir ankuendigen -- ihr Indexstand
+        // geht in die Ankuendigung ein.
+        foreach (var share in shares)
+        {
+            var host2 = new ShareHost(share, _app, _log);
+            host2.OpenIndex();
+            _shares[share.FolderId] = host2;
+            ShareAdded?.Invoke(host2);
+        }
+
+        await NegotiateAsync(token);
+        State = PeerState.Verbunden;
+
+        foreach (var share in _shares.Values)
+        {
+            try { await share.StartAsync(connection, token); }
+            catch (Exception ex) { _log($"[{share.FolderId}] {ex.Message}"); }
         }
     }
 
@@ -226,21 +395,66 @@ public sealed class PeerHost : IAsyncDisposable
 
     // ------------------------------------------------------------ Verwalten
 
-    /// <summary>Nimmt einen angebotenen Ordner in Betrieb, ohne neu zu verbinden.</summary>
-    public async Task<ShareHost> AcceptAsync(ShareConfig share, CancellationToken ct = default)
+    /// <summary>
+    /// Erster Schritt zum Uebernehmen: den Ordner ankuendigen und seinen
+    /// Index holen. Im Explorer entsteht dabei noch nichts.
+    /// </summary>
+    /// <remarks>
+    /// Getrennt vom zweiten Schritt, damit vorher gefragt werden kann, wohin
+    /// der Ordner soll und welche Zweige daraus. Beides steht erst fest, wenn
+    /// man weiss, was drin ist.
+    /// </remarks>
+    public async Task<ShareHost> PrepareAsync(ShareConfig share, CancellationToken ct = default)
     {
         if (_connection is null) throw new InvalidOperationException("nicht verbunden.");
 
         var host = new ShareHost(share, _app, _log);
         host.OpenIndex();
         _shares[share.FolderId] = host;
-        ShareAdded?.Invoke(host);
 
         // Erneut ankuendigen -- jetzt mit dem neuen Ordner dabei.
         await NegotiateAsync(ct);
-        await host.StartAsync(_connection, ct);
+        await host.PrepareAsync(_connection, ct);
+
+        return host;
+    }
+
+    /// <summary>Zweiter Schritt: uebernehmen, was bestaetigt wurde.</summary>
+    public async Task CommitAsync(ShareHost host, CancellationToken ct = default)
+    {
+        ShareAdded?.Invoke(host);
+        await host.CommitAsync(ct);
+        MarkOffered();
+    }
+
+    /// <summary>
+    /// Nimmt zurueck, was <see cref="PrepareAsync"/> angelegt hat.
+    /// </summary>
+    /// <remarks>
+    /// Ohne das neue Ankuendigen schickte die Gegenstelle weiter
+    /// Aktualisierungen fuer einen Ordner, den wir gar nicht wollten.
+    /// </remarks>
+    public async Task DiscardAsync(ShareHost host)
+    {
+        _shares.Remove(host.FolderId);
+
+        await host.UnbindAsync();
+        await host.DisposeAsync();
+
+        if (_connection is not null && State == PeerState.Verbunden)
+        {
+            try { await NegotiateAsync(CancellationToken.None); }
+            catch (Exception ex) { _log($"[{Display}] {ex.Message}"); }
+        }
 
         MarkOffered();
+    }
+
+    /// <summary>Beide Schritte auf einmal -- fuer alles, was nicht fragt.</summary>
+    public async Task<ShareHost> AcceptAsync(ShareConfig share, CancellationToken ct = default)
+    {
+        var host = await PrepareAsync(share, ct);
+        await CommitAsync(host, ct);
         return host;
     }
 

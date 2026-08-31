@@ -29,21 +29,21 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public string StatusText => Share?.State switch
     {
-        ShareState.Bereit => Share.Phase == SyncPhase.Fertig ? "bereit" : PhaseText,
+        ShareState.Bereit => Share.Phase == SyncPhase.Fertig ? App.S("R.Ready") : PhaseText,
         ShareState.Wartet => PhaseText,
-        ShareState.Pausiert => "angehalten",
-        ShareState.Fehler => "Fehler",
-        ShareState.Gestoppt => "gestoppt",
-        _ => "nicht übernommen"
+        ShareState.Pausiert => App.S("R.Paused"),
+        ShareState.Fehler => App.S("R.Error"),
+        ShareState.Gestoppt => App.S("R.Stopped"),
+        _ => App.S("R.NotConnected")
     };
 
     private string PhaseText => Share?.Phase switch
     {
-        SyncPhase.Index => "Index wird gelesen",
-        SyncPhase.Platzhalter => "Platzhalter werden angelegt",
-        SyncPhase.Cache => "Cache wird abgeglichen",
-        SyncPhase.Inhalte => "Inhalte werden geholt",
-        _ => "wartet"
+        SyncPhase.Index => App.S("R.PhaseIndex"),
+        SyncPhase.Platzhalter => App.S("R.PhasePlaceholders"),
+        SyncPhase.Cache => App.S("R.PhaseCache"),
+        SyncPhase.Inhalte => App.S("R.PhaseContent"),
+        _ => App.S("R.PhaseWaiting")
     };
 
     /// <summary>Haken, wenn alles steht -- wie bei Resilio die gruene Spalte.</summary>
@@ -81,13 +81,10 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public bool CopiesAtRisk => Accepted && Copies < 1;
 
     public string CopiesHint => !Accepted
-        ? "Noch nicht übernommen."
+        ? App.S("R.NotConnectedHint")
         : Copies == 0
-            ? "Kein erreichbarer Knoten führt diesen Ordner — Platzhalter lassen sich " +
-              "gerade nicht öffnen. Ob verdrängt werden darf, entscheidet weiterhin die " +
-              "zuletzt empfangene Ankündigung, nicht die Erreichbarkeit."
-            : $"{Copies} erreichbarer Knoten führt den Inhalt. Über nicht verbundene " +
-              "Knoten wissen wir nichts — die Zahl ist eine Untergrenze.";
+            ? App.S("R.CopiesNone")
+            : App.S("R.CopiesSome", Copies);
 
     // ------------------------------------------------------------ Fortschritt
 
@@ -131,7 +128,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public string LocalFilesText => Share is null ? "—" : Format.Count(Share.CacheFileCount);
     public string ThumbsText => Share is null ? "—" : Format.Count(Share.ThumbnailUsage().Count);
     public string PathText => Share?.Config.LocalPath ?? "";
-    public string ModeText => Share?.Config.Mode == ShareMode.AlwaysLocal ? "vollständig lokal" : "bei Bedarf";
+    public string ModeText => Share?.Config.Mode == ShareMode.AlwaysLocal ? App.S("R.ModeAlways") : App.S("R.ModeOnDemand");
 
     public string BudgetText => Share is null || Share.CacheMaxBytes == 0
         ? "—"

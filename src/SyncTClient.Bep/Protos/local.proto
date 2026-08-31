@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package discover;
+
+option csharp_namespace = "SyncTClient.Bep.Proto";
+
+// Was ein Geraet alle 30 Sekunden ins lokale Netz ruft. Ein leerer Host in
+// einer Adresse ("tcp://0.0.0.0:22000") bedeutet: nimm die Absenderadresse
+// des Pakets -- der Rufer kennt seine eigene IP nicht zuverlaessig.
+message Announce {
+  bytes id = 1;
+  repeated string addresses = 2;
+  uint64 instance_id = 3;
+}

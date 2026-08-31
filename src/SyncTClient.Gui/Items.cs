@@ -14,10 +14,12 @@ public sealed class PeerItem(PeerHost host) : INotifyPropertyChanged
 
     public string StateText => Host.State switch
     {
-        PeerState.Verbindet => "verbindet ...",
-        PeerState.Verbunden => "verbunden",
-        PeerState.Fehler => Host.LastError is null ? "Fehler" : "Fehler: " + Kurz(Host.LastError),
-        _ => "getrennt"
+        PeerState.Verbindet => App.S("I.Connecting"),
+        PeerState.Verbunden => App.S("I.Connected"),
+        PeerState.Fehler => Host.LastError is null
+            ? App.S("I.Error")
+            : App.S("I.ErrorWith", Kurz(Host.LastError)),
+        _ => App.S("I.Disconnected")
     };
 
     public string Detail => Host.State == PeerState.Verbunden

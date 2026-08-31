@@ -17,6 +17,7 @@
   <ItemGroup>
     <!-- Nur Nachrichtenklassen, kein gRPC-Service-Code. -->
     <Protobuf Include="Protos\bep.proto" GrpcServices="None" />
+    <Protobuf Include="Protos\local.proto" GrpcServices="None" />
   </ItemGroup>
 
 </Project>
