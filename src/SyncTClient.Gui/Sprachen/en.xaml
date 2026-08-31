@@ -329,4 +329,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Settings.VolumeDefaults">New drives start with default values (2 GB / 10 % at the time of the first share).</s:String>
   <s:String x:Key="M.VolumeEvictable">{0} files ({1}) have reached the placeholder threshold</s:String>
   <s:String x:Key="M.CacheNone">No share yet.</s:String>
+  <s:String x:Key="R.PhaseSyncing">syncing</s:String>
+  <s:String x:Key="R.Synced">in sync</s:String>
 </ResourceDictionary>

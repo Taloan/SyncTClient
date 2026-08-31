@@ -321,4 +321,6 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Settings.VolumeDefaults">Neue Laufwerke erhalten Vorgabewerte (2 GB / 10 % zum Zeitpunkt der ersten Freigabe).</s:String>
   <s:String x:Key="M.VolumeEvictable">{0} Dateien ({1}) erreichen die Platzhalter-Schwelle</s:String>
   <s:String x:Key="M.CacheNone">Noch keine Freigabe.</s:String>
+  <s:String x:Key="R.PhaseSyncing">gleicht ab</s:String>
+  <s:String x:Key="R.Synced">abgeglichen</s:String>
 </ResourceDictionary>

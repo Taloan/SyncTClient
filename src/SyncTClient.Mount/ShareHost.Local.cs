@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text;
 using Google.Protobuf;
 using SyncTClient.Bep;
@@ -501,6 +501,7 @@ public sealed partial class ShareHost
                 // Datei, die beide Seiten geaendert haben, als eigene Aenderung
                 // angekuendigt, bevor der Konflikt bemerkt ist.
                 ApplyIncoming();
+                SettlePhase();
                 SweepVersions();
 
                 // Die Meldungen der Cloud-Files-Schicht sind der schnelle Weg,

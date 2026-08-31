@@ -85,6 +85,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         SyncPhase.Platzhalter => App.S("R.PhasePlaceholders"),
         SyncPhase.Cache => App.S("R.PhaseCache"),
         SyncPhase.Inhalte => App.S("R.PhaseContent"),
+        SyncPhase.Abgleich => App.S("R.PhaseSyncing"),
         _ => App.S("R.PhaseWaiting")
     };
 
@@ -154,7 +155,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         get
         {
             if (Share is null) return "";
-            if (!Busy) return Share.State == ShareState.Bereit ? "abgeglichen" : "";
+            if (!Busy) return Share.State == ShareState.Bereit ? App.S("R.Synced") : "";
 
             return Share.PhaseTotal == 0
                 ? $"{Share.PhaseDone:N0}"
