@@ -93,33 +93,52 @@ public sealed class CacheLimits
 
     // ------------------------------------------------------------ Bestand
 
-    /// <summary>Was auf welchem Datenträger liegt, ein Eintrag je Laufwerk.</summary>
-    public IReadOnlyList<VolumeUsage> Volumes
+    /// <summary>
+    /// Was auf welchem Datenträger liegt, ein Eintrag je Laufwerk.
+    /// </summary>
+    /// <remarks>
+    /// Ohne das Freigebbare. Es zu bestimmen heißt, für jede Datei im Index
+    /// nachzuschlagen, ob die Gegenstelle sie führt -- bei tausend Dateien
+    /// tausend Abfragen. Für eine Anzeige, die im Sekundentakt nachzieht, ist
+    /// das der falsche Preis.
+    /// </remarks>
+    public IReadOnlyList<VolumeUsage> Volumes => Sammeln(false);
+
+    /// <summary>
+    /// Dasselbe, aber mit der Angabe, wie viel sich davon freigeben lässt.
+    /// </summary>
+    /// <remarks>
+    /// Für die Einstellungen, wo genau diese Zahl die Frage ist, und für die
+    /// Prüfung vor dem Holen. Beide fragen selten.
+    /// </remarks>
+    public IReadOnlyList<VolumeUsage> VolumesWithCandidates() => Sammeln(true);
+
+    private IReadOnlyList<VolumeUsage> Sammeln(bool mitKandidaten)
     {
-        get
-        {
-            HydrationCache[] caches;
-            lock (_caches) caches = [.. _caches];
+        HydrationCache[] caches;
+        lock (_caches) caches = [.. _caches];
 
-            return [.. caches
-                .GroupBy(c => RootOf(c.RootPath), StringComparer.OrdinalIgnoreCase)
-                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(g =>
-                {
-                    var kandidaten = g.SelectMany(c => c.EvictionCandidates()).ToList();
-                    var grenzen = _limits(g.Key);
+        return [.. caches
+            .GroupBy(c => RootOf(c.RootPath), StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g =>
+            {
+                var kandidaten = mitKandidaten
+                    ? g.SelectMany(c => c.EvictionCandidates()).ToList()
+                    : [];
 
-                    return new VolumeUsage(
-                        g.Key,
-                        g.Sum(c => c.UsedBytes),
-                        g.Sum(c => c.FileCount),
-                        FreeBytesOn(g.Key),
-                        kandidaten.Sum(e => e.Bytes),
-                        kandidaten.Count,
-                        grenzen.MaxBytes,
-                        grenzen.MinimumFreeBytes);
-                })];
-        }
+                var grenzen = _limits(g.Key);
+
+                return new VolumeUsage(
+                    g.Key,
+                    g.Sum(c => c.UsedBytes),
+                    g.Sum(c => c.FileCount),
+                    FreeBytesOn(g.Key),
+                    kandidaten.Sum(e => e.Bytes),
+                    kandidaten.Count,
+                    grenzen.MaxBytes,
+                    grenzen.MinimumFreeBytes);
+            })];
     }
 
     /// <summary>Was alle Datenträger zusammen belegen.</summary>
@@ -163,7 +182,8 @@ public sealed class CacheLimits
         var free = FreeBytesOn(targetPath);
         if (free < 0) return Limit.None;
 
-        var freigebbar = Volumes.FirstOrDefault(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase))
+        var freigebbar = VolumesWithCandidates()
+            .FirstOrDefault(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase))
             ?.EvictableBytes ?? 0;
 
         // Freigebbares zählt als Reserve. Es würde beim Holen ohnehin weichen.

@@ -1494,7 +1494,7 @@ public partial class MainWindow : Window
     {
         var dialog = new ProgramSettingsWindow(
             _config, Path.GetDirectoryName(_configPath)!,
-            () => _runtime.Cache.Volumes,
+            () => _runtime.Cache.VolumesWithCandidates(),
             ReleaseVolumeAsync,
             () => new ThumbnailStore(_config.ThumbnailDirectory).Usage(),
             ClearThumbnailsAsync)

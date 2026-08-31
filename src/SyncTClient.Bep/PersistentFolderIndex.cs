@@ -25,6 +25,24 @@ public sealed class PersistentFolderIndex : IDisposable
 
     public string FolderId { get; }
 
+    /// <summary>
+    /// Schuetzt die Verbindung.
+    /// </summary>
+    /// <remarks>
+    /// SqliteConnection fuehrt intern eine Liste ihrer Befehle. Sie ist nicht
+    /// fuer mehrere Faeden gebaut: legt der eine einen Befehl an, waehrend der
+    /// andere einen wegraeumt, greift das Wegraeumen daneben und die
+    /// Anwendung endet mit einer ArgumentOutOfRangeException aus dem Inneren
+    /// von Microsoft.Data.Sqlite.
+    ///
+    /// Genau das ist passiert: die Oberflaeche fragte im Sekundentakt, ob
+    /// Dateien freigegeben werden duerfen, waehrend der Hintergrundlauf
+    /// Ankuendigungen aufnahm. Die Sperre gehoert hierher und nicht zu den
+    /// Aufrufern -- dort waere sie eine Verabredung, die jede neue Stelle
+    /// einhalten muesste.
+    /// </remarks>
+    private readonly System.Threading.Lock _gate = new();
+
     public PersistentFolderIndex(string databasePath, string folderId)
     {
         FolderId = folderId;
@@ -162,6 +180,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// </summary>
     public IReadOnlyList<string> Absorb(IEnumerable<BepFileInfo> files)
     {
+        using var gate = _gate.EnterScope();
         Interlocked.Increment(ref _messageCount);
         var changed = new List<string>();
 
@@ -241,6 +260,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// </remarks>
     public long NextLocalSequence()
     {
+        using var gate = _gate.EnterScope();
         var next = LocalSequence + 1;
         LocalSequence = next;
         return next;
@@ -249,6 +269,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// <summary>Unsere eigene Fassung dieser Datei, sofern wir eine kennen.</summary>
     public bool TryGetLocal(string name, out BepFileInfo file)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = "SELECT info FROM local_files WHERE name = $name";
         command.Parameters.AddWithValue("$name", name);
@@ -270,6 +291,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// </param>
     public void PutLocal(BepFileInfo file, int state)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = """
             INSERT INTO local_files (name, sequence, size, modified, deleted, state, version, info)
@@ -301,6 +323,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// </summary>
     public void ForgetLocal(string name)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = "DELETE FROM local_files WHERE name = $name";
         command.Parameters.AddWithValue("$name", name);
@@ -310,6 +333,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// <summary>Setzt den Zustand einer eigenen Datei, ohne sie neu zu schreiben.</summary>
     public void SetLocalState(string name, int state)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = "UPDATE local_files SET state = $state WHERE name = $name";
         command.Parameters.AddWithValue("$name", name);
@@ -320,6 +344,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// <summary>Alle eigenen Dateien in diesem Zustand.</summary>
     public IReadOnlyList<BepFileInfo> LocalInState(int state)
     {
+        using var gate = _gate.EnterScope();
         var found = new List<BepFileInfo>();
 
         using var command = _db.CreateCommand();
@@ -336,6 +361,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// <summary>Alles Eigene ab dieser Sequenznummer, aufsteigend.</summary>
     public IReadOnlyList<BepFileInfo> LocalFrom(long sequence)
     {
+        using var gate = _gate.EnterScope();
         var found = new List<BepFileInfo>();
 
         using var command = _db.CreateCommand();
@@ -354,6 +380,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     public bool TryGet(string name, out BepFileInfo file)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = "SELECT info FROM files WHERE name = $name";
         command.Parameters.AddWithValue("$name", name);
@@ -377,13 +404,17 @@ public sealed class PersistentFolderIndex : IDisposable
     /// gehoert dazu, denn er ist der Grund, eine noch vorhandene Datei
     /// fortzunehmen.
     /// </remarks>
-    public IEnumerable<string> AllNames()
+    public IReadOnlyList<string> AllNames()
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = "SELECT name FROM files WHERE name <> '' ORDER BY name";
 
+        var namen = new List<string>();
         using var reader = command.ExecuteReader();
-        while (reader.Read()) yield return reader.GetString(0);
+        while (reader.Read()) namen.Add(reader.GetString(0));
+
+        return namen;
     }
 
     /// <summary>
@@ -391,8 +422,10 @@ public sealed class PersistentFolderIndex : IDisposable
     /// Blocklisten bleiben aussen vor, sie machen den Grossteil der
     /// Datenmenge aus.
     /// </summary>
-    public IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> EnumerateLight()
+    public IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> EnumerateLight()
     {
+        using var gate = _gate.EnterScope();
+        var eintraege = new List<(string, long, long, bool, bool)>();
         using var command = _db.CreateCommand();
         command.CommandText = """
             SELECT name, size, modified, kind, has_blocks FROM files
@@ -403,13 +436,15 @@ public sealed class PersistentFolderIndex : IDisposable
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
-            yield return (
+            eintraege.Add((
                 reader.GetString(0),
                 reader.GetInt64(1),
                 reader.GetInt64(2),
                 (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
-                reader.GetInt32(4) != 0);
+                reader.GetInt32(4) != 0));
         }
+
+        return eintraege;
     }
 
     /// <summary>
@@ -421,6 +456,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     private void Execute(string sql)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = sql;
         command.ExecuteNonQuery();
@@ -428,6 +464,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     private object? Scalar(string sql)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = sql;
         return command.ExecuteScalar();
@@ -435,6 +472,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     private string? GetMeta(string key)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = "SELECT value FROM meta WHERE key = $key";
         command.Parameters.AddWithValue("$key", key);
@@ -443,6 +481,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     private void SetMeta(string key, string value)
     {
+        using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
         command.CommandText = """
             INSERT INTO meta (key, value) VALUES ($key, $value)
@@ -453,5 +492,9 @@ public sealed class PersistentFolderIndex : IDisposable
         command.ExecuteNonQuery();
     }
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose()
+    {
+        using var gate = _gate.EnterScope();
+        _db.Dispose();
+    }
 }
