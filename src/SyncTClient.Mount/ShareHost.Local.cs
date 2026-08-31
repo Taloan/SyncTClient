@@ -402,10 +402,15 @@ public sealed partial class ShareHost
     /// Zaehlt, was die Gegenstelle fuehrt und hier noch nicht so dasteht.
     /// </summary>
     /// <remarks>
-    /// Dieselbe Bedingung, nach der auch uebernommen wird: eine Datei gilt als
-    /// abgeglichen, wenn sie da ist und Groesse und Zeit zum Index passen. Ob
-    /// ihr Inhalt lokal liegt, spielt keine Rolle -- ein Platzhalter ist der
-    /// erwuenschte Zustand und kein Rueckstand.
+    /// Gezaehlt wird in beide Richtungen. Was die Gegenstelle fuehrt und hier
+    /// fehlt, steht aus -- und was hier liegt und sie nicht kennt, ebenso. Es
+    /// ist dieselbe Differenz, nur von der anderen Seite gesehen; solange die
+    /// beiden Staende auseinandergehen, ist der Abgleich nicht fertig.
+    ///
+    /// Als abgeglichen gilt eine Datei, wenn sie auf beiden Seiten steht und
+    /// Groesse und Zeit zusammenpassen. Ob ihr Inhalt lokal liegt, spielt
+    /// keine Rolle -- ein Platzhalter ist der erwuenschte Zustand und kein
+    /// Rueckstand.
     ///
     /// Gerechnet wird auf dem Verzeichnis, das der Durchgang ohnehin gelesen
     /// hat. Ein eigener Lauf ueber den Index mit einem Zugriff je Datei waere
@@ -417,6 +422,8 @@ public sealed partial class ShareHost
         long bytes = 0;
         var gesamt = 0;
         long gesamtBytes = 0;
+        var vereint = 0;
+        long vereintBytes = 0;
         long vorhandenBytes = 0;
 
         foreach (var eintrag in vorhanden.Values) vorhandenBytes += eintrag.Size;
@@ -427,12 +434,17 @@ public sealed partial class ShareHost
             {
                 if (_index is null) return;
 
+                var bekannt = new HashSet<string>(StringComparer.Ordinal);
+
                 foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in _index.EnumerateLight())
                 {
                     if (isDirectory || !_config.Includes(name)) continue;
 
+                    bekannt.Add(name);
                     gesamt++;
                     gesamtBytes += size;
+                    vereint++;
+                    vereintBytes += size;
 
                     // Zwei Gruende, dass etwas aussteht. Der erste ist unser
                     // eigener: der Eintrag steht hier noch nicht so da.
@@ -447,6 +459,19 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += size;
+                }
+
+                // Die andere Richtung. Was hier liegt und die Gegenstelle
+                // nicht kennt, muss noch hinaus -- es ist genauso Rueckstand
+                // wie das, was hereinkommen muss.
+                foreach (var (name, eintrag) in vorhanden)
+                {
+                    if (bekannt.Contains(name)) continue;
+
+                    vereint++;
+                    vereintBytes += eintrag.Size;
+                    offen++;
+                    bytes += eintrag.Size;
                 }
             }
         }
@@ -463,13 +488,16 @@ public sealed partial class ShareHost
         // je Minute, die immer dasselbe sagt, verdeckt die Zeilen, die etwas
         // sagen; gar keine Zeile laesst offen, ob ueberhaupt gemessen wurde.
         if (offen != Outstanding || IndexFiles == 0)
-            _log($"[{FolderId}] Rueckstand: {offen} von {gesamt} Dateien, " +
-                 $"{bytes / (1024.0 * 1024.0):0.0} von {gesamtBytes / (1024.0 * 1024.0):0.0} MB.");
+            _log($"[{FolderId}] Rueckstand: {offen} von {vereint} Dateien, " +
+                 $"{bytes / (1024.0 * 1024.0):0.0} von {vereintBytes / (1024.0 * 1024.0):0.0} MB " +
+                 $"(Gegenstelle {gesamt}, hier {vorhanden.Count}).");
 
         LocalFiles = vorhanden.Count;
         LocalBytes = vorhandenBytes;
         IndexFiles = gesamt;
         IndexTotalBytes = gesamtBytes;
+        SyncTotal = vereint;
+        SyncTotalBytes = vereintBytes;
         Outstanding = offen;
         OutstandingBytes = bytes;
         UpdateOutstandingPhase();
