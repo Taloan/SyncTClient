@@ -431,11 +431,49 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------ Takt
 
+    /// <summary>Wann zuletzt aufgeraeumt wurde.</summary>
+    private DateTime _lastEnforce = DateTime.MinValue;
+
+    /// <summary>So oft wird nachgesehen, ob die Grenzen noch eingehalten sind.</summary>
+    private static readonly TimeSpan EnforceInterval = TimeSpan.FromMinutes(1);
+
     private void Tick()
     {
         RefreshRows();
         UpdateThroughput();
         _tray?.Show(Zustand());
+        EnforceLimits();
+    }
+
+    /// <summary>
+    /// Zieht die Grenzen der Datentraeger nach.
+    /// </summary>
+    /// <remarks>
+    /// Nach jeder Hydration wird ohnehin geprueft. Dieser Takt deckt die
+    /// Faelle ab, in denen von aussen etwas dazukommt: hineinkopierte
+    /// Dateien werden nie geholt, also loest sie auch nichts aus, und sie
+    /// blieben sonst liegen, bis das naechste Mal etwas hydriert wird.
+    ///
+    /// Der Befehlszeilenbetrieb hatte diesen Takt von Anfang an. Der
+    /// Oberflaeche fehlte er -- und damit blieben genau die 12 GB liegen,
+    /// die jemand hineinkopiert hatte.
+    /// </remarks>
+    private void EnforceLimits()
+    {
+        if (DateTime.UtcNow - _lastEnforce < EnforceInterval) return;
+        _lastEnforce = DateTime.UtcNow;
+
+        var shares = _rows.Select(r => r.Share).OfType<ShareHost>().ToList();
+        if (shares.Count == 0) return;
+
+        _ = Task.Run(async () =>
+        {
+            foreach (var share in shares)
+            {
+                try { await share.EnforceLimitsAsync(); }
+                catch (Exception ex) { AppendLog($"[{share.FolderId}] {ex.Message}"); }
+            }
+        });
     }
 
     /// <summary>

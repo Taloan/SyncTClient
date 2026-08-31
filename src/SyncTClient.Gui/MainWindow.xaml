@@ -68,17 +68,7 @@
               BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" RowHeight="30"
               SelectionChanged="OnShareSelected" MouseDoubleClick="OnGridDoubleClick"
               PreviewMouseRightButtonDown="OnGridRightClick"
-              RowDetailsVisibilityMode="Collapsed">
-
-      <!-- Aufgeklappt wird ueber das Winkelzeichen in der Zeile und nicht
-           ueber die Auswahl: eine ausgewaehlte Zeile laesst sich nicht
-           abwaehlen, und damit gaebe es keinen Weg zurueck. -->
-      <DataGrid.RowStyle>
-        <Style TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
-          <Setter Property="DetailsVisibility"
-                  Value="{Binding Expanded, Converter={StaticResource Sichtbar}}" />
-        </Style>
-      </DataGrid.RowStyle>
+              RowDetailsVisibilityMode="Visible">
 
       <!-- Aufgeklappt steht in der Zeile, was in keine Spalte passt. Nicht
            alles davon gehoert nebeneinander: die Zahlen sind ein Vergleich
@@ -87,8 +77,14 @@
            dieselbe Unuebersichtlichkeit, die die Spalten schon haben. -->
       <DataGrid.RowDetailsTemplate>
         <DataTemplate>
+          <!-- Die Detailzeile ist immer da, ihr Inhalt nicht. Ueber
+               DetailsVisibility der Zeile ginge es nicht: das DataGrid setzt
+               diesen Wert aus RowDetailsVisibilityMode selbst und ueberschreibt
+               damit jede Bindung. Ein eingeklappter Rahmen belegt keinen
+               Platz, und die Zeile sieht aus wie vorher. -->
           <Border Background="{DynamicResource Feld}" BorderBrush="{DynamicResource RahmenFein}"
-                  BorderThickness="0,1,0,1" Padding="16,10">
+                  BorderThickness="0,1,0,1" Padding="16,10"
+                  Visibility="{Binding Expanded, Converter={StaticResource Sichtbar}}">
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />

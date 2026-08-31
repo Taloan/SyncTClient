@@ -139,15 +139,15 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     /// Ein Balken, der dauerhaft auf 100 steht, traegt keine Information und
     /// lenkt von den Balken ab, deren Abgleich tatsaechlich laeuft.
     ///
-    /// Fuer den Abgleich im laufenden Betrieb gibt es keinen Balken. Es ist
-    /// nicht bekannt, wie viel die Gegenstelle noch sagen will, und ein
-    /// endlos durchlaufender Balken behauptet Fortschritt, von dem niemand
-    /// weiss, wovon er ein Teil ist. Dort steht nur, was gerade geschieht.
+    /// Waehrend des laufenden Abgleichs nur, wenn wirklich etwas aussteht.
+    /// Ein Balken auf hundert Prozent, waehrend die Zeile "gleicht ab" sagt,
+    /// widerspricht sich selbst -- und ein voller Balken ist kein
+    /// Fortschritt, sondern eine Behauptung.
     /// </remarks>
     public bool Busy => Share is not null
                         && Share.Phase != SyncPhase.Fertig
                         && Share.Phase != SyncPhase.Ruht
-                        && (Share.Phase != SyncPhase.Abgleich || Share.PhaseTotal > 0);
+                        && (Share.Phase != SyncPhase.Abgleich || Share.Outstanding > 0);
 
     /// <summary>Unbestimmt, solange die Gesamtzahl unbekannt ist.</summary>
     public bool Indeterminate => Busy && Share!.PhaseTotal == 0;
@@ -162,8 +162,10 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         {
             if (Share is null) return "";
 
+            // Die Spalte daneben nennt den Zustand bereits. Ihn hier zu
+            // wiederholen fuellt Platz und sagt nichts.
             if (!Busy)
-                return Share.Phase == SyncPhase.Abgleich ? App.S("R.PhaseSyncing")
+                return Share.Phase == SyncPhase.Abgleich ? ""
                     : Share.State == ShareState.Bereit ? App.S("R.Synced")
                     : "";
 
@@ -171,9 +173,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
             // Was noch aussteht, steht in Bytes daneben: 444 Dateien koennen
             // vier Minuten sein oder vier Stunden.
             if (Share.Phase == SyncPhase.Abgleich)
-                return Share.Outstanding == 0
-                    ? App.S("R.PhaseSyncing")
-                    : App.S("R.SyncPercent", $"{Percent:0}", Format.Bytes(Share.OutstandingBytes));
+                return App.S("R.SyncPercent", $"{Percent:0}", Format.Bytes(Share.OutstandingBytes));
 
             return Share.PhaseTotal == 0
                 ? $"{Share.PhaseDone:N0}"
