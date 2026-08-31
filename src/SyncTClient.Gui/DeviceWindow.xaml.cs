@@ -15,12 +15,10 @@ public partial class DeviceWindow : Window
     private readonly AppConfig _config;
     private readonly Action _save;
 
-    /// <summary>Während des Füllens sollen die Kästchen nichts auslösen.</summary>
-    private bool _loading;
-
     /// <param name="save">
-    /// Schreibt die Konfiguration und zieht nach, was daran hängt. Dieses
-    /// Fenster hat keinen Speichern-Knopf, jeder Haken gilt sofort.
+    /// Schreibt die Konfiguration und zieht nach, was daran hängt — etwa das
+    /// Symbol im Infobereich. Wird auf „Speichern“ gerufen, nicht bei jeder
+    /// Änderung.
     /// </param>
     public DeviceWindow(string deviceId, string configPath, AppConfig config, Action save)
     {
@@ -34,15 +32,11 @@ public partial class DeviceWindow : Window
         ConfigPathBox.Text = configPath;
         ShowQrCode(deviceId);
 
-        _loading = true;
-
         // Der Autostart kommt aus der Registry: nur dort steht, ob Windows
         // dieses Programm wirklich startet.
         AutostartBox.IsChecked = Autostart.Enabled;
         StartMinimizedBox.IsChecked = config.StartMinimized;
         CloseToTrayBox.IsChecked = config.CloseToTray;
-
-        _loading = false;
     }
 
     /// <summary>
@@ -87,32 +81,6 @@ public partial class DeviceWindow : Window
         }
     }
 
-    /// <summary>
-    /// Der Name, unter dem uns die Gegenstellen sehen.
-    /// </summary>
-    /// <remarks>
-    /// Beim Verlassen des Feldes und nicht bei jedem Tastendruck: sonst
-    /// entstuende bei jedem Buchstaben eine geschriebene Konfiguration. Ein
-    /// leeres Feld faellt auf den Rechnernamen zurueck, damit die Gegenstelle
-    /// nie einen namenlosen Eintrag bekommt.
-    /// </remarks>
-    private void OnDeviceNameChanged(object sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-
-        var name = DeviceNameBox.Text.Trim();
-        if (name.Length == 0)
-        {
-            name = Environment.MachineName;
-            DeviceNameBox.Text = name;
-        }
-
-        if (name == _config.DeviceName) return;
-
-        _config.DeviceName = name;
-        _save();
-    }
-
     private void OnCopyId(object sender, RoutedEventArgs e)
     {
         Clipboard.SetText(OwnIdBox.Text);
@@ -120,39 +88,46 @@ public partial class DeviceWindow : Window
     }
 
     /// <summary>
-    /// Der Windows-Autostart. Er wirkt sofort, denn er steht nicht in der
-    /// Konfiguration, sondern in der Registry. Danach wird nachgelesen, was
-    /// dort wirklich steht.
+    /// Uebernimmt alles auf einmal.
     /// </summary>
-    private void OnAutostartChanged(object sender, RoutedEventArgs e)
+    /// <remarks>
+    /// Frueher galt jeder Haken sofort. Das war bequem, aber es passte nicht
+    /// zu einem Fenster mit Abbrechen: was schon geschrieben ist, nimmt kein
+    /// Abbrechen mehr zurueck. Jetzt gilt hier dieselbe Regel wie in den
+    /// Freigabe-Einstellungen -- vor "Speichern" aendert sich nichts.
+    ///
+    /// Der Autostart ist dabei der Sonderfall: er steht nicht in der
+    /// Konfiguration, sondern in der Registrierung. Er wird deshalb getrennt
+    /// geschrieben und danach zurueckgelesen, denn nur dort steht, ob Windows
+    /// das Programm wirklich startet.
+    /// </remarks>
+    private void OnSave(object sender, RoutedEventArgs e)
     {
-        if (_loading) return;
+        var name = DeviceNameBox.Text.Trim();
+        if (name.Length == 0) name = Environment.MachineName;
 
-        try
-        {
-            Autostart.Set(AutostartBox.IsChecked == true);
-            Hint.Text = "";
-        }
-        catch (Exception ex)
-        {
-            Hint.Text = App.S("D.AutostartFailed", ex.Message);
-        }
-
-        _loading = true;
-        AutostartBox.IsChecked = Autostart.Enabled;
-        _loading = false;
-    }
-
-    /// <summary>
-    /// Wie sich das Fenster beim Start und beim Schließen verhält. Beides
-    /// gehört in die Konfiguration und wird sofort geschrieben.
-    /// </summary>
-    private void OnWindowOptionChanged(object sender, RoutedEventArgs e)
-    {
-        if (_loading) return;
-
+        _config.DeviceName = name;
         _config.StartMinimized = StartMinimizedBox.IsChecked == true;
         _config.CloseToTray = CloseToTrayBox.IsChecked == true;
         _save();
+
+        var autostart = AutostartBox.IsChecked == true;
+        if (autostart != Autostart.Enabled)
+        {
+            try
+            {
+                Autostart.Set(autostart);
+            }
+            catch (Exception ex)
+            {
+                // Alles andere ist gespeichert. Das Fenster bleibt offen,
+                // damit die Meldung nicht mit ihm verschwindet.
+                Hint.Text = App.S("D.AutostartFailed", ex.Message);
+                AutostartBox.IsChecked = Autostart.Enabled;
+                return;
+            }
+        }
+
+        DialogResult = true;
     }
 }
