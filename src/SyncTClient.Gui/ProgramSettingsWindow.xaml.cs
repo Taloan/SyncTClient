@@ -34,21 +34,44 @@ public partial class ProgramSettingsWindow : Window
 
     private readonly ObservableCollection<VolumeRow> _rows = [];
 
+    private readonly System.Windows.Threading.DispatcherTimer _takt =
+        new() { Interval = TimeSpan.FromSeconds(2) };
+
     /// <summary>Eine Zeile je Datentraeger, so wie sie im Fenster steht.</summary>
     /// <remarks>
     /// Die beiden Grenzen stehen hier als Text und nicht als Zahl. Waehrend
     /// jemand tippt, ist das Feld zwischendurch leer oder unvollstaendig; eine
     /// Zahl muesste dann raten, was gemeint ist. Geprueft wird beim Speichern.
     /// </remarks>
-    private sealed class VolumeRow
+    private sealed class VolumeRow : System.ComponentModel.INotifyPropertyChanged
     {
-        public string Text { get; init; } = "";
-        public string EvictText { get; init; } = "";
-        public string ButtonText { get; init; } = "";
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
         public string Root { get; init; } = "";
-        public bool CanRelease { get; init; }
+
+        private string _text = "";
+        private string _evictText = "";
+        private string _buttonText = "";
+        private bool _canRelease;
+
+        public string Text { get => _text; set => Setze(ref _text, value); }
+        public string EvictText { get => _evictText; set => Setze(ref _evictText, value); }
+        public string ButtonText { get => _buttonText; set => Setze(ref _buttonText, value); }
+        public bool CanRelease { get => _canRelease; set => Setze(ref _canRelease, value); }
+
+        // Die beiden Grenzen melden keine Aenderung: sie kommen aus dem Feld
+        // und gehen nicht dorthin zurueck. Ein Nachziehen wuerde ueberschreiben,
+        // was jemand gerade tippt.
         public string MaxGb { get; set; } = "";
         public string MinFreeGb { get; set; } = "";
+
+        private void Setze<T>(ref T feld, T wert, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(feld, wert)) return;
+
+            feld = wert;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
+        }
     }
 
     /// <param name="volumes">Was auf welchem Datentraeger liegt.</param>
@@ -71,6 +94,14 @@ public partial class ProgramSettingsWindow : Window
         _clearCache = clearThumbnails;
 
         VolumeList.ItemsSource = _rows;
+
+        // Solange der Dialog offen ist, aendert sich, was freigegeben werden
+        // darf: die Gegenstelle kuendigt an, der Aufraeumtakt laeuft. Ein
+        // Knopf, der eine Zahl von vorhin nennt, verspricht etwas anderes,
+        // als er tut.
+        _takt.Tick += (_, _) => ShowUsage();
+        _takt.Start();
+        Closed += (_, _) => _takt.Stop();
 
         // Der Autostart kommt aus der Registrierung: nur dort steht, ob
         // Windows das Programm wirklich startet.
@@ -146,35 +177,86 @@ public partial class ProgramSettingsWindow : Window
     /// laesst. Ohne diese zweite Zahl sieht ein Knopf, der nichts bewirkt,
     /// wie ein Fehler aus -- dabei liegt es meist daran, dass die
     /// Platzhalter-Schwelle noch nicht erreicht ist.
+    ///
+    /// Das Bestimmen der Zahlen laeuft nebenher. Fuer jede Datei wird
+    /// nachgeschlagen, ob die Gegenstelle sie fuehrt; im Faden der
+    /// Oberflaeche waere das ein Stocken alle paar Sekunden, mitten im
+    /// Tippen.
     /// </remarks>
-    private void ShowUsage()
+    private async void ShowUsage()
     {
-        _rows.Clear();
+        IReadOnlyList<VolumeUsage> volumes;
+        (int Files, long Bytes) vorschau;
 
-        foreach (var volume in _volumes())
+        try
+        {
+            volumes = await Task.Run(_volumes);
+            vorschau = await Task.Run(_thumbUsage);
+        }
+        catch (Exception)
+        {
+            // Eine Anzeige. Sie ist es nicht wert, den Dialog zu beenden.
+            return;
+        }
+
+        Anwenden(volumes, vorschau);
+    }
+
+    /// <summary>
+    /// Traegt die Zahlen ein, ohne die Zeilen neu aufzubauen.
+    /// </summary>
+    /// <remarks>
+    /// Neu aufgebaut wuerde jede Eingabe verworfen, die noch nicht
+    /// gespeichert ist -- und das Fenster zieht im Sekundentakt nach. Was
+    /// sich aendert, sind die Zahlen; was jemand getippt hat, bleibt.
+    /// </remarks>
+    private void Anwenden(IReadOnlyList<VolumeUsage> volumes, (int Files, long Bytes) vorschau)
+    {
+        foreach (var volume in volumes)
         {
             var frei = volume.FreeBytes < 0 ? App.S("G.FreeUnknown") : Format.Bytes(volume.FreeBytes);
 
-            _rows.Add(new VolumeRow
+            var text = App.S("M.VolumeLine",
+                volume.Root, Format.Bytes(volume.UsedBytes), Format.Count(volume.Files), frei);
+            var offen = App.S("M.VolumeEvictable",
+                Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes));
+            var knopf = App.S("M.VolumeRelease",
+                Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes));
+
+            var zeile = _rows.FirstOrDefault(
+                r => r.Root.Equals(volume.Root, StringComparison.OrdinalIgnoreCase));
+
+            if (zeile is null)
             {
-                Text = App.S("M.VolumeLine",
-                    volume.Root, Format.Bytes(volume.UsedBytes),
-                    Format.Count(volume.Files), frei),
-                EvictText = App.S("M.VolumeEvictable",
-                    Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
-                ButtonText = App.S("M.VolumeRelease",
-                    Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
-                Root = volume.Root,
-                CanRelease = volume.EvictableFiles > 0,
-                MaxGb = (volume.MaxBytes / Gigabyte).ToString(),
-                MinFreeGb = (volume.MinimumFreeBytes / Gigabyte).ToString()
-            });
+                _rows.Add(new VolumeRow
+                {
+                    Root = volume.Root,
+                    Text = text,
+                    EvictText = offen,
+                    ButtonText = knopf,
+                    CanRelease = volume.EvictableFiles > 0,
+                    MaxGb = (volume.MaxBytes / Gigabyte).ToString(),
+                    MinFreeGb = (volume.MinimumFreeBytes / Gigabyte).ToString()
+                });
+
+                continue;
+            }
+
+            zeile.Text = text;
+            zeile.EvictText = offen;
+            zeile.ButtonText = knopf;
+            zeile.CanRelease = volume.EvictableFiles > 0;
         }
 
+        // Ein Laufwerk kann verschwinden, waehrend der Dialog offen ist.
+        foreach (var weg in _rows.Where(r => volumes.All(
+                     v => !v.Root.Equals(r.Root, StringComparison.OrdinalIgnoreCase))).ToList())
+            _rows.Remove(weg);
 
-        var (dateien, bytes) = _thumbUsage();
-        ThumbUsageText.Text = App.S("M.ThumbUsage", Format.Count(dateien), Format.Bytes(bytes));
-        ClearButton.IsEnabled = dateien > 0;
+        ThumbUsageText.Text = App.S("M.ThumbUsage",
+            Format.Count(vorschau.Files), Format.Bytes(vorschau.Bytes));
+
+        ClearButton.IsEnabled = vorschau.Files > 0;
     }
 
     private async void OnReleaseVolume(object sender, RoutedEventArgs e)
