@@ -714,9 +714,17 @@ public partial class MainWindow : Window
 
         try
         {
+            var zeilen = File.ReadAllLines(ColumnFile);
+
+            // Gespeichert wird je Spaltennummer. Kommt eine Spalte hinzu,
+            // verschieben sich alle dahinter, und die alten Masse gehoerten
+            // dann zur jeweils falschen Spalte. Bei abweichender Anzahl also
+            // lieber von vorn.
+            if (zeilen.Length != ShareGrid.Columns.Count) return;
+
             var stored = new Dictionary<int, string[]>();
 
-            foreach (var line in File.ReadAllLines(ColumnFile))
+            foreach (var line in zeilen)
             {
                 var parts = line.Split('\t');
 

@@ -189,8 +189,27 @@
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
 
-        <DataGridTextColumn x:Name="ColReceived" Header="{DynamicResource S.Col.Received}" Width="95"
-                            Binding="{Binding ReceivedText}" SortMemberPath="ReceivedValue" />
+        <!-- Pfeil statt Wort: die Spalte traegt eine kurze Zahl, eine
+             Ueberschrift aus einem ganzen Wort waere breiter als ihr Inhalt.
+             Die Bedeutung steht im Tooltip und im Spaltenmenue. -->
+        <DataGridTextColumn x:Name="ColReceived" Width="80"
+                            Binding="{Binding ReceivedText}" SortMemberPath="ReceivedValue">
+          <DataGridTextColumn.Header>
+            <TextBlock Text="&#x2193;" FontSize="14" FontWeight="Bold"
+                       Foreground="{DynamicResource Sekundaer}"
+                       ToolTip="{DynamicResource S.Col.Received}" />
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
+
+        <DataGridTextColumn x:Name="ColSent" Width="80"
+                            Binding="{Binding SentText}" SortMemberPath="SentValue">
+          <DataGridTextColumn.Header>
+            <TextBlock Text="&#x2191;" FontSize="14" FontWeight="Bold"
+                       Foreground="{DynamicResource Sekundaer}"
+                       ToolTip="{DynamicResource S.Col.Sent}" />
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
+
 
         <DataGridTextColumn x:Name="ColSize" Header="{DynamicResource S.Col.Size}" Width="95"
                             Binding="{Binding SizeText}" SortMemberPath="SizeValue" />

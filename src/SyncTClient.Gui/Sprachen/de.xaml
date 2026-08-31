@@ -294,4 +294,5 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Main.ResumeAll">Fortsetzen</s:String>
   <s:String x:Key="M.PausedAll">Der Abgleich ist angehalten. Platzhalter bleiben, Inhalte werden nicht mehr geholt.</s:String>
   <s:String x:Key="M.ResumedAll">Der Abgleich läuft wieder.</s:String>
+  <s:String x:Key="S.Col.Sent">Gesendet</s:String>
 </ResourceDictionary>
