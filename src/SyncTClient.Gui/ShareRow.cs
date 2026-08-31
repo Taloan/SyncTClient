@@ -167,6 +167,14 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                     : Share.State == ShareState.Bereit ? App.S("R.Synced")
                     : "";
 
+            // Waehrend des Abgleichs sagt der Anteil mehr als die Stueckzahl.
+            // Was noch aussteht, steht in Bytes daneben: 444 Dateien koennen
+            // vier Minuten sein oder vier Stunden.
+            if (Share.Phase == SyncPhase.Abgleich)
+                return Share.Outstanding == 0
+                    ? App.S("R.PhaseSyncing")
+                    : App.S("R.SyncPercent", $"{Percent:0}", Format.Bytes(Share.OutstandingBytes));
+
             return Share.PhaseTotal == 0
                 ? $"{Share.PhaseDone:N0}"
                 : $"{Share.PhaseDone:N0} von {Share.PhaseTotal:N0}";
@@ -205,10 +213,24 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         ? "—"
         : App.S("R.CountAndSize", Format.Count(Share.IndexCount), Format.Bytes(Share.IndexBytes));
 
-    /// <summary>Was davon lokal liegt, mit Inhalt.</summary>
+    /// <summary>Was im Ordner steht, Platzhalter eingerechnet.</summary>
     public string LocalText => Share is null
         ? "—"
+        : App.S("R.CountAndSize", Format.Count(Share.LocalFiles), Format.Bytes(Share.LocalBytes));
+
+    /// <summary>Wovon der Inhalt hier liegt und Platz belegt.</summary>
+    public string ContentText => Share is null
+        ? "—"
         : App.S("R.CountAndSize", Format.Count(Share.CacheFileCount), Format.Bytes(Share.CacheUsedBytes));
+
+    /// <summary>Ob die Zeile aufgeklappt ist.</summary>
+    private bool _expanded;
+
+    public bool Expanded
+    {
+        get => _expanded;
+        set { _expanded = value; Notify(nameof(Expanded)); }
+    }
 
     public string OutstandingText => Share is null
         ? "—"
@@ -268,7 +290,8 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                      nameof(FilesValue), nameof(LocalFilesValue), nameof(ThumbsValue),
                      nameof(LimitValue), nameof(LastTransferValue),
                      nameof(GlobalText), nameof(LocalText), nameof(OutstandingText),
-                     nameof(LastScanText), nameof(FolderIdText), nameof(ThumbDetailText)
+                     nameof(LastScanText), nameof(FolderIdText), nameof(ThumbDetailText),
+                     nameof(ContentText)
                  })
         {
             Notify(name);

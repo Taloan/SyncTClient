@@ -411,6 +411,9 @@ public sealed partial class ShareHost
     {
         var offen = 0;
         long bytes = 0;
+        long vorhandenBytes = 0;
+
+        foreach (var eintrag in vorhanden.Values) vorhandenBytes += eintrag.Size;
 
         try
         {
@@ -436,6 +439,8 @@ public sealed partial class ShareHost
             return;
         }
 
+        LocalFiles = vorhanden.Count;
+        LocalBytes = vorhandenBytes;
         Outstanding = offen;
         OutstandingBytes = bytes;
         UpdateOutstandingPhase();

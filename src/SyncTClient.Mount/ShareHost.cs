@@ -358,6 +358,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public long OutstandingBytes { get; private set; }
 
+    /// <summary>
+    /// Was im Ordner steht, Platzhalter eingerechnet.
+    /// </summary>
+    /// <remarks>
+    /// Nicht dasselbe wie der Cache. Ein Platzhalter steht da und zaehlt
+    /// hier mit, haelt aber keinen Inhalt. Erst beide Zahlen nebeneinander
+    /// sagen etwas: was abgeglichen ist und was davon Platz belegt.
+    /// </remarks>
+    public int LocalFiles { get; private set; }
+
+    public long LocalBytes { get; private set; }
+
     /// <summary>Wann zuletzt ueber den Ordner gegangen wurde.</summary>
     public DateTime LastScan { get; private set; }
 
@@ -391,14 +403,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         // Erledigte von insgesamt, damit der Balken einen Bezug hat. Ohne
         // Rueckstand bleibt nur die Frage, ob die Gegenstelle noch redet.
-        if (Outstanding > 0)
-        {
-            var gesamt = IndexCount;
-            SetPhase(SyncPhase.Abgleich, Math.Max(0, gesamt - Outstanding), gesamt);
-            return;
-        }
+        if (Outstanding == 0 && DateTime.UtcNow - _letzteMeldung >= Ruhe) return;
 
-        if (DateTime.UtcNow - _letzteMeldung < Ruhe) SetPhase(SyncPhase.Abgleich);
+        // Auch ohne Rueckstand bekommt der Balken seinen Bezug. Steht die
+        // Gegenstelle noch in der Leitung, ist der Abgleich nicht vorbei --
+        // aber wie weit er ist, laesst sich sagen.
+        var gesamt = IndexCount;
+        SetPhase(SyncPhase.Abgleich, Math.Max(0, gesamt - Outstanding), gesamt);
     }
 
     /// <summary>

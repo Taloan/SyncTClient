@@ -519,7 +519,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private void UpdateCache()
     {
-        var volumes = _config.Cache.Volumes;
+        // _runtime traegt die laufenden Freigaben; an dessen Grenzen melden
+        // sich die Caches an. _config ist nur die Datei.
+        var volumes = _runtime.Cache.Volumes;
 
         _cacheRows.Clear();
 

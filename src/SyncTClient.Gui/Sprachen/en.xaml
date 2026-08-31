@@ -343,4 +343,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Detail.LastScan">Last scan</s:String>
   <s:String x:Key="R.CountAndSize">{0} files · {1}</s:String>
   <s:String x:Key="R.NothingOutstanding">nothing pending</s:String>
+  <s:String x:Key="S.Detail.Content">Content local</s:String>
+  <s:String x:Key="S.Col.Details">Expand or collapse the row</s:String>
+  <s:String x:Key="R.SyncPercent">{0} % · {1} pending</s:String>
 </ResourceDictionary>
