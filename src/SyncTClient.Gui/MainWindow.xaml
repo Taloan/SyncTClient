@@ -1,264 +1,263 @@
 <Window x:Class="SyncTClient.Gui.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:SyncTClient.Gui"
         Title="SyncTClient"
-        Height="800" Width="1180"
+        Height="820" Width="1280"
         WindowStartupLocation="CenterScreen"
         Loaded="OnLoaded" Closing="OnClosing">
 
-  <Grid Margin="12">
+  <Window.Resources>
+    <Style x:Key="Kopfzeile" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="#888" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style x:Key="Kennzahl" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="16" />
+    </Style>
+    <Style x:Key="Beschriftung" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="Foreground" Value="#888" />
+    </Style>
+    <Style TargetType="Button">
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="Margin" Value="0,0,6,0" />
+    </Style>
+  </Window.Resources>
+
+  <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" MinHeight="140" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="170" MinHeight="0" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
-    <Grid.ColumnDefinitions>
-      <ColumnDefinition Width="330" />
-      <ColumnDefinition Width="12" />
-      <ColumnDefinition Width="*" />
-    </Grid.ColumnDefinitions>
 
-    <!-- ============== Links: Gegenstellen und deren Ordner ============== -->
-    <Grid Grid.Row="0" Grid.Column="0">
-      <Grid.RowDefinitions>
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="190" />
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="Auto" />
-        <RowDefinition Height="*" />
-        <RowDefinition Height="Auto" />
-      </Grid.RowDefinitions>
-
-      <TextBlock Grid.Row="0" Text="Gegenstellen" FontWeight="SemiBold" Margin="0,0,0,4" />
-
-      <Border Grid.Row="1" BorderBrush="#DDD" BorderThickness="1">
-        <ListBox x:Name="PeerList" BorderThickness="0" SelectionChanged="OnPeerSelected">
-          <ListBox.ItemTemplate>
-            <DataTemplate>
-              <StackPanel Margin="2,4">
-                <DockPanel>
-                  <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}"
-                             Foreground="Gray" FontSize="11" Margin="8,0,0,0" />
-                  <TextBlock Text="{Binding Display}" FontWeight="SemiBold" />
-                </DockPanel>
-                <TextBlock Text="{Binding Detail}" Foreground="Gray" FontSize="11"
-                           TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </Border>
-
-      <WrapPanel Grid.Row="2" Margin="0,6,0,10">
-        <Button Content="Server hinzufügen" Click="OnAddPeer" />
-        <Button x:Name="ConnectButton" Content="Verbinden" Click="OnConnectPeer" />
-        <Button Content="Entfernen" Click="OnRemovePeer" Margin="0" />
-      </WrapPanel>
-
-      <TextBlock Grid.Row="3" x:Name="FolderHeader" Text="Ordner" FontWeight="SemiBold" Margin="0,0,0,4" />
-
-      <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="1">
-        <ListBox x:Name="FolderList" BorderThickness="0" SelectionChanged="OnFolderSelected"
-                 MouseDoubleClick="OnFolderDoubleClick">
-          <ListBox.ItemTemplate>
-            <DataTemplate>
-              <StackPanel Margin="2,4">
-                <DockPanel>
-                  <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}"
-                             Foreground="Gray" FontSize="11" Margin="8,0,0,0" />
-                  <TextBlock Text="{Binding Display}" />
-                </DockPanel>
-                <TextBlock Text="{Binding Detail}" Foreground="Gray" FontSize="11"
-                           TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </Border>
-
-      <WrapPanel Grid.Row="5" Margin="0,6,0,0">
+    <!-- ===================== Werkzeugleiste ===================== -->
+    <DockPanel Grid.Row="0" Margin="10,8,10,8">
+      <Button DockPanel.Dock="Right" Content="Dieses Gerät" Click="OnShowDevice" Margin="0" />
+      <Button DockPanel.Dock="Right" Content="Gegenstellen …" Click="OnManagePeers" />
+      <WrapPanel>
         <Button x:Name="AcceptButton" Content="Übernehmen" Click="OnAcceptFolder" />
         <Button x:Name="PauseButton" Content="Anhalten" Click="OnPauseShare" />
-        <Button x:Name="UnbindButton" Content="Bindung lösen" Click="OnUnbind" Margin="0" />
+        <Button x:Name="SettingsButton" Content="Einstellungen" Click="OnShowSettings" />
+        <Button x:Name="OpenButton" Content="Ordner öffnen" Click="OnOpenFolder" />
+        <Button x:Name="UnbindButton" Content="Bindung lösen" Click="OnUnbind" />
       </WrapPanel>
-    </Grid>
+    </DockPanel>
 
-    <GridSplitter Grid.Row="0" Grid.Column="1" Width="4"
-                  HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="Transparent" />
+    <!-- ===================== Freigaben ===================== -->
+    <DataGrid x:Name="ShareGrid" Grid.Row="1" Margin="10,0,10,0"
+              AutoGenerateColumns="False" IsReadOnly="True"
+              CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
+              SelectionMode="Single" HeadersVisibility="Column"
+              GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="#EEE"
+              BorderBrush="#DDD" BorderThickness="1" RowHeight="30"
+              SelectionChanged="OnShareSelected" MouseDoubleClick="OnGridDoubleClick">
+      <DataGrid.Columns>
 
-    <!-- ============== Rechts: Reiter ============== -->
-    <TabControl Grid.Row="0" Grid.Column="2">
-
-      <TabItem Header="Status">
-        <Grid Margin="10">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="180" />
-          </Grid.RowDefinitions>
-
-          <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock x:Name="ShareTitle" FontSize="16" FontWeight="SemiBold" Text="—" />
-            <TextBlock x:Name="ShareSubtitle" Foreground="Gray" Text="" Margin="0,0,0,10" />
-
-            <DockPanel>
-              <TextBlock DockPanel.Dock="Left" Text="Lokaler Cache" FontWeight="SemiBold" />
-              <TextBlock x:Name="CacheText" DockPanel.Dock="Right" Foreground="Gray"
-                         HorizontalAlignment="Right" Text="—" />
-            </DockPanel>
-            <ProgressBar x:Name="CacheBar" Height="14" Margin="0,4,0,0" Minimum="0" Maximum="100" />
-
-            <UniformGrid Columns="4" Margin="0,12,0,0">
-              <StackPanel>
-                <TextBlock Text="Einträge" Foreground="Gray" FontSize="11" />
-                <TextBlock x:Name="StatIndex" Text="—" FontSize="15" />
+        <DataGridTemplateColumn Header="Name" Width="240" SortMemberPath="Name" CanUserSort="True">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="13"
+                           Foreground="#B0B0B0" Margin="4,0,7,0" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
               </StackPanel>
-              <StackPanel>
-                <TextBlock Text="Gesamtgröße" Foreground="Gray" FontSize="11" />
-                <TextBlock x:Name="StatSize" Text="—" FontSize="15" />
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+
+        <DataGridTemplateColumn Header="Status" Width="190" SortMemberPath="StatusText" CanUserSort="True">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                           Foreground="#2E9E4F" VerticalAlignment="Center" Margin="0,0,6,0">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Ready}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" Foreground="#555" />
               </StackPanel>
-              <StackPanel>
-                <TextBlock Text="Lokal" Foreground="Gray" FontSize="11" />
-                <TextBlock x:Name="StatLocal" Text="—" FontSize="15" />
-              </StackPanel>
-              <StackPanel>
-                <TextBlock Text="Vorschaubilder" Foreground="Gray" FontSize="11" />
-                <TextBlock x:Name="StatThumbs" Text="—" FontSize="15" />
-              </StackPanel>
-            </UniformGrid>
-          </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
 
-          <DockPanel Grid.Row="1">
-            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
-              <TextBlock DockPanel.Dock="Left" Text="Übertragungen" FontWeight="SemiBold" />
-              <TextBlock x:Name="QueueText" DockPanel.Dock="Right" Foreground="Gray"
-                         HorizontalAlignment="Right" Text="" />
-            </DockPanel>
-            <Border BorderBrush="#DDD" BorderThickness="1">
-              <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <ItemsControl x:Name="TransferList">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <StackPanel Margin="8,6">
-                        <DockPanel>
-                          <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}"
-                                     Foreground="Gray" Margin="8,0,0,0" />
-                          <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                        </DockPanel>
-                        <DockPanel Margin="0,1,0,3">
-                          <TextBlock DockPanel.Dock="Right" Text="{Binding Progress}"
-                                     Foreground="Gray" FontSize="11" Margin="8,0,0,0" />
-                          <TextBlock Text="{Binding Folder}" Foreground="Gray" FontSize="11"
-                                     TextTrimming="CharacterEllipsis" />
-                        </DockPanel>
-                        <ProgressBar Height="6" Minimum="0" Maximum="100"
-                                     Value="{Binding Percent, Mode=OneWay}" />
-                      </StackPanel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-              </ScrollViewer>
-            </Border>
-          </DockPanel>
+        <DataGridTemplateColumn x:Name="ColPeers" Header="Knoten online" Width="110"
+                                SortMemberPath="PeersText" CanUserSort="True">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <TextBlock VerticalAlignment="Center" Margin="4,0">
+                <Hyperlink Click="OnShowPeers" ToolTip="Wer trägt diesen Ordner?">
+                  <Run Text="{Binding PeersText, Mode=OneWay}" />
+                </Hyperlink>
+              </TextBlock>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
 
-          <DockPanel Grid.Row="2" Margin="0,12,0,0">
-            <TextBlock DockPanel.Dock="Top" Text="Protokoll" FontWeight="SemiBold" Margin="0,0,0,6" />
-            <TextBox x:Name="LogBox" IsReadOnly="True" FontFamily="Consolas" FontSize="11"
-                     VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"
-                     HorizontalScrollBarVisibility="Auto" Margin="0" />
-          </DockPanel>
-        </Grid>
-      </TabItem>
+        <DataGridTemplateColumn x:Name="ColProgress" Header="Fortschritt" Width="200"
+                                SortMemberPath="Percent" CanUserSort="True">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <Grid VerticalAlignment="Center" Margin="4,0">
+                <ProgressBar Height="12" Minimum="0" Maximum="100"
+                             Value="{Binding Percent, Mode=OneWay}"
+                             IsIndeterminate="{Binding Indeterminate, Mode=OneWay}">
+                  <ProgressBar.Style>
+                    <Style TargetType="ProgressBar">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Busy}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </ProgressBar.Style>
+                </ProgressBar>
+                <TextBlock Text="{Binding ProgressText}" FontSize="10" Foreground="#666"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Grid>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
 
-      <TabItem Header="Einstellungen">
-        <Grid Margin="10" x:Name="DetailPanel">
-          <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-          </Grid.RowDefinitions>
+        <DataGridTextColumn x:Name="ColReceived" Header="Empfangen" Width="95"
+                            Binding="{Binding ReceivedText}" SortMemberPath="ReceivedValue" />
 
-          <StackPanel Grid.Row="0">
-            <Label Content="Lokaler Pfad" />
-            <TextBox x:Name="LocalPathBox" />
+        <DataGridTextColumn x:Name="ColSize" Header="Größe" Width="95"
+                            Binding="{Binding SizeText}" SortMemberPath="SizeValue" />
 
-            <Label Content="Modus" />
-            <ComboBox x:Name="ModeBox" SelectionChanged="OnModeChanged">
-              <ComboBoxItem Content="Bei Bedarf herunterladen (Platzhalter)" />
-              <ComboBoxItem Content="Vollständig lokal bereithalten" />
-            </ComboBox>
+        <DataGridTextColumn x:Name="ColLocalFiles" Header="Lokale Dateien" Width="105"
+                            Binding="{Binding LocalFilesText}" SortMemberPath="LocalFilesValue" />
 
-            <StackPanel Orientation="Horizontal">
-              <StackPanel Width="200" x:Name="CachePanel">
-                <Label Content="Cache-Budget (MB)" />
-                <TextBox x:Name="CacheBudgetBox" />
-              </StackPanel>
-              <StackPanel Margin="16,0,0,0" VerticalAlignment="Bottom">
-                <CheckBox x:Name="ThumbsBox" Content="Vorschaubilder vorbereiten" Margin="0,0,0,6" />
-                <CheckBox x:Name="AutoStartBox" Content="Beim Start automatisch hochfahren" Margin="0,0,0,12" />
-              </StackPanel>
-            </StackPanel>
-            <TextBlock x:Name="CacheHint" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,8" />
-          </StackPanel>
+        <DataGridTextColumn x:Name="ColLocalSize" Header="Lokale Größe" Width="105" Visibility="Collapsed"
+                            Binding="{Binding LocalSizeText}" SortMemberPath="LocalSizeValue" />
+        <DataGridTextColumn x:Name="ColFiles" Header="Dateien" Width="90" Visibility="Collapsed"
+                            Binding="{Binding FilesText}" SortMemberPath="FilesValue" />
+        <DataGridTextColumn x:Name="ColThumbs" Header="Vorschaubilder" Width="110" Visibility="Collapsed"
+                            Binding="{Binding ThumbsText}" SortMemberPath="ThumbsValue" />
+        <DataGridTextColumn x:Name="ColBudget" Header="Cache-Budget" Width="110" Visibility="Collapsed"
+                            Binding="{Binding BudgetText}" SortMemberPath="BudgetValue" />
+        <DataGridTextColumn x:Name="ColMode" Header="Modus" Width="130" Visibility="Collapsed"
+                            Binding="{Binding ModeText}" />
+        <DataGridTextColumn x:Name="ColLast" Header="Zuletzt übertragen" Width="130" Visibility="Collapsed"
+                            Binding="{Binding LastTransferText}" SortMemberPath="LastTransferValue" />
+        <DataGridTextColumn x:Name="ColPeer" Header="Gegenstelle" Width="150" Visibility="Collapsed"
+                            Binding="{Binding PeerText}" />
+        <DataGridTextColumn x:Name="ColFolderId" Header="Ordner-ID" Width="120" Visibility="Collapsed"
+                            Binding="{Binding FolderId}" />
+        <DataGridTextColumn x:Name="ColPath" Header="Pfad" Width="*" Visibility="Collapsed"
+                            Binding="{Binding PathText}" />
+      </DataGrid.Columns>
+    </DataGrid>
 
-          <DockPanel Grid.Row="1" Margin="0,8,0,4">
-            <TextBlock DockPanel.Dock="Left" Text="Was soll überhaupt erscheinen?"
-                       FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button DockPanel.Dock="Right" Content="Nichts" Click="OnSelectNone" Margin="0" />
-            <Button DockPanel.Dock="Right" Content="Alles" Click="OnSelectAll" />
-            <TextBlock x:Name="TreeStatus" VerticalAlignment="Center" Margin="10,0" Foreground="Gray" />
-          </DockPanel>
+    <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch"
+                  VerticalAlignment="Center" Background="Transparent" />
 
-          <Border Grid.Row="2" BorderBrush="#DDD" BorderThickness="1">
-            <TreeView x:Name="FolderTree" BorderThickness="0">
-              <TreeView.ItemContainerStyle>
-                <Style TargetType="TreeViewItem">
-                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                </Style>
-              </TreeView.ItemContainerStyle>
-              <TreeView.ItemTemplate>
-                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                  <StackPanel Orientation="Horizontal" Margin="0,1">
-                    <!-- IsThreeState bleibt aus: der unbestimmte Zustand ergibt
-                         sich aus den Kindern, anklicken laesst er sich nicht. -->
-                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                              IsThreeState="False" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Summary}" Margin="10,0,0,0"
-                               Foreground="Gray" VerticalAlignment="Center" />
+    <!-- ===================== Übertragungen und Protokoll ===================== -->
+    <TabControl Grid.Row="3" Margin="10,0,10,0" BorderBrush="#DDD">
+      <TabItem Header="Übertragungen">
+        <DockPanel>
+          <TextBlock x:Name="QueueText" DockPanel.Dock="Top" Foreground="Gray"
+                     Margin="8,6,8,4" Text="nichts unterwegs" />
+          <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="TransferList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel Margin="8,4">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}"
+                                 Foreground="Gray" Margin="8,0,0,0" />
+                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <DockPanel Margin="0,1,0,3">
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Progress}"
+                                 Foreground="Gray" FontSize="11" Margin="8,0,0,0" />
+                      <TextBlock Text="{Binding Folder}" Foreground="Gray" FontSize="11"
+                                 TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                    <ProgressBar Height="5" Minimum="0" Maximum="100"
+                                 Value="{Binding Percent, Mode=OneWay}" />
                   </StackPanel>
-                </HierarchicalDataTemplate>
-              </TreeView.ItemTemplate>
-            </TreeView>
-          </Border>
-
-          <DockPanel Grid.Row="3" Margin="0,10,0,0">
-            <Button DockPanel.Dock="Right" Content="Speichern" Click="OnSave" Margin="0" />
-            <TextBlock x:Name="SaveHint" Foreground="Gray" VerticalAlignment="Center"
-                       Text="Änderungen greifen, wenn die Freigabe neu gestartet wird." />
-          </DockPanel>
-        </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
       </TabItem>
 
-      <TabItem Header="Dieses Gerät">
-        <StackPanel Margin="14">
-          <TextBlock Text="Eigene Device-ID" FontWeight="SemiBold" />
-          <TextBlock Foreground="Gray" TextWrapping="Wrap" Margin="0,2,0,8"
-                     Text="Diese Kennung auf der Gegenstelle als Gerät eintragen und die gewünschten Ordner damit teilen. Danach erscheinen sie hier unter „Ordner“ als angeboten." />
-          <TextBox x:Name="OwnIdBox" IsReadOnly="True" FontFamily="Consolas"
-                   TextWrapping="Wrap" Padding="8" />
-          <Button Content="In die Zwischenablage" Click="OnCopyId"
-                  HorizontalAlignment="Left" Margin="0,8,0,0" />
-
-          <TextBlock Text="Konfigurationsdatei" FontWeight="SemiBold" Margin="0,20,0,2" />
-          <TextBox x:Name="ConfigPathBox" IsReadOnly="True" />
-
-          <TextBlock Text="Vorschaubilder" FontWeight="SemiBold" Margin="0,20,0,2" />
-          <TextBlock x:Name="ThumbInfo" Foreground="Gray" TextWrapping="Wrap" />
-        </StackPanel>
+      <TabItem Header="Protokoll">
+        <TextBox x:Name="LogBox" IsReadOnly="True" FontFamily="Consolas" FontSize="11"
+                 VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"
+                 HorizontalScrollBarVisibility="Auto" BorderThickness="0" />
       </TabItem>
     </TabControl>
 
-    <TextBlock x:Name="StatusBar" Grid.Row="1" Grid.ColumnSpan="3" Margin="0,10,0,0" Foreground="Gray" />
+    <!-- ===================== Leiste: Netzwerk, Diagramm, Sitzung ===================== -->
+    <Border Grid.Row="4" BorderBrush="#DDD" BorderThickness="0,1,0,0" Background="#FAFAFA"
+            Margin="0,8,0,0" Padding="10,8">
+      <Grid Height="128">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="176" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="200" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0">
+          <TextBlock Text="NETZWERK" Style="{StaticResource Kopfzeile}" />
+          <TextBlock Text="Empfangen" Style="{StaticResource Beschriftung}" />
+          <TextBlock x:Name="RateDown" Text="0 B/s" Style="{StaticResource Kennzahl}"
+                     Foreground="#1E88E5" Margin="0,0,0,4" />
+          <TextBlock Text="Gesendet" Style="{StaticResource Beschriftung}" />
+          <TextBlock x:Name="RateUp" Text="0 B/s" Style="{StaticResource Kennzahl}"
+                     Foreground="#43A047" Margin="0,0,0,10" />
+
+          <TextBlock Text="CACHE" Style="{StaticResource Kopfzeile}" />
+          <TextBlock x:Name="CacheText" Text="—" Style="{StaticResource Beschriftung}" />
+          <ProgressBar x:Name="CacheBar" Height="8" Minimum="0" Maximum="100" Margin="0,3,10,0" />
+        </StackPanel>
+
+        <DockPanel Grid.Column="1" Margin="12,0">
+          <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                      HorizontalAlignment="Center" Margin="0,4,0,0">
+            <RadioButton x:Name="Range5" Content="5 Minuten" GroupName="Spanne" IsChecked="True"
+                         Checked="OnRangeChanged" Margin="8,0" />
+            <RadioButton x:Name="Range30" Content="30 Minuten" GroupName="Spanne"
+                         Checked="OnRangeChanged" Margin="8,0" />
+            <RadioButton x:Name="Range180" Content="3 Stunden" GroupName="Spanne"
+                         Checked="OnRangeChanged" Margin="8,0" />
+          </StackPanel>
+          <Border BorderBrush="#E4E4E4" BorderThickness="1" Background="White">
+            <local:ThroughputChart x:Name="Chart" />
+          </Border>
+        </DockPanel>
+
+        <StackPanel Grid.Column="2">
+          <TextBlock Text="SITZUNG" Style="{StaticResource Kopfzeile}" />
+          <TextBlock Text="Empfangen seit Programmstart" Style="{StaticResource Beschriftung}" />
+          <TextBlock x:Name="TotalDown" Text="0 B" Style="{StaticResource Kennzahl}" Margin="0,0,0,4" />
+          <TextBlock Text="Gesendet seit Programmstart" Style="{StaticResource Beschriftung}" />
+          <TextBlock x:Name="TotalUp" Text="0 B" Style="{StaticResource Kennzahl}" Margin="0,0,0,4" />
+          <TextBlock Text="Höchste Rate" Style="{StaticResource Beschriftung}" />
+          <TextBlock x:Name="PeakRate" Text="0 B/s" Style="{StaticResource Kennzahl}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <TextBlock x:Name="StatusBar" Grid.Row="5" Margin="10,6,10,8" Foreground="Gray" />
   </Grid>
 </Window>

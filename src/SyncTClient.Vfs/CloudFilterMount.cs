@@ -110,7 +110,12 @@ public sealed class CloudFilterMount : IDisposable
     /// Legt fuer jeden Eintrag der Quelle einen Platzhalter an -- Verzeichnisse
     /// zuerst, damit die Kinder ein Zuhause haben.
     /// </summary>
-    public void ProjectPlaceholders()
+    /// <param name="progress">
+    /// Meldet angelegte und insgesamt zu erwartende Platzhalter. Bei grossen
+    /// Freigaben dauert dieser Lauf lange genug, dass ein stummes Fenster wie
+    /// ein Absturz aussieht.
+    /// </param>
+    public void ProjectPlaceholders(Action<int, int>? progress = null)
     {
         var entries = _source.Enumerate();
 
@@ -146,9 +151,15 @@ public sealed class CloudFilterMount : IDisposable
             .GroupBy(e => ParentOf(e.RelativePath))
             .ToDictionary(g => g.Key, g => g.ToList());
 
+        var erwartet = files.Sum(g => g.Value.Count);
+        progress?.Invoke(0, erwartet);
+
         var created = 0;
         foreach (var (directory, kids) in files)
+        {
             created += CreatePlaceholders(directory, kids);
+            progress?.Invoke(created, erwartet);
+        }
 
         _log?.Invoke($"{directories.Count - 1} Verzeichnisse, {created} Platzhalter angelegt (0 Bytes belegt).");
     }

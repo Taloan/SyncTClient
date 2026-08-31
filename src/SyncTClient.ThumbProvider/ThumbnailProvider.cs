@@ -171,7 +171,7 @@ internal static class Trace
 /// </summary>
 internal static class Host
 {
-    public static Action? Alive;
+    public static Action? Alive { get; set; }
     public static void KeepAlive() => Alive?.Invoke();
 }
 
@@ -187,7 +187,7 @@ internal static class Store
     /// dagegen im Client, traegt der hier ein, wie sich ein Dateikopf holen
     /// laesst. Damit muss nichts mehr auf Vorrat erzeugt werden.
     /// </remarks>
-    public static Func<string, bool>? Produce;
+    public static Func<string, bool>? Produce { get; set; }
 
     private static string? _directory;
     private static bool _looked;
