@@ -94,6 +94,12 @@ blockweise geladen und verifiziert.
   und schneidet die eingebettete EXIF-Vorschau heraus. Gemessen: 42 ms im
   Median fuer ein neues Bild, 2 ms fuer ein bekanntes, und der Platzhalter
   bleibt dabei dehydriert
+- Verdrängung nur, wenn die Datei wiederbeschaffbar ist: eine Kopie wird erst
+  freigegeben, wenn die Gegenstelle sie im Index vollständig führt (`Size > 0`
+  und Blockliste). Die geforderte Anzahl ist je Freigabe einstellbar
+- Lokal geänderte Dateien werden nicht dehydriert. Windows lehnt das ohnehin
+  ab; die Prüfung macht sichtbar, dass hier eine Änderung liegt, für die der
+  Schreibweg noch fehlt
 - Messwerkzeuge für die Vorschaukette: `--providertest`, `--cachecheck`,
   `--shellprops`, `--pin`, `--register-thumbs`
 

@@ -135,6 +135,31 @@
           </DataGridTemplateColumn.CellTemplate>
         </DataGridTemplateColumn>
 
+        <DataGridTemplateColumn x:Name="ColCopies" Header="Vollständige Kopien" Width="130"
+                                SortMemberPath="Copies" CanUserSort="True">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0"
+                          ToolTip="{Binding CopiesHint}">
+                <TextBlock Text="{Binding CopiesText}" VerticalAlignment="Center" />
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                           Foreground="#C77700" Margin="6,0,0,0" VerticalAlignment="Center">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding CopiesAtRisk}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </StackPanel>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+
         <DataGridTextColumn x:Name="ColReceived" Header="Empfangen" Width="95"
                             Binding="{Binding ReceivedText}" SortMemberPath="ReceivedValue" />
 

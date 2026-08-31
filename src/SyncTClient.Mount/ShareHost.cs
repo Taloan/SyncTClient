@@ -154,6 +154,55 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>Wann zuletzt etwas fuer diese Freigabe ankam.</summary>
     public DateTime? LastTransfer { get; private set; }
 
+    // -------------------------------------------------------- Replikation
+
+    /// <summary>
+    /// Wie viele andere Knoten diese Datei vollstaendig fuehren.
+    /// </summary>
+    /// <remarks>
+    /// Ein BEP-Index ist pro Datei alles oder nichts: wer eine Datei
+    /// auffuehrt, hat sie ganz. Halbe Dateien liegen als temporaere Dateien
+    /// daneben und stehen nicht im Index -- deshalb genuegt die Frage "kommt
+    /// sie mit Inhalt vor?", und "vielleicht verteilt bei mehreren" stellt
+    /// sich innerhalb einer Datei gar nicht.
+    ///
+    /// Heute tragen wir je Freigabe genau eine Gegenstelle, also ist das
+    /// Ergebnis 0 oder 1. Die Form traegt aber schon mehrere.
+    /// </remarks>
+    public int HoldersOf(string relativePath)
+    {
+        if (_index is null) return 0;
+        return _index.TryGet(relativePath, out var file) && HasContent(file) ? 1 : 0;
+    }
+
+    /// <summary>
+    /// Ob eine Datei nach der Ankuendigung der Gegenstelle wiederbeschaffbar
+    /// ist -- die Bedingung dafuer, unsere Kopie herzugeben.
+    /// </summary>
+    private bool MayEvict(string relativePath)
+    {
+        var wanted = _config.MinimumCopies;
+        return wanted <= 0 || HoldersOf(relativePath) >= wanted;
+    }
+
+    /// <summary>Fuehrt diese Ankuendigung wirklich Inhalt, oder nur einen Namen?</summary>
+    /// <remarks>
+    /// <c>setNoContent()</c> in Syncthing streicht genau diese beiden Felder.
+    /// Eine Ankuendigung ohne Bloecke heisst: ich kenne die Datei, aber hol
+    /// sie nicht bei mir.
+    /// </remarks>
+    private static bool HasContent(BepFileInfo file)
+        => !file.Deleted && file.Size > 0 && file.Blocks.Count > 0;
+
+    /// <summary>
+    /// Wie viele erreichbare Knoten diese Freigabe tragen -- fuer die Anzeige.
+    /// </summary>
+    /// <remarks>
+    /// Es ist eine Untergrenze, keine Wahrheit ueber das Netz: von Knoten,
+    /// mit denen wir gerade nicht verbunden sind, wissen wir nichts.
+    /// </remarks>
+    public int ReachableCopies => _connection is not null && (_index?.Count ?? 0) > 0 ? 1 : 0;
+
     private long _bytesReceived;
 
     private void NoteReceived(long bytes)
@@ -296,7 +345,12 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
         var budget = _config.Mode == ShareMode.AlwaysLocal ? 0 : _config.CacheMaxBytes;
-        _cache = new HydrationCache(_config.LocalPath, budget, statePath, _log);
+        _cache = new HydrationCache(_config.LocalPath, budget, statePath, _log)
+        {
+            // Der Cache kennt nur Groessen und Zugriffszeiten; ob eine Datei
+            // wiederbeschaffbar ist, steht im Index der Gegenstelle.
+            MayEvict = MayEvict
+        };
 
         _thumbnails = new ThumbnailStore(Path.Combine(_app.HomeDirectory, "thumbs"));
 
