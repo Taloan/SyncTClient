@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using SyncTClient.Mount;
@@ -45,9 +45,28 @@ public sealed class ThroughputChart : FrameworkElement
 
     private ThroughputPoint[] _points = [];
 
+    /// <summary>
+    /// Die Obergrenze der Hochachse, nachlaufend geglaettet.
+    /// </summary>
+    /// <remarks>
+    /// Sie richtet sich nach der hoechsten Saeule. Ohne Glaettung sprang das
+    /// ganze Bild in dem Moment, in dem eine Spitze aus dem Fenster lief:
+    /// dieselben Daten standen ploetzlich doppelt so hoch da. Nach oben wird
+    /// deshalb sofort nachgezogen -- eine Spitze soll nicht abgeschnitten
+    /// werden --, nach unten nur langsam.
+    /// </remarks>
+    private double _obergrenze;
+
     public void Show(ThroughputPoint[] points)
     {
         _points = points;
+
+        var spitze = 0.0;
+        foreach (var p in points) spitze = Math.Max(spitze, Math.Max(p.Read, p.Written));
+
+        var ziel = Rundung(Math.Max(spitze * 1.15, 1024));
+        _obergrenze = ziel >= _obergrenze ? ziel : Math.Max(ziel, _obergrenze * 0.92);
+
         InvalidateVisual();
     }
 
@@ -62,12 +81,9 @@ public sealed class ThroughputChart : FrameworkElement
         const double links = 52;
         var flaeche = new Rect(links, 4, Math.Max(1, w - links - 4), Math.Max(1, h - 20));
 
-        var spitze = 0.0;
-        foreach (var p in _points) spitze = Math.Max(spitze, Math.Max(p.Read, p.Written));
-
-        // Eine glatte Obergrenze oberhalb der Spitze, mindestens 1 KB/s. Sonst
-        // erscheint bei geringem Durchsatz das Rauschen als Zickzack.
-        var obergrenze = Rundung(Math.Max(spitze * 1.15, 1024));
+        // Mindestens 1 KB/s. Sonst erscheint bei geringem Durchsatz das
+        // Rauschen als Zickzack.
+        var obergrenze = Math.Max(_obergrenze, 1024);
 
         for (var i = 0; i <= 4; i++)
         {
