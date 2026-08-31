@@ -301,6 +301,10 @@ public sealed class PeerHost : IAsyncDisposable
         connection.ClusterConfigReceived += cc => OnClusterConfig(cc);
         connection.IndexReceived += m => { Melde("Index", m.Folder, m.Files); Route(m.Folder, m.Files); };
         connection.IndexUpdateReceived += m => { Melde("Index-Aktualisierung", m.Folder, m.Files); Route(m.Folder, m.Files); };
+        connection.PeerBusyOn += folderId =>
+        {
+            if (_shares.TryGetValue(folderId, out var busy)) busy.PeerBusy();
+        };
         connection.MessageReceived += (typ, bytes) => Zaehle(typ, bytes, true);
         connection.MessageSent += (typ, bytes) => Zaehle(typ, bytes, false);
         connection.Serve = ServeAsync;

@@ -33,6 +33,18 @@ public enum SyncPhase
     Platzhalter,
     Cache,
     Inhalte,
+
+    /// <summary>
+    /// Fertig war es schon, aber die Gegenstelle hat wieder etwas zu sagen.
+    /// </summary>
+    /// <remarks>
+    /// Der Abgleich hoert nicht auf, wenn er einmal durchgelaufen ist. Solange
+    /// noch Ankuendigungen eintreffen, die Arbeit machen, oder die Gegenstelle
+    /// selbst noch laedt, ist der Stand nicht der gemeinsame -- und "fertig"
+    /// waere schlicht falsch.
+    /// </remarks>
+    Abgleich,
+
     Fertig
 }
 
@@ -311,10 +323,52 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         if (Phase == SyncPhase.Index) SetPhase(SyncPhase.Index, _index.Count);
 
+        // Nur was Arbeit macht, zaehlt. Eine Ankuendigung, die nichts aendert,
+        // wiederholt bloss Bekanntes und ist kein Redebedarf.
+        if (changed.Count > 0) PeerBusy();
+
         // Der Index sagt nur, was die Gegenstelle fuehrt. Damit es auch im
         // Ordner steht, muss jeder genannte Name angewendet werden: angelegt,
         // ersetzt oder entfernt. Das geschieht im Hintergrundlauf, nicht hier.
         QueueIncoming(changed);
+    }
+
+    /// <summary>Wann die Gegenstelle zuletzt etwas zu tun gab.</summary>
+    private DateTime _letzteMeldung = DateTime.MinValue;
+
+    /// <summary>So lange muss Ruhe sein, bevor wieder "fertig" gilt.</summary>
+    /// <remarks>
+    /// Ohne diese Wartezeit fiele die Anzeige zwischen zwei Ankuendigungen
+    /// jedes Mal kurz auf "abgeglichen" zurueck und flackerte.
+    /// </remarks>
+    private static readonly TimeSpan Ruhe = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Die Gegenstelle ist noch nicht fertig -- sie hat angekuendigt oder
+    /// laedt selbst noch.
+    /// </summary>
+    public void PeerBusy()
+    {
+        _letzteMeldung = DateTime.UtcNow;
+        if (Phase == SyncPhase.Fertig) SetPhase(SyncPhase.Abgleich);
+    }
+
+    /// <summary>
+    /// Prueft, ob wieder Ruhe eingekehrt ist.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Bedingungen, und beide muessen gelten: nichts liegt mehr an, was
+    /// zu uebernehmen waere, und seit der letzten Meldung ist es eine Weile
+    /// still. Die erste allein reichte nicht -- zwischen zwei Stapeln ist die
+    /// Warteschlange auch leer.
+    /// </remarks>
+    private void SettlePhase()
+    {
+        if (Phase != SyncPhase.Abgleich) return;
+        if (!_incoming.IsEmpty) return;
+        if (DateTime.UtcNow - _letzteMeldung < Ruhe) return;
+
+        SetPhase(SyncPhase.Fertig);
     }
 
     // ------------------------------------------------------------ Start und Stopp

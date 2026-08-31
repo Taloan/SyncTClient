@@ -247,6 +247,11 @@ public sealed class BepConnection : IAsyncDisposable
                         return;
 
                     case MessageType.DownloadProgress:
+                        // Die Gegenstelle laedt selbst noch. Fuer uns ist das
+                        // kein Inhalt, aber die Auskunft, dass sie mit diesem
+                        // Ordner noch nicht fertig ist.
+                        var progress = DownloadProgress.Parser.ParseFrom(payload);
+                        PeerBusyOn?.Invoke(progress.Folder);
                         break;
                 }
             }
@@ -396,6 +401,9 @@ public sealed class BepConnection : IAsyncDisposable
 
     /// <summary>Was hinausging.</summary>
     public event Action<MessageType, int>? MessageSent;
+
+    /// <summary>Die Gegenstelle laedt in diesem Ordner noch selbst.</summary>
+    public event Action<string>? PeerBusyOn;
 
     private async Task SendAsync(MessageType type, IMessage message, CancellationToken ct)
     {
