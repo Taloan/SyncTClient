@@ -133,15 +133,21 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     // ------------------------------------------------------------ Fortschritt
 
     /// <summary>
-    /// Sichtbar, solange der Abgleich laeuft.
+    /// Sichtbar, solange ein Durchlauf mit bekanntem Umfang laeuft.
     /// </summary>
     /// <remarks>
     /// Ein Balken, der dauerhaft auf 100 steht, traegt keine Information und
     /// lenkt von den Balken ab, deren Abgleich tatsaechlich laeuft.
+    ///
+    /// Fuer den Abgleich im laufenden Betrieb gibt es keinen Balken. Es ist
+    /// nicht bekannt, wie viel die Gegenstelle noch sagen will, und ein
+    /// endlos durchlaufender Balken behauptet Fortschritt, von dem niemand
+    /// weiss, wovon er ein Teil ist. Dort steht nur, was gerade geschieht.
     /// </remarks>
     public bool Busy => Share is not null
                         && Share.Phase != SyncPhase.Fertig
-                        && Share.Phase != SyncPhase.Ruht;
+                        && Share.Phase != SyncPhase.Ruht
+                        && (Share.Phase != SyncPhase.Abgleich || Share.PhaseTotal > 0);
 
     /// <summary>Unbestimmt, solange die Gesamtzahl unbekannt ist.</summary>
     public bool Indeterminate => Busy && Share!.PhaseTotal == 0;
@@ -155,7 +161,11 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         get
         {
             if (Share is null) return "";
-            if (!Busy) return Share.State == ShareState.Bereit ? App.S("R.Synced") : "";
+
+            if (!Busy)
+                return Share.Phase == SyncPhase.Abgleich ? App.S("R.PhaseSyncing")
+                    : Share.State == ShareState.Bereit ? App.S("R.Synced")
+                    : "";
 
             return Share.PhaseTotal == 0
                 ? $"{Share.PhaseDone:N0}"
@@ -175,7 +185,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public string PathText => Share?.Config.LocalPath ?? "";
     public string ModeText => Share?.Config.Mode == ShareMode.AlwaysLocal ? App.S("R.ModeAlways") : App.S("R.ModeOnDemand");
 
-    public string BudgetText => Share is null || Share.CacheMaxBytes == 0
+    public string LimitText => Share is null || Share.CacheMaxBytes == 0
         ? "—"
         : Format.Bytes(Share.CacheMaxBytes);
 
@@ -190,7 +200,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public long FilesValue => Share?.IndexCount ?? -1;
     public long LocalFilesValue => Share?.CacheFileCount ?? -1;
     public long ThumbsValue => Share?.ThumbnailUsage().Count ?? -1;
-    public long BudgetValue => Share?.CacheMaxBytes ?? -1;
+    public long LimitValue => Share?.CacheMaxBytes ?? -1;
     public DateTime LastTransferValue => Share?.LastTransfer ?? DateTime.MinValue;
 
     // -------------------------------------------------------------- Pflege
@@ -216,10 +226,10 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                      nameof(Busy), nameof(Indeterminate), nameof(Percent), nameof(ProgressText),
                      nameof(ReceivedText), nameof(SentText), nameof(SizeText), nameof(LocalSizeText),
                      nameof(FilesText), nameof(LocalFilesText), nameof(ThumbsText),
-                     nameof(PathText), nameof(ModeText), nameof(BudgetText), nameof(LastTransferText),
+                     nameof(PathText), nameof(ModeText), nameof(LimitText), nameof(LastTransferText),
                      nameof(ReceivedValue), nameof(SentValue), nameof(SizeValue), nameof(LocalSizeValue),
                      nameof(FilesValue), nameof(LocalFilesValue), nameof(ThumbsValue),
-                     nameof(BudgetValue), nameof(LastTransferValue)
+                     nameof(LimitValue), nameof(LastTransferValue)
                  })
         {
             Notify(name);

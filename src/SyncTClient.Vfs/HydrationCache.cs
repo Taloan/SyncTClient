@@ -9,8 +9,8 @@ using Windows.Win32.Storage.FileSystem;
 namespace SyncTClient.Vfs;
 
 /// <summary>
-/// Der selbstverwaltete lokale Cache: hydrierte Dateien bis zu einem Budget.
-/// Wird das Budget ueberschritten, wird verdraengt, worauf am laengsten nicht
+/// Der selbstverwaltete lokale Cache: hydrierte Dateien bis zu einem Limit.
+/// Wird das Limit ueberschritten, wird verdraengt, worauf am laengsten nicht
 /// zugegriffen wurde.
 /// </summary>
 /// <remarks>
@@ -45,28 +45,28 @@ public sealed class HydrationCache
     private readonly string _statePath;
     private readonly Action<string>? _log;
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
-    private readonly CacheBudget? _budget;
+    private readonly CacheLimits? _limits;
 
-    public HydrationCache(string rootPath, CacheBudget? budget, string statePath, Action<string>? log = null)
+    public HydrationCache(string rootPath, CacheLimits? limits, string statePath, Action<string>? log = null)
     {
         _rootPath = Path.GetFullPath(rootPath);
         _statePath = statePath;
         _log = log;
-        _budget = budget;
+        _limits = limits;
         Load();
 
-        // Das Budget gilt fuer alle Freigaben zusammen. Ohne Anmeldung zaehlt
+        // Das Limit gilt fuer alle Freigaben zusammen. Ohne Anmeldung zaehlt
         // diese Freigabe nicht mit.
-        budget?.Register(this);
+        limits?.Register(this);
     }
 
     /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
-    public long MaxBytes => _budget?.LimitsFor(RootPath).MaxBytes ?? 0;
+    public long MaxBytes => _limits?.LimitsFor(RootPath).MaxBytes ?? 0;
 
     /// <summary>
-    /// Meldet diesen Cache vom Budget ab. Die Freigabe laeuft nicht mehr.
+    /// Meldet diesen Cache vom Limit ab. Die Freigabe laeuft nicht mehr.
     /// </summary>
-    public void LeaveBudget() => _budget?.Forget(this);
+    public void LeaveLimits() => _limits?.Forget(this);
 
     /// <summary>
     /// Zusaetzliche Pruefung, bevor eine Datei verdraengt wird.
@@ -86,7 +86,7 @@ public sealed class HydrationCache
 
     public int FileCount => _entries.Count;
 
-    /// <summary>Wo diese Freigabe liegt. Das Budget gruppiert danach.</summary>
+    /// <summary>Wo diese Freigabe liegt. Das Limit gruppiert danach.</summary>
     public string RootPath => _rootPath;
 
     private sealed record Entry(long Bytes, DateTimeOffset LastAccess);
@@ -150,11 +150,11 @@ public sealed class HydrationCache
     // ------------------------------------------------------------ Verdraengung
 
     /// <summary>
-    /// Sorgt dafuer, dass das gemeinsame Budget wieder eingehalten wird.
-    /// Welche Dateien weichen, entscheidet das Budget, denn nur es sieht alle
+    /// Sorgt dafuer, dass das gemeinsame Limit wieder eingehalten wird.
+    /// Welche Dateien weichen, entscheidet das Limit, denn nur es sieht alle
     /// Freigaben.
     /// </summary>
-    public Task EnforceBudgetAsync() => _budget?.EnforceAsync() ?? Task.CompletedTask;
+    public Task EnforceLimitsAsync() => _limits?.EnforceAsync() ?? Task.CompletedTask;
 
     /// <summary>Die Dateien, die hier verdraengt werden duerfen.</summary>
     internal IEnumerable<(string Path, long Bytes, DateTimeOffset LastAccess)> EvictionCandidates()
@@ -217,7 +217,7 @@ public sealed class HydrationCache
             _entries.TryRemove(stale, out _);
 
         _log?.Invoke($"Cache: {FileCount} Dateien lokal, {UsedBytes / (1024.0 * 1024.0):0.0} MB" +
-                     (MaxBytes > 0 ? $" von {MaxBytes / (1024.0 * 1024.0):0.0} MB Budget." : " (kein Budget gesetzt)."));
+                     (MaxBytes > 0 ? $" von {MaxBytes / (1024.0 * 1024.0):0.0} MB Limit." : " (kein Limit gesetzt)."));
     }
 
     // ------------------------------------------------------------ Windows

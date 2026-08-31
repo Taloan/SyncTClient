@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using SyncTClient.Bep;
 using SyncTClient.Vfs;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
@@ -53,18 +53,25 @@ public sealed partial class ShareHost
            || name.StartsWith(VersionsFolder + "/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Vermerkt, dass diese Namen neu zu betrachten sind.</summary>
-    private void QueueIncoming(IEnumerable<string> names)
+    /// <summary>Nimmt Namen entgegen und meldet, wie viele neu dazukamen.</summary>
+    /// <remarks>
+    /// Gezaehlt wird, was wirklich Arbeit macht. Ausgeschlossene Namen und
+    /// alte Fassungen fallen heraus, und ein Name, der ohnehin schon in der
+    /// Schlange steht, ist keine zusaetzliche Aufgabe -- sonst waere die
+    /// Gesamtzahl groesser als die Menge, die je abgearbeitet wird.
+    /// </remarks>
+    private int QueueIncoming(IEnumerable<string> names)
     {
-        var any = false;
+        var neu = 0;
 
         foreach (var name in names)
         {
             if (!_config.Includes(name) || IsVersionsPath(name)) continue;
-            _incoming[name] = 0;
-            any = true;
+            if (_incoming.TryAdd(name, 0)) neu++;
         }
 
-        if (any) Wake();
+        if (neu > 0) Wake();
+        return neu;
     }
 
     // ------------------------------------------------------------ Anwenden
@@ -97,10 +104,12 @@ public sealed partial class ShareHost
         if (_mount is null || _incoming.IsEmpty) return;
 
         var bilanz = new Bilanz();
+        var verarbeitet = 0;
 
         foreach (var name in _incoming.Keys.ToArray())
         {
             _incoming.TryRemove(name, out _);
+            verarbeitet++;
 
             try
             {
@@ -113,6 +122,8 @@ public sealed partial class ShareHost
                 _log($"[{FolderId}] \"{name}\" liess sich nicht uebernehmen: {ex.Message}");
             }
         }
+
+        Fortschritt(verarbeitet);
 
         if (!bilanz.Leer) _log($"[{FolderId}] von der Gegenstelle uebernommen: {bilanz}.");
     }

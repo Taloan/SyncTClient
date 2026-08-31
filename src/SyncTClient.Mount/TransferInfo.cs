@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace SyncTClient.Mount;
@@ -102,13 +102,13 @@ public sealed class TransferInfo : INotifyPropertyChanged
 /// <summary>
 /// Eine Datei wurde nicht geholt, weil eine Grenze es verbietet.
 /// </summary>
-/// <param name="Budget">
-/// Wahr: das Cache-Budget ist die Grenze. Falsch: der freizuhaltende Platz
-/// ist die Grenze.
+/// <param name="UsageLimit">
+/// Wahr: das Verbrauchs Limit ist die Grenze. Falsch: das Freihalte Limit.
 /// </param>
+/// <param name="Limit">Der Wert der Grenze, die gegriffen hat.</param>
 public sealed record CacheLimitHit(
     string FolderId,
     string Name,
     long Needed,
-    bool Budget,
+    bool UsageLimit,
     long Limit);

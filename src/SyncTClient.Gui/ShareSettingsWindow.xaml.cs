@@ -6,7 +6,7 @@ using SyncTClient.Mount;
 
 namespace SyncTClient.Gui;
 
-/// <summary>Die Einstellungen einer Freigabe: Modus, Budget und Teilbaum.</summary>
+/// <summary>Die Einstellungen einer Freigabe: Modus, Limit und Teilbaum.</summary>
 public partial class ShareSettingsWindow : Window
 {
     private readonly ShareConfig _share;

@@ -323,14 +323,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         if (Phase == SyncPhase.Index) SetPhase(SyncPhase.Index, _index.Count);
 
-        // Nur was Arbeit macht, zaehlt. Eine Ankuendigung, die nichts aendert,
-        // wiederholt bloss Bekanntes und ist kein Redebedarf.
-        if (changed.Count > 0) PeerBusy();
-
         // Der Index sagt nur, was die Gegenstelle fuehrt. Damit es auch im
         // Ordner steht, muss jeder genannte Name angewendet werden: angelegt,
         // ersetzt oder entfernt. Das geschieht im Hintergrundlauf, nicht hier.
-        QueueIncoming(changed);
+        //
+        // Nur was dabei liegen bleibt, ist Redebedarf. Eine Gegenstelle, die
+        // ueber ausgeschlossene Namen oder alte Fassungen redet, sagt nichts,
+        // was uns fehlt -- und "gleicht ab" waere dann genauso falsch wie
+        // vorher "abgeglichen".
+        var neu = QueueIncoming(changed);
+        if (neu > 0) PeerBusy(neu);
     }
 
     /// <summary>Wann die Gegenstelle zuletzt etwas zu tun gab.</summary>
@@ -343,14 +345,50 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private static readonly TimeSpan Ruhe = TimeSpan.FromSeconds(10);
 
+    /// <summary>Wie viel dieser Abgleich umfasst und wie viel davon steht.</summary>
+    /// <remarks>
+    /// Ein Anteil, kein Versprechen. Die Gesamtzahl waechst, solange die
+    /// Gegenstelle weiter ankuendigt -- wie viel sie insgesamt noch sagen
+    /// will, weiss sie selbst nicht. Sie zaehlt trotzdem: sie sagt, wie viel
+    /// von dem, was bisher hereinkam, schon uebernommen ist.
+    /// </remarks>
+    private int _abgleichGesamt;
+    private int _abgleichFertig;
+
     /// <summary>
     /// Die Gegenstelle ist noch nicht fertig -- sie hat angekuendigt oder
     /// laedt selbst noch.
     /// </summary>
-    public void PeerBusy()
+    /// <param name="neu">
+    /// Wie viele Namen dabei neu dazukamen. 0 heisst: sie meldet sich, hat
+    /// uns aber nichts zu uebergeben. Dann gibt es auch keinen Anteil.
+    /// </param>
+    public void PeerBusy(int neu = 0)
     {
         _letzteMeldung = DateTime.UtcNow;
-        if (Phase == SyncPhase.Fertig) SetPhase(SyncPhase.Abgleich);
+
+        // Ein neuer Abgleich faengt bei null an. Ohne diesen Schnitt liefe
+        // der Zaehler ueber Stunden weiter und der Anteil stuende immer bei
+        // fast hundert.
+        if (Phase != SyncPhase.Abgleich)
+        {
+            _abgleichGesamt = 0;
+            _abgleichFertig = 0;
+        }
+
+        _abgleichGesamt += neu;
+
+        if (Phase is SyncPhase.Fertig or SyncPhase.Abgleich)
+            SetPhase(SyncPhase.Abgleich, _abgleichFertig, _abgleichGesamt);
+    }
+
+    /// <summary>Meldet, wie viele Namen ein Durchgang abgearbeitet hat.</summary>
+    private void Fortschritt(int verarbeitet)
+    {
+        if (verarbeitet == 0 || Phase != SyncPhase.Abgleich) return;
+
+        _abgleichFertig = Math.Min(_abgleichGesamt, _abgleichFertig + verarbeitet);
+        SetPhase(SyncPhase.Abgleich, _abgleichFertig, _abgleichGesamt);
     }
 
     /// <summary>
@@ -368,6 +406,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (!_incoming.IsEmpty) return;
         if (DateTime.UtcNow - _letzteMeldung < Ruhe) return;
 
+        _abgleichGesamt = 0;
+        _abgleichFertig = 0;
         SetPhase(SyncPhase.Fertig);
     }
 
@@ -465,7 +505,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         await StopLocalLoopAsync();
 
         _cache?.Save();
-        _cache?.LeaveBudget();
+        _cache?.LeaveLimits();
         _mount?.Dispose();
         _mount = null;
         _connection = null;
@@ -506,12 +546,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
-        // "Vollstaendig lokal" nimmt am Budget nicht teil. Dort darf nichts
+        // "Vollstaendig lokal" nimmt am Limit nicht teil. Dort darf nichts
         // verdraengt werden, sonst gilt die Zusage nicht.
-        var budget = _config.Mode == ShareMode.AlwaysLocal ? null : _app.Cache;
-        if (budget is not null) budget.Log ??= _log;
+        var limits = _config.Mode == ShareMode.AlwaysLocal ? null : _app.Cache;
+        if (limits is not null) limits.Log ??= _log;
 
-        _cache = new HydrationCache(_config.LocalPath, budget, statePath, _log)
+        _cache = new HydrationCache(_config.LocalPath, limits, statePath, _log)
         {
             // Der Cache speichert nur Groessen und Zugriffszeiten. Ob eine
             // Datei wiederbeschaffbar ist, steht im Index der Gegenstelle.
@@ -780,10 +820,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     // ------------------------------------------------------------ Cache
 
-    public async Task EnforceBudgetAsync()
+    public async Task EnforceLimitsAsync()
     {
         if (_cache is null) return;
-        await _cache.EnforceBudgetAsync();
+        await _cache.EnforceLimitsAsync();
         CacheChanged?.Invoke();
     }
 
@@ -813,19 +853,19 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         // Erst pruefen, ob der Platz ueberhaupt reicht. Wird erst geladen und
         // danach aufgeraeumt, ist die Uebertragung bereits gelaufen.
-        var limit = _cache is null ? CacheBudget.Limit.None : _app.Cache.CanHold(totalLength, _config.LocalPath);
+        var limit = _cache is null ? CacheLimits.Limit.None : _app.Cache.CanHold(totalLength, _config.LocalPath);
         var grenzen = _app.Cache.LimitsFor(_config.LocalPath);
-        if (limit != CacheBudget.Limit.None)
+        if (limit != CacheLimits.Limit.None)
         {
             var hit = new CacheLimitHit(
                 FolderId, relativePath, totalLength,
-                limit == CacheBudget.Limit.Budget,
-                limit == CacheBudget.Limit.Budget ? grenzen.MaxBytes : grenzen.MinimumFreeBytes);
+                limit == CacheLimits.Limit.Usage,
+                limit == CacheLimits.Limit.Usage ? grenzen.MaxBytes : grenzen.MinimumFreeBytes);
 
             LimitReached?.Invoke(hit);
             throw new IOException(
                 $"\"{relativePath}\" passt nicht: " +
-                (hit.Budget ? "groesser als das Cache-Budget" : "es bliebe zu wenig frei"));
+                (hit.UsageLimit ? "groesser als das Verbrauchs Limit" : "es bliebe zu wenig frei"));
         }
 
         var transfer = new TransferInfo(FolderId, relativePath, totalLength);
@@ -903,10 +943,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             _cache?.NoteHydrated(relativePath, data.Length);
             CacheChanged?.Invoke();
 
-            // Nach dem Zuwachs pruefen, ob das Budget noch eingehalten ist.
+            // Nach dem Zuwachs pruefen, ob das Limit noch eingehalten ist.
             // Das laeuft im Hintergrund, damit der Hydrations-Rueckruf nicht
             // darauf wartet.
-            _ = Task.Run(EnforceBudgetAsync, CancellationToken.None);
+            _ = Task.Run(EnforceLimitsAsync, CancellationToken.None);
 
             return data;
         }

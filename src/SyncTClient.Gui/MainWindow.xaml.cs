@@ -123,9 +123,9 @@ public partial class MainWindow : Window
     /// ausgeschriebenem Datenverzeichnis.
     /// </summary>
     /// <remarks>
-    /// Absichtlich eine einzige Instanz. An ihr haengt das Cache-Budget, und
+    /// Absichtlich eine einzige Instanz. An ihr haengt das Verbrauchs Limit, und
     /// das gilt fuer alle Freigaben zusammen. Je Gegenstelle ein eigenes
-    /// Budget waere kein programmweites Budget mehr.
+    /// Limit waere kein programmweites Limit mehr.
     /// </remarks>
     private AppConfig _runtime = new();
 
@@ -535,7 +535,7 @@ public partial class MainWindow : Window
                 volume.MaxBytes > 0 ? Math.Min(100, 100.0 * volume.UsedBytes / volume.MaxBytes) : 0,
                 volume.MaxBytes > 0
                     ? App.S("M.CacheOf", Format.Bytes(volume.UsedBytes), Format.Bytes(volume.MaxBytes))
-                    : App.S("M.CacheNoBudget", Format.Bytes(volume.UsedBytes)),
+                    : App.S("M.CacheNoLimit", Format.Bytes(volume.UsedBytes)),
                 frei));
         }
 
@@ -1467,8 +1467,8 @@ public partial class MainWindow : Window
         _complained[key] = DateTime.UtcNow;
 
         var name = Path.GetFileName(hit.Name);
-        var text = hit.Budget
-            ? App.S("M.LimitBudget", name, Format.Bytes(hit.Needed), Format.Bytes(hit.Limit))
+        var text = hit.UsageLimit
+            ? App.S("M.LimitUsage", name, Format.Bytes(hit.Needed), Format.Bytes(hit.Limit))
             : App.S("M.LimitFree", name, Format.Bytes(hit.Needed), Format.Bytes(hit.Limit));
 
         Status(text.Split('\n')[0]);
