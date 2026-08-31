@@ -13,7 +13,8 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <RootNamespace>SyncTClient.Gui</RootNamespace>
-    <AssemblyName>synctgui</AssemblyName>
+    <AssemblyName>SyncTClient</AssemblyName>
+    <ApplicationIcon>SyncTClient.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!--

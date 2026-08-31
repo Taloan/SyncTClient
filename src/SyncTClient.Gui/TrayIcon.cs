@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows;
 using Microsoft.Win32;
 using Forms = System.Windows.Forms;
@@ -44,6 +44,35 @@ internal static class Autostart
                 // Laesst sich der Wert nicht lesen, gilt der Eintrag als nicht gesetzt.
                 return false;
             }
+        }
+    }
+
+    /// <summary>
+    /// Zieht einen veralteten Eintrag nach.
+    /// </summary>
+    /// <remarks>
+    /// Der Eintrag enthaelt einen festen Pfad. Wandert die Programmdatei oder
+    /// aendert sich ihr Name -- aus synctgui.exe wurde SyncTClient.exe --,
+    /// zeigt er ins Leere, und Windows startet beim Anmelden stillschweigend
+    /// nichts. Wer den Autostart eingeschaltet hat, merkt davon erst etwas,
+    /// wenn er ihn braucht.
+    ///
+    /// Nur nachziehen, nie neu anlegen: wer den Autostart nicht wollte, soll
+    /// ihn nicht dadurch bekommen, dass das Programm einmal lief.
+    /// </remarks>
+    public static void Refresh()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+            if (key?.GetValue(EntryName) is not string vorhanden || vorhanden.Length == 0) return;
+            if (Command is not { } command || vorhanden == command) return;
+
+            key.SetValue(EntryName, command);
+        }
+        catch (Exception)
+        {
+            // Laesst sich der Eintrag nicht schreiben, bleibt er wie er war.
         }
     }
 
