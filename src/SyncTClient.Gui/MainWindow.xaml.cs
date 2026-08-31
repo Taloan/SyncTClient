@@ -411,6 +411,17 @@ public partial class MainWindow : Window
         PauseAllButton.Content = App.S(_config.Paused ? "S.Main.ResumeAll" : "S.Main.PauseAll");
     }
 
+    /// <summary>Klappt die Zeile auf oder zu.</summary>
+    private void OnToggleDetails(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: ShareRow row })
+            row.Expanded = !row.Expanded;
+
+        // Sonst waehlt der Klick nebenbei die Zeile aus und aendert damit,
+        // was unten in den Reitern steht.
+        e.Handled = true;
+    }
+
     private void OnShareSelected(object sender, SelectionChangedEventArgs e)
     {
         _row = ShareGrid.SelectedItem as ShareRow;
@@ -601,7 +612,9 @@ public partial class MainWindow : Window
         var menu = new ContextMenu();
         _columnItems.Clear();
 
-        foreach (var column in ShareGrid.Columns.Skip(2))
+        // 0 ist das Winkelzeichen, 1 der Name, 2 der Status. Die drei stehen
+        // nicht zur Wahl: ohne sie waere die Zeile nicht mehr zu bedienen.
+        foreach (var column in ShareGrid.Columns.Skip(3))
         {
             var item = new MenuItem
             {
@@ -768,8 +781,8 @@ public partial class MainWindow : Window
             {
                 var column = ShareGrid.Columns[nummer];
 
-                // Name und Status bleiben immer sichtbar.
-                if (nummer >= 2)
+                // Winkelzeichen, Name und Status bleiben immer sichtbar.
+                if (nummer >= 3)
                     column.Visibility = parts[1] == "1" ? Visibility.Visible : Visibility.Collapsed;
 
                 if (parts[2] == "*")
