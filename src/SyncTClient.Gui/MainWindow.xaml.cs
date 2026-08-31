@@ -104,6 +104,9 @@ public partial class MainWindow : Window
         if (_config.StartMinimized) WindowState = WindowState.Minimized;
         ApplyTray();
 
+        // Falls die Programmdatei umgezogen ist oder anders heisst.
+        Autostart.Refresh();
+
         PrepareRenaming();
 
         _meter = new ThroughputMeter(CollectWire);
