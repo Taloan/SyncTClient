@@ -4,15 +4,15 @@ namespace SyncTClient.Vfs;
 /// Ein Budget für alle Freigaben zusammen.
 /// </summary>
 /// <remarks>
-/// Der Cache ist kein Verzeichnis. Zwischengespeichert ist eine Datei, die an
-/// ihrem Platz im Explorer liegt und ihre Bytes lokal hat; verdraengen heisst,
-/// sie wieder zum Platzhalter zu machen. Ein Limit je Freigabe waere darum nur
-/// eine Rechenaufgabe fuer den Benutzer -- die Platte ist eine, also ist das
-/// Budget eines.
+/// Der Cache ist kein eigenes Verzeichnis. Eine zwischengespeicherte Datei
+/// liegt an ihrem Platz im Explorer und haelt ihre Bytes lokal. Verdraengen
+/// bedeutet, sie wieder zum Platzhalter zu machen. Ein Limit je Freigabe waere
+/// deshalb nur eine Rechenaufgabe fuer den Benutzer. Es gibt eine Platte, also
+/// gibt es ein Budget.
 ///
-/// Verdraengt wird quer ueber alle Freigaben nach Zugriffszeit: der Ordner,
-/// den seit Monaten niemand angefasst hat, gibt nach, nicht der, der zufaellig
-/// gerade waechst.
+/// Verdraengt wird ueber alle Freigaben hinweg nach Zugriffszeit. Zuerst
+/// weichen Dateien, auf die seit Monaten niemand zugegriffen hat, und nicht
+/// die Dateien der Freigabe, die gerade waechst.
 /// </remarks>
 public sealed class CacheBudget
 {
@@ -32,24 +32,28 @@ public sealed class CacheBudget
     public long MaxBytes { get; }
 
     /// <summary>
-    /// So viel soll auf dem Laufwerk frei bleiben. 0 heisst: keine Ruecksicht.
+    /// So viel soll auf dem Laufwerk frei bleiben. 0 bedeutet, dass der freie
+    /// Platz nicht beruecksichtigt wird.
     /// </summary>
     /// <remarks>
-    /// Die zweite Grenze. Ein Budget allein hilft nicht, wenn daneben etwas
-    /// anderes die Platte fuellt -- dann ist der Cache im Recht und die Platte
-    /// trotzdem voll.
+    /// Das ist die zweite Grenze. Ein Budget allein reicht nicht, wenn andere
+    /// Programme die Platte fuellen. Der Cache haelt dann sein Budget ein, die
+    /// Platte ist trotzdem voll.
     /// </remarks>
     public long MinimumFreeBytes { get; }
 
-    /// <summary>Was auf dem Laufwerk des Caches frei ist. -1: nicht feststellbar.</summary>
+    /// <summary>
+    /// Der freie Platz auf dem Laufwerk des Caches. -1 bedeutet, dass er sich
+    /// nicht feststellen laesst.
+    /// </summary>
     public long FreeBytes => FreeBytesOn(_probePath);
 
     /// <summary>
     /// Der freie Platz auf dem Laufwerk, auf dem dieser Pfad liegt.
     /// </summary>
     /// <remarks>
-    /// Gefragt ist der Platz, der diesem Benutzer zusteht -- bei einem
-    /// Kontingent ist das weniger als das, was die Platte noch hat.
+    /// Gemeint ist der Platz, der diesem Benutzer zusteht. Bei einem
+    /// Kontingent ist das weniger, als die Platte insgesamt noch frei hat.
     /// </remarks>
     public static long FreeBytesOn(string path)
     {
@@ -60,8 +64,8 @@ public sealed class CacheBudget
         }
         catch
         {
-            // Netzlaufwerk, abgezogener Stick, fehlende Rechte -- dann gilt
-            // eben nur das Budget.
+            // Netzlaufwerk, abgezogener Stick oder fehlende Rechte. Dann gilt
+            // nur das Budget.
             return -1;
         }
     }
@@ -81,12 +85,71 @@ public sealed class CacheBudget
         return missing <= 0 ? limit : Math.Min(limit, Math.Max(0, used - missing));
     }
 
-    /// <summary>Wohin die Bilanz gemeldet wird. Der erste, der sich meldet, gibt sie vor.</summary>
+    /// <summary>
+    /// Wohin die Bilanz gemeldet wird. Es gilt der zuerst gesetzte Empfaenger.
+    /// </summary>
     public Action<string>? Log { get; set; }
 
     public long UsedBytes
     {
         get { lock (_caches) return _caches.Sum(c => c.UsedBytes); }
+    }
+
+    /// <summary>Welche Grenze das Holen einer Datei verhindert.</summary>
+    public enum Limit
+    {
+        /// <summary>Keine. Die Datei passt.</summary>
+        None,
+
+        /// <summary>Die Datei ist groesser als das Budget des Caches.</summary>
+        Budget,
+
+        /// <summary>Es bliebe zu wenig auf der Platte frei.</summary>
+        FreeSpace
+    }
+
+    /// <summary>
+    /// Wie viele Bytes sich freigeben liessen.
+    /// </summary>
+    /// <remarks>
+    /// Angeheftete Dateien und Dateien, die sonst nirgends vollstaendig
+    /// vorliegen, zaehlen nicht mit. Sie duerfen nicht verdraengt werden und
+    /// stehen deshalb nicht als Reserve zur Verfuegung.
+    /// </remarks>
+    public long EvictableBytes
+    {
+        get
+        {
+            HydrationCache[] caches;
+            lock (_caches) caches = [.. _caches];
+
+            return caches.Sum(c => c.EvictionCandidates().Sum(e => e.Bytes));
+        }
+    }
+
+    /// <summary>
+    /// Prüft vor dem Holen, ob eine Datei dieser Größe Platz hat.
+    /// </summary>
+    /// <remarks>
+    /// Ohne diese Prüfung laeuft der Download an, verdraengt unterwegs den
+    /// gesamten uebrigen Cache und wird am Ende selbst verworfen. Das kostet
+    /// Uebertragung ohne Ergebnis. Stattdessen wird vorher abgesagt und der
+    /// Grund genannt.
+    /// </remarks>
+    public Limit CanHold(long bytes)
+    {
+        // Eine Datei, die allein schon groesser ist als das Budget, kann nie
+        // bleiben. Daran aendert auch Verdraengen nichts.
+        if (MaxBytes > 0 && bytes > MaxBytes) return Limit.Budget;
+
+        if (MinimumFreeBytes <= 0) return Limit.None;
+
+        var free = FreeBytes;
+        if (free < 0) return Limit.None;
+
+        // Verdraengbares zaehlt als Reserve. Es wuerde beim Holen ohnehin
+        // weichen und gibt seinen Platz frei.
+        return free + EvictableBytes - bytes < MinimumFreeBytes ? Limit.FreeSpace : Limit.None;
     }
 
     public void Register(HydrationCache cache)
@@ -102,8 +165,9 @@ public sealed class CacheBudget
     }
 
     /// <summary>
-    /// Dehydriert, bis das Budget wieder eingehalten wird -- aelteste Zugriffe
-    /// zuerst, ueber alle Freigaben hinweg. Angeheftete Dateien bleiben.
+    /// Dehydriert, bis das Budget wieder eingehalten wird. Aelteste Zugriffe
+    /// zuerst, ueber alle Freigaben hinweg. Angeheftete Dateien bleiben
+    /// erhalten.
     /// </summary>
     public async Task EnforceAsync()
     {
@@ -116,13 +180,13 @@ public sealed class CacheBudget
     }
 
     /// <summary>
-    /// Gibt alles frei, was freigegeben werden darf: aus den Dateien werden
+    /// Gibt alles frei, was freigegeben werden darf. Aus den Dateien werden
     /// wieder Platzhalter.
     /// </summary>
     /// <remarks>
-    /// Angeheftete Dateien bleiben, und die Mindestzahl an Kopien gilt auch
-    /// hier -- ein Knopf ist kein Grund, die letzte Kopie einer Datei
-    /// wegzuwerfen.
+    /// Angeheftete Dateien bleiben erhalten, und die Mindestzahl an Kopien
+    /// gilt auch hier. Auch auf Knopfdruck wird die letzte Kopie einer Datei
+    /// nicht verworfen.
     /// </remarks>
     public Task<(int Files, long Bytes)> ClearAsync() => ShrinkToAsync(0, "geleert");
 

@@ -4,15 +4,16 @@ using Microsoft.Win32.SafeHandles;
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Setzt den Anheft-Zustand von Platzhaltern -- zum Vergleichen, nicht fuer
-/// den Betrieb.
+/// Setzt den Anheft-Zustand von Platzhaltern. Dient dem Vergleich, nicht dem
+/// Betrieb.
 /// </summary>
 /// <remarks>
 /// Der Zustand steht in den Dateiattributen und ist einer der wenigen
 /// Unterschiede, die die Shell zwischen zwei sonst gleichen Platzhaltern
-/// sieht. "Nicht angeheftet" sagt ihr: diese Datei soll gar nicht erst lokal
-/// liegen. Ob sie daraus auch schliesst, sich die Vorschau zu sparen, laesst
-/// sich nur messen -- also machen wir es umschaltbar.
+/// auswerten kann. "Nicht angeheftet" bedeutet, dass die Datei gar nicht erst
+/// lokal liegen soll. Ob die Shell daraus ableitet, keine Vorschau
+/// anzufordern, laesst sich nur messen. Deshalb ist der Zustand hier
+/// umschaltbar.
 /// </remarks>
 public static class PinStateTool
 {

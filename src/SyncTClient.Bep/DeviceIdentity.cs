@@ -4,10 +4,10 @@ using System.Security.Cryptography.X509Certificates;
 namespace SyncTClient.Bep;
 
 /// <summary>
-/// Das Geraetezertifikat dieses Clients. Syncthing kennt keine CA -- die
-/// Identitaet eines Geraets <em>ist</em> der SHA-256-Hash seines Zertifikats.
-/// Ein selbstsigniertes Zertifikat ist daher nicht Notloesung, sondern
-/// genau das vorgesehene Verfahren.
+/// Das Geraetezertifikat dieses Clients. Syncthing verwendet keine
+/// Zertifizierungsstelle. Die Identitaet eines Geraets ist der SHA-256-Hash
+/// seines Zertifikats. Ein selbstsigniertes Zertifikat ist deshalb keine
+/// Notloesung, sondern das vorgesehene Verfahren.
 /// </summary>
 public sealed class DeviceIdentity
 {
@@ -17,10 +17,10 @@ public sealed class DeviceIdentity
 
     /// <summary>
     /// PKCS#12 unterscheidet "kein Passwort" von "leeres Passwort", und
-    /// verschiedene Werkzeuge meinen Verschiedenes damit. Ein fester,
-    /// nicht-leerer Wert umgeht die Mehrdeutigkeit. Schutzwirkung hat er
-    /// keine -- die Datei liegt ohnehin unverschluesselt daneben, genau wie
-    /// Syncthings eigene key.pem.
+    /// verschiedene Werkzeuge legen das unterschiedlich aus. Ein fester,
+    /// nicht-leerer Wert umgeht die Mehrdeutigkeit. Eine Schutzwirkung hat er
+    /// nicht. Der private Schluessel liegt ohnehin unverschluesselt daneben,
+    /// genau wie Syncthings eigene key.pem.
     /// </summary>
     private const string PfxPassword = "synctclient";
 

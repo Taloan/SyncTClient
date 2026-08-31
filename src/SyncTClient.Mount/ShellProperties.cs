@@ -6,11 +6,11 @@ namespace SyncTClient.Mount;
 /// Zeigt, was die Shell ueber eine Datei weiss.
 /// </summary>
 /// <remarks>
-/// Ob Explorer einen Vorschau-Anbieter fragt, haengt daran, ob er die Datei
-/// ueberhaupt einem Anbieter zuordnet. Genau das steht in diesen
-/// Eigenschaften -- und sie sind auch die Quelle der Spalten "Status" und
+/// Ob der Explorer einen Vorschau-Anbieter aufruft, haengt davon ab, ob er die
+/// Datei ueberhaupt einem Anbieter zuordnet. Genau das steht in diesen
+/// Eigenschaften. Sie sind ausserdem die Quelle der Spalten "Status" und
 /// "Verfuegbarkeit". Ein Vergleich mit einem Anbieter, der funktioniert,
-/// zeigt sofort, ob unsere Platzhalter dort ankommen, wo sie sollen.
+/// zeigt, ob unsere Platzhalter dort ankommen, wo sie sollen.
 /// </remarks>
 public static class ShellProperties
 {
@@ -63,8 +63,8 @@ public static class ShellProperties
                     continue;
                 }
 
-                // Erst als Text, dann als Zahl: welche Form eine Eigenschaft
-                // hat, verraet die Shell nicht vorab.
+                // Erst als Text, dann als Zahl. Welchen Typ eine Eigenschaft
+                // hat, gibt die Shell nicht vorab an.
                 if (getString(item, in key, out var text) == 0 && text != 0)
                 {
                     Console.WriteLine($"  {name,-52} {Marshal.PtrToStringUni(text)}");

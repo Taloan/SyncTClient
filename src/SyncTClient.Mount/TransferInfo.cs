@@ -12,10 +12,10 @@ public enum TransferState
     Fehler
 }
 
-/// <summary>Eine einzelne Hydration -- eine Datei, die gerade geholt wird.</summary>
+/// <summary>Eine einzelne Hydration, also eine Datei, die gerade geholt wird.</summary>
 /// <remarks>
-/// Meldet ihre Aenderungen auf dem Kontext, den die Oberflaeche gesetzt hat.
-/// Die Rueckrufe von CfAPI kommen aus dem Threadpool, Bindungen in WPF wollen
+/// Meldet Aenderungen auf dem Kontext, den die Oberflaeche gesetzt hat. Die
+/// Rueckrufe von CfAPI kommen aus dem Threadpool, Bindungen in WPF muessen
 /// aber vom Oberflaechen-Thread bedient werden.
 /// </remarks>
 public sealed class TransferInfo : INotifyPropertyChanged
@@ -61,7 +61,9 @@ public sealed class TransferInfo : INotifyPropertyChanged
 
     public string Progress => TotalBytes <= 0
         ? ""
-        : $"{_doneBytes / (1024.0 * 1024.0):0.#} / {TotalBytes / (1024.0 * 1024.0):0.#} MB";
+        // Feste Nachkommastelle. Mit "0.#" faellt sie bei glatten Werten weg,
+        // und die Breite der Zeile aendert sich bei jedem Fortschritt.
+        : $"{_doneBytes / (1024.0 * 1024.0):0.0} / {TotalBytes / (1024.0 * 1024.0):0.0} MB";
 
     public TransferState State
     {
@@ -96,3 +98,17 @@ public sealed class TransferInfo : INotifyPropertyChanged
         else UiContext.Post(_ => handler(this, args), null);
     }
 }
+
+/// <summary>
+/// Eine Datei wurde nicht geholt, weil eine Grenze es verbietet.
+/// </summary>
+/// <param name="Budget">
+/// Wahr: das Cache-Budget ist die Grenze. Falsch: der freizuhaltende Platz
+/// ist die Grenze.
+/// </param>
+public sealed record CacheLimitHit(
+    string FolderId,
+    string Name,
+    long Needed,
+    bool Budget,
+    long Limit);

@@ -8,12 +8,13 @@ namespace SyncTClient.Mount;
 /// </summary>
 /// <remarks>
 /// Windows ruft fuer dehydrierte Platzhalter absichtlich keinen
-/// Vorschau-Erzeuger auf -- es will verhindern, was wir auch nicht wollen:
-/// dass das Durchblaettern eines Ordners alles herunterlaedt. Damit kommen
-/// wir aber auch nicht dazu, das eingebettete Vorschaubild anzubieten.
+/// Vorschau-Erzeuger auf. Damit soll verhindert werden, dass das
+/// Durchblaettern eines Ordners alle Dateien herunterlaedt. Aus demselben
+/// Grund kommen wir aber auch nicht dazu, das eingebettete Vorschaubild
+/// anzubieten.
 ///
-/// Also legen wir es vorher an: der Client holt im Hintergrund den Dateikopf
-/// -- einen einzigen Block von 128 KiB -- und legt die darin enthaltene
+/// Deshalb wird es vorher angelegt: der Client holt im Hintergrund den
+/// Dateikopf, einen einzigen Block von 128 KiB, und legt die darin enthaltene
 /// EXIF-Vorschau hier ab. Die Shell-Erweiterung liest spaeter nur noch aus
 /// diesem Vorrat und kommt ohne Netz und ohne Wartezeit aus.
 /// </remarks>
@@ -22,11 +23,11 @@ public sealed class ThumbnailStore(string directory)
     public string Directory { get; } = Path.GetFullPath(directory);
 
     /// <summary>
-    /// Wo die Vorschau einer Datei liegt -- geschluesselt ueber den absoluten
-    /// lokalen Pfad, weil die Shell-Erweiterung spaeter nur den kennt.
+    /// Wo die Vorschau einer Datei liegt. Der Schluessel ist der absolute
+    /// lokale Pfad, weil die Shell-Erweiterung spaeter nur diesen kennt.
     /// </summary>
     /// <remarks>
-    /// Der Dateiname ist der Hash dieses Pfades: das umgeht
+    /// Der Dateiname ist der Hash dieses Pfades. Das umgeht
     /// Laengenbegrenzungen und Sonderzeichen und streut die Dateien ueber
     /// Unterverzeichnisse, damit keines zu gross wird.
     /// </remarks>
@@ -46,9 +47,10 @@ public sealed class ThumbnailStore(string directory)
     /// Wo vermerkt ist, dass eine Datei keine eingebettete Vorschau hat.
     /// </summary>
     /// <remarks>
-    /// Ohne diesen Vermerk holten wir den Kopf jeder vorschaulosen Datei
-    /// wieder und wieder: der Explorer fragt bei jedem Blick in den Ordner
-    /// erneut, und ein Fehlschlag sieht fuer ihn aus wie "noch nicht da".
+    /// Ohne diesen Vermerk wuerde der Kopf jeder vorschaulosen Datei immer
+    /// wieder geholt. Der Explorer fragt bei jedem Blick in den Ordner
+    /// erneut, und ein Fehlschlag ist fuer ihn nicht von "noch nicht
+    /// vorhanden" zu unterscheiden.
     /// </remarks>
     private static string MarkerFor(string directory, string localFilePath)
         => Path.ChangeExtension(PathFor(directory, localFilePath), ".leer");
@@ -63,7 +65,7 @@ public sealed class ThumbnailStore(string directory)
             System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, []);
         }
-        catch (IOException) { /* dann fragen wir eben noch einmal */ }
+        catch (IOException) { /* dann wird spaeter erneut gefragt */ }
     }
 
     public void Save(string localFilePath, byte[] jpeg)
@@ -71,8 +73,8 @@ public sealed class ThumbnailStore(string directory)
         var path = PathFor(localFilePath);
         System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-        // Erst daneben schreiben, dann umbenennen: sonst koennte die
-        // Shell-Erweiterung eine halb geschriebene Datei zu sehen bekommen.
+        // Erst daneben schreiben, dann umbenennen. Sonst koennte die
+        // Shell-Erweiterung eine halb geschriebene Datei lesen.
         var temporary = path + ".neu";
         File.WriteAllBytes(temporary, jpeg);
         File.Move(temporary, path, overwrite: true);
@@ -80,8 +82,8 @@ public sealed class ThumbnailStore(string directory)
 
     public void Remove(string localFilePath)
     {
-        // Auch den Vermerk loeschen: hat sich die Datei geaendert, kann
-        // diesmal sehr wohl eine Vorschau darin stecken.
+        // Auch den Vermerk loeschen. Hat sich die Datei geaendert, kann sie
+        // diesmal eine Vorschau enthalten.
         foreach (var path in new[] { PathFor(localFilePath), MarkerFor(Directory, localFilePath) })
         {
             try { File.Delete(path); }
@@ -89,10 +91,10 @@ public sealed class ThumbnailStore(string directory)
         }
     }
 
-    /// <summary>Legt das Verzeichnis an und haelt es aus dem Blickfeld.</summary>
+    /// <summary>Legt das Verzeichnis an und markiert es als versteckt.</summary>
     /// <remarks>
-    /// Der Vorrat liegt neben den Freigaben -- dort will ihn niemand sehen,
-    /// und anfassen soll ihn auch niemand.
+    /// Der Vorrat liegt neben den Freigaben. Er soll dort nicht sichtbar sein
+    /// und nicht bearbeitet werden.
     /// </remarks>
     public void Prepare()
     {
@@ -104,12 +106,12 @@ public sealed class ThumbnailStore(string directory)
             info.Create();
             info.Attributes |= FileAttributes.Hidden;
         }
-        catch (IOException) { /* dann eben sichtbar */ }
+        catch (IOException) { /* dann bleibt es sichtbar */ }
         catch (UnauthorizedAccessException) { /* dito */ }
     }
 
     /// <summary>
-    /// Wirft den ganzen Vorrat weg. Was gebraucht wird, entsteht neu -- die
+    /// Loescht den ganzen Vorrat. Was gebraucht wird, entsteht neu. Die
     /// Vorlage dazu liegt bei der Gegenstelle.
     /// </summary>
     public (int Count, long Bytes) Clear()

@@ -10,10 +10,10 @@ namespace SyncTClient.Vfs;
 /// statt ueber <c>CfRegisterSyncRoot</c>.
 /// </summary>
 /// <remarks>
-/// Dieser Weg traegt die Hydrations-Politik als ausdrueckliche Eigenschaft --
-/// der Verdacht ist, dass <c>CF_HYDRATION_POLICY_PARTIAL</c> nur so beachtet
-/// wird. Ueber die Win32-Registrierung allein forderte Windows selbst bei
-/// einem 4-KB-Lesezugriff die ganze Datei an.
+/// Dieser Weg traegt die Hydrations-Politik als ausdrueckliche Eigenschaft.
+/// Vermutlich wird <c>CF_HYDRATION_POLICY_PARTIAL</c> nur so beachtet. Ueber
+/// die Win32-Registrierung allein forderte Windows selbst bei einem
+/// 4-KB-Lesezugriff die ganze Datei an.
 ///
 /// Nebenwirkung: der Ordner erscheint mit Namen und Symbol in der
 /// Navigationsleiste des Explorers, so wie OneDrive.
@@ -31,8 +31,9 @@ public static class WinRtSyncRoot
         var full = Path.GetFullPath(path);
 
         // Die Id muss geraeteweit eindeutig sein. Ueblich ist
-        // <Anbieter>!<Benutzer-SID>!<Konto>; als Konto nehmen wir den Pfad,
-        // damit mehrere Shares desselben Benutzers auseinandergehalten werden.
+        // <Anbieter>!<Benutzer-SID>!<Konto>. Als Konto wird der Pfad
+        // verwendet, damit mehrere Shares desselben Benutzers unterschieden
+        // werden.
         var sid = WindowsIdentity.GetCurrent().User?.Value ?? "S-1-0-0";
         var id = $"SyncTClient!{sid}!{Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(
@@ -45,7 +46,7 @@ public static class WinRtSyncRoot
             Id = id,
             Path = folder,
             DisplayNameResource = displayName,
-            // Ein vorhandenes Systemsymbol -- eigene Ressourcen kommen spaeter.
+            // Ein vorhandenes Systemsymbol. Eigene Ressourcen kommen spaeter.
             IconResource = @"%SystemRoot%\system32\imageres.dll,-1043",
             Version = providerVersion,
 
@@ -71,7 +72,10 @@ public static class WinRtSyncRoot
     public static void Unregister(string id)
         => StorageProviderSyncRootManager.Unregister(id);
 
-    /// <summary>Alle von diesem Programm angemeldeten Roots -- zum Aufraeumen.</summary>
+    /// <summary>
+    /// Alle von diesem Programm angemeldeten Roots. Wird zum Aufraeumen
+    /// gebraucht.
+    /// </summary>
     public static IEnumerable<(string Id, string Path)> ListOwn()
     {
         foreach (var root in StorageProviderSyncRootManager.GetCurrentSyncRoots())

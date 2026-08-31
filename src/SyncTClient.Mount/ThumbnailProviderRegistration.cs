@@ -3,18 +3,18 @@
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Meldet die Shell-Erweiterung an, die Explorer die vorbereiteten
+/// Meldet die Shell-Erweiterung an, damit der Explorer die vorbereiteten
 /// Vorschaubilder zeigt.
 /// </summary>
 /// <remarks>
 /// Der Eintrag <c>ThumbnailProvider</c> am Sync-Root ist der Platz, den
-/// Windows dafuer vorsieht -- OneDrive und Nextcloud nutzen ihn genauso. Er
+/// Windows dafuer vorsieht. OneDrive und Nextcloud nutzen ihn genauso. Er
 /// gilt nur fuer den eigenen Ordner: eine systemweite Uebernahme aller
 /// JPEG-Vorschauen findet nicht statt.
 ///
 /// Alles hier laeuft unter HKEY_CURRENT_USER beziehungsweise auf einem
 /// Schlüssel, den die Sync-Root-Registrierung dem Benutzer ueberlassen hat.
-/// Adminrechte braucht es nicht.
+/// Adminrechte werden nicht benoetigt.
 /// </remarks>
 public static class ThumbnailProviderRegistration
 {
@@ -26,11 +26,11 @@ public static class ThumbnailProviderRegistration
     /// betreiben statt im Aufrufer.
     /// </summary>
     /// <remarks>
-    /// Das ist kein Beiwerk, sondern die Bedingung. Messbar an Nextcloud, das
-    /// dieselbe Bauform verwendet: derselbe Anbieter, dieselbe Datei -- im
-    /// eigenen Prozess erzeugt liefert er <c>E_FAIL</c>, ueber den Surrogat
-    /// eine Vorschau. Ohne diesen Eintrag laedt COM die DLL beim Aufrufer und
-    /// umgeht die Abschottung, auf die die Shell dabei baut.
+    /// Dieser Eintrag ist notwendig. Gemessen an Nextcloud, das dieselbe
+    /// Bauform verwendet: derselbe Anbieter und dieselbe Datei liefern im
+    /// eigenen Prozess erzeugt <c>E_FAIL</c>, ueber den Surrogat dagegen eine
+    /// Vorschau. Ohne diesen Eintrag laedt COM die DLL beim Aufrufer und
+    /// umgeht die Abschottung, die die Shell dabei voraussetzt.
     /// </remarks>
     public const string AppId = "{C2A9B4D7-5E31-4A88-9F60-71B3E8C42D19}";
 
@@ -44,7 +44,7 @@ public static class ThumbnailProviderRegistration
         if (File.Exists(beside)) return beside;
 
         // Im Entwicklungsbaum liegt sie im Publish-Ordner ihres eigenen
-        // Projekts -- je nach Plattformwahl mit oder ohne x64-Zwischenstufe.
+        // Projekts, je nach Plattformwahl mit oder ohne x64-Zwischenstufe.
         string[][] variants =
         [
             ["bin", "Release", "net10.0-windows", "win-x64", "publish"],
@@ -61,7 +61,7 @@ public static class ThumbnailProviderRegistration
                 var candidate = Path.Combine(
                     [directory.FullName, "src", "SyncTClient.ThumbProvider", .. variant, "synctthumbs.dll"]);
 
-                // Beide Varianten koennen nebeneinander liegen; die aeltere
+                // Beide Varianten koennen nebeneinander liegen. Die aeltere
                 // waere eine schwer zu findende Fehlerquelle.
                 if (File.Exists(candidate) && File.GetLastWriteTimeUtc(candidate) > newest.Written)
                     newest = (candidate, File.GetLastWriteTimeUtc(candidate));
@@ -75,7 +75,7 @@ public static class ThumbnailProviderRegistration
 
     /// <summary>
     /// Traegt die COM-Klasse ein und hinterlegt, wo der Vorrat liegt. Ohne
-    /// diesen zweiten Teil faende die Erweiterung ihre Bilder nicht.
+    /// den zweiten Teil findet die Erweiterung ihre Bilder nicht.
     /// </summary>
     public static void RegisterClass(string libraryPath, string thumbnailDirectory)
     {
@@ -90,7 +90,7 @@ public static class ThumbnailProviderRegistration
         }
 
         // Ein leerer DllSurrogate-Wert waehlt den mitgelieferten Wirt
-        // (dllhost.exe). Der Wert muss vorhanden und leer sein -- fehlt er,
+        // (dllhost.exe). Der Wert muss vorhanden und leer sein. Fehlt er,
         // laeuft die DLL im Aufrufer.
         using (var appId = Registry.CurrentUser.CreateSubKey($@"Software\Classes\AppID\{AppId}"))
         {
@@ -104,7 +104,7 @@ public static class ThumbnailProviderRegistration
 
     /// <summary>
     /// Haengt die Erweiterung an einen Sync-Root. Der Schluessel entsteht nur
-    /// bei der Anmeldung ueber StorageProviderSyncRootManager -- die
+    /// bei der Anmeldung ueber StorageProviderSyncRootManager. Die
     /// Win32-Anmeldung legt ihn nicht an.
     /// </summary>
     public static bool AttachToSyncRoot(string syncRootId)

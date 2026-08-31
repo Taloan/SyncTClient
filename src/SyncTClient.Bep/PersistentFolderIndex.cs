@@ -10,13 +10,13 @@ namespace SyncTClient.Bep;
 /// </summary>
 /// <remarks>
 /// Bei 100.000 Dateien zu je 5 MB ergeben sich mit 128-KiB-Bloecken rund
-/// 4 Millionen Blockhashes -- etwa 128 MB, die niemand dauerhaft im RAM halten
-/// will. Die vollstaendige <c>FileInfo</c> liegt deshalb als Blob in der
-/// Datenbank und wird nur geladen, wenn wirklich eine Datei geholt wird.
+/// 4 Millionen Blockhashes, also etwa 128 MB. So viel soll nicht dauerhaft im
+/// Arbeitsspeicher liegen. Die vollstaendige <c>FileInfo</c> liegt deshalb als
+/// Blob in der Datenbank und wird nur geladen, wenn eine Datei geholt wird.
 ///
-/// Zweiter Gewinn: die hoechste empfangene Sequenznummer ueberlebt den
-/// Neustart. Beim naechsten Verbinden schickt der Peer nur noch Aenderungen
-/// statt des gesamten Index.
+/// Ausserdem ueberlebt die hoechste empfangene Sequenznummer den Neustart.
+/// Beim naechsten Verbinden schickt der Peer nur noch Aenderungen statt des
+/// gesamten Index.
 /// </remarks>
 public sealed class PersistentFolderIndex : IDisposable
 {
@@ -62,7 +62,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     public int Count => (int)(long)(Scalar("SELECT COUNT(*) FROM files WHERE deleted = 0") ?? 0L);
 
-    /// <summary>Summe der Dateigroessen -- fuer die Anzeige.</summary>
+    /// <summary>Summe der Dateigroessen. Wird fuer die Anzeige gebraucht.</summary>
     public long TotalBytes =>
         (long)(Scalar("SELECT COALESCE(SUM(size), 0) FROM files WHERE deleted = 0 AND kind = 0") ?? 0L);
 
@@ -83,8 +83,59 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
+    /// Unsere eigene IndexId zu diesem Ordner.
+    /// </summary>
+    /// <remarks>
+    /// Das Gegenstueck zu <see cref="PeerIndexId"/> aus eigener Sicht. Eine
+    /// geaenderte IndexId bedeutet im Protokoll, dass die Gegenstelle alles
+    /// bisher Empfangene verwerfen soll. Sie wird deshalb einmal zufaellig
+    /// bestimmt und danach aufbewahrt. Eine bei jeder Verhandlung neue Zahl
+    /// wuerde die Gegenstelle bei jeder Verbindung von vorn anfangen lassen.
+    ///
+    /// Neu bestimmt wird sie nur absichtlich, naemlich wenn die eigene
+    /// Buchfuehrung verloren ging und nicht mehr feststeht, welche Fassung
+    /// bereits angekuendigt wurde.
+    /// </remarks>
+    public ulong OwnIndexId
+    {
+        get
+        {
+            if (ulong.TryParse(GetMeta("ownIndexId"), out var stored) && stored != 0) return stored;
+
+            var fresh = (ulong)Random.Shared.NextInt64(1, long.MaxValue);
+            SetMeta("ownIndexId", fresh.ToString());
+            return fresh;
+        }
+    }
+
+    /// <summary>
+    /// Verwirft die eigene IndexId. Die Gegenstelle faengt dann von vorn an.
+    /// </summary>
+    public void ResetOwnIndex() => SetMeta("ownIndexId", "0");
+
+    /// <summary>
+    /// Wie weit der eigene Index reicht: die hoechste Sequenznummer, die
+    /// dieser Client selbst vergeben hat.
+    /// </summary>
+    /// <remarks>
+    /// Sie steht im ClusterConfig im eigenen Eintrag und ist eine Auskunft
+    /// ueber diesen Client, nicht ueber die Gegenstelle. Die Gegenstelle
+    /// vergleicht den Wert mit dem, was sie von uns bereits hat, und erkennt
+    /// daran, ob noch etwas aussteht. Welchen Stand sie selbst hat, teilt sie
+    /// in ihrem eigenen ClusterConfig mit.
+    ///
+    /// Solange nichts angekuendigt wird, ist sie 0. Das ist der zutreffende
+    /// Wert und keine Luecke.
+    /// </remarks>
+    public long LocalSequence
+    {
+        get => long.TryParse(GetMeta("localSequence"), out var v) ? v : 0;
+        set => SetMeta("localSequence", value.ToString());
+    }
+
+    /// <summary>
     /// Nimmt einen Stapel Index-Eintraege auf und meldet zurueck, welche
-    /// Dateien sich inhaltlich geaendert haben -- fuer die muss ein
+    /// Dateien sich inhaltlich geaendert haben. Fuer diese Dateien muss ein
     /// zwischengespeicherter Inhalt verworfen werden.
     /// </summary>
     public IReadOnlyList<string> Absorb(IEnumerable<BepFileInfo> files)
@@ -162,8 +213,9 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
-    /// Nur die Angaben, die fuer Platzhalter gebraucht werden -- ohne die
-    /// Blocklisten, die den Grossteil der Datenmenge ausmachen.
+    /// Nur die Angaben, die fuer Platzhalter gebraucht werden. Die
+    /// Blocklisten bleiben aussen vor, sie machen den Grossteil der
+    /// Datenmenge aus.
     /// </summary>
     public IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory)> EnumerateLight()
     {
@@ -185,7 +237,9 @@ public sealed class PersistentFolderIndex : IDisposable
         }
     }
 
-    /// <summary>Verwirft alles -- noetig, wenn der Peer seinen Index neu aufgebaut hat.</summary>
+    /// <summary>
+    /// Verwirft alles. Noetig, wenn der Peer seinen Index neu aufgebaut hat.
+    /// </summary>
     public void Clear() => Execute("DELETE FROM files");
 
     // ------------------------------------------------------------ Kleinkram

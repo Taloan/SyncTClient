@@ -11,14 +11,14 @@ namespace SyncTClient.Bep;
 /// erreichbar ist.
 /// </summary>
 /// <remarks>
-/// Eine feste Adresse setzt voraus, dass die Gegenstelle eine hat. Wer zu
-/// Hause keinen Port nach aussen oeffnet, hat keine -- er meldet dem
-/// Erkennungsserver stattdessen, ueber welchen Relay er zu sprechen ist.
+/// Eine feste Adresse setzt voraus, dass die Gegenstelle eine hat. Ein Gerät
+/// ohne nach aussen geoeffneten Port hat keine. Es meldet dem
+/// Erkennungsserver stattdessen, ueber welchen Relay es erreichbar ist.
 ///
-/// Der Server traegt ein selbstsigniertes Zertifikat; erkannt wird er wie
-/// jedes Syncthing-Geraet an dessen Hash. Deshalb steht seine Geraete-ID als
-/// <c>id=</c> in der Adresse, und deshalb wird sie hier geprueft statt einer
-/// Zertifikatskette.
+/// Der Server traegt ein selbstsigniertes Zertifikat und wird wie jedes
+/// Syncthing-Geraet an dessen Hash erkannt. Deshalb steht seine Geraete-ID
+/// als <c>id=</c> in der Adresse, und deshalb wird sie hier geprueft statt
+/// einer Zertifikatskette.
 /// </remarks>
 public sealed class GlobalDiscovery : IDisposable
 {
@@ -26,7 +26,7 @@ public sealed class GlobalDiscovery : IDisposable
     private readonly Uri _endpoint;
 
     /// <param name="identity">
-    /// Für die Anmeldung nötig: der Server liest die Geräte-ID aus dem
+    /// Für die Anmeldung nötig. Der Server liest die Geräte-ID aus dem
     /// Zertifikat, nicht aus der Nachricht. Zum Abfragen nicht nötig.
     /// </param>
     public GlobalDiscovery(string server, DeviceIdentity? identity = null, TimeSpan? timeout = null)
@@ -47,10 +47,10 @@ public sealed class GlobalDiscovery : IDisposable
         {
             handler.SslOptions.ClientCertificates = new X509Certificate2Collection(identity.Certificate);
 
-            // Ohne diese Wahl schickt .NET das Zertifikat nur, wenn der Server
-            // eine passende Aussteller-Liste nennt. Unseres ist selbstsigniert
-            // und stuende dort nie -- der Server saehe einen anonymen Gast und
-            // wiese die Anmeldung ab.
+            // Ohne diesen Rueckruf schickt .NET das Zertifikat nur, wenn der
+            // Server eine passende Aussteller-Liste nennt. Unser Zertifikat
+            // ist selbstsigniert und steht dort nie. Der Server saehe dann
+            // eine unbekannte Gegenstelle und wiese die Anmeldung ab.
             handler.SslOptions.LocalCertificateSelectionCallback =
                 (_, _, _, _, _) => identity.Certificate;
         }
@@ -60,12 +60,12 @@ public sealed class GlobalDiscovery : IDisposable
 
     /// <summary>
     /// Meldet, unter welchen Adressen dieses Gerät zu erreichen ist, und
-    /// nennt zurück, wann die nächste Meldung fällig ist.
+    /// liefert zurück, wann die nächste Meldung fällig ist.
     /// </summary>
     /// <remarks>
-    /// Eine Adresse ohne Host ("tcp://0.0.0.0:22000") heisst: nimm die
-    /// Absenderadresse dieser Anmeldung. Welche das von aussen ist, weiss ein
-    /// Rechner hinter einem Router nicht.
+    /// Eine Adresse ohne Host ("tcp://0.0.0.0:22000") bedeutet, dass der
+    /// Server die Absenderadresse dieser Anmeldung einsetzt. Ein Rechner
+    /// hinter einem Router kennt seine Adresse von aussen nicht.
     /// </remarks>
     public async Task<TimeSpan> AnnounceAsync(
         IEnumerable<string> addresses, CancellationToken ct = default)
@@ -76,8 +76,8 @@ public sealed class GlobalDiscovery : IDisposable
 
         response.EnsureSuccessStatusCode();
 
-        // Wann wieder, sagt der Server. Sagt er nichts, ist die halbe Stunde
-        // die uebliche Antwort.
+        // Der Server nennt den Zeitpunkt der naechsten Meldung. Fehlt die
+        // Angabe, gilt die uebliche halbe Stunde.
         if (response.Headers.TryGetValues("Reannounce-After", out var values) &&
             int.TryParse(values.FirstOrDefault(), out var seconds) && seconds > 0)
             return TimeSpan.FromSeconds(seconds);
@@ -86,8 +86,9 @@ public sealed class GlobalDiscovery : IDisposable
     }
 
     /// <summary>
-    /// Was der Server über dieses Gerät weiss. Eine leere Liste heisst: er
-    /// kennt es nicht (mehr) -- kein Fehler, nur keine Auskunft.
+    /// Die Adressen, die der Server zu diesem Gerät kennt. Eine leere Liste
+    /// bedeutet, dass er das Gerät nicht (mehr) kennt. Das ist kein Fehler,
+    /// sondern eine fehlende Auskunft.
     /// </summary>
     public async Task<IReadOnlyList<string>> LookupAsync(DeviceId device, CancellationToken ct = default)
     {
@@ -98,7 +99,7 @@ public sealed class GlobalDiscovery : IDisposable
 
         using var response = await _http.GetAsync(url, ct).ConfigureAwait(false);
 
-        // Ein unbekanntes Geraet ist der Normalfall, kein Ausfall.
+        // Ein unbekanntes Geraet ist der Normalfall und kein Fehler.
         if (response.StatusCode == HttpStatusCode.NotFound) return [];
         response.EnsureSuccessStatusCode();
 
@@ -120,10 +121,10 @@ public sealed class GlobalDiscovery : IDisposable
     /// </summary>
     /// <remarks>
     /// Die Voreinstellung von Syncthing nennt drei Server mit verteilten
-    /// Rollen: einer beantwortet Fragen, zwei nehmen Anmeldungen entgegen --
-    /// je einer fuer IPv4 und IPv6, denn welche Adresse ein Server sieht,
-    /// haengt daran, worueber er angesprochen wird. Die Rollen stehen als
-    /// <c>nolookup</c> und <c>noannounce</c> in der Adresse.
+    /// Rollen: einer beantwortet Abfragen, zwei nehmen Anmeldungen entgegen,
+    /// je einer fuer IPv4 und IPv6. Welche Adresse ein Server sieht, haengt
+    /// davon ab, ueber welches Protokoll er angesprochen wird. Die Rollen
+    /// stehen als <c>nolookup</c> und <c>noannounce</c> in der Adresse.
     /// </remarks>
     public static bool AllowsLookup(string server) => !HasFlag(server, "nolookup");
 
@@ -143,7 +144,8 @@ public sealed class GlobalDiscovery : IDisposable
         {
             var query = HttpUtility.ParseQueryString(new UriBuilder(server).Query);
 
-            // Eine Flagge steht ohne Wert da; dann landet sie im Schluessel null.
+            // Eine Flagge steht ohne Wert in der Adresse. Sie landet dann
+            // unter dem Schluessel null.
             return query.AllKeys.Contains(flag) ||
                    (query[null]?.Split(',').Contains(flag) ?? false);
         }
@@ -154,8 +156,9 @@ public sealed class GlobalDiscovery : IDisposable
     }
 
     /// <summary>
-    /// Trennt die Adresse von der Geraete-ID darin. <c>id=</c> ist eine
-    /// Anweisung an uns, nicht an den Server -- sie geht nicht mit hinaus.
+    /// Trennt die Adresse von der darin enthaltenen Geraete-ID. <c>id=</c> ist
+    /// eine Angabe fuer den Aufrufer, nicht fuer den Server, und wird deshalb
+    /// aus der Adresse entfernt.
     /// </summary>
     private static (Uri Endpoint, DeviceId Expected) Split(string server)
     {
@@ -164,7 +167,7 @@ public sealed class GlobalDiscovery : IDisposable
 
         var id = query["id"];
 
-        // Anweisungen an den Aufrufer, nicht an den Server.
+        // Angaben fuer den Aufrufer, nicht fuer den Server.
         query.Remove("id");
         query.Remove("noannounce");
         query.Remove("nolookup");

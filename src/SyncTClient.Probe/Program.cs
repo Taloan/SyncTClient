@@ -7,7 +7,8 @@ using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 
 // Konsolenwerkzeug zum Nachweis, dass ein eigener BEP-Peer den Ordnerindex
 // entgegennehmen und Inhalte gezielt anfordern kann, ohne irgendetwas lokal
-// zu materialisieren. Der Vorlaeufer des eigentlichen Platzhalter-Clients.
+// zu materialisieren. Es ist der Vorlaeufer des eigentlichen
+// Platzhalter-Clients.
 
 var options = CommandLineOptions.Parse(args);
 if (options is null) return 2;
@@ -82,8 +83,8 @@ static async Task<int> RunAsync(CommandLineOptions o)
 
     var readLoop = connection.RunAsync(cts.Token);
 
-    // Wir kuendigen den Ordner an, halten aber selbst nichts: MaxSequence und
-    // IndexId fuer den Peer bleiben 0, damit er den vollen Index schickt.
+    // Wir kuendigen den Ordner an, halten selbst aber keine Daten. MaxSequence
+    // und IndexId fuer den Peer bleiben 0, damit er den vollen Index schickt.
     var clusterConfig = new ClusterConfig();
     var folder = new Folder { Id = o.Folder, Label = o.Folder, Type = FolderType.SendReceive };
     folder.Devices.Add(new Device
@@ -112,9 +113,9 @@ static async Task<int> RunAsync(CommandLineOptions o)
 
     Console.WriteLine($"Sammle Index fuer Ordner \"{o.Folder}\" (max. {o.Wait.TotalSeconds:0}s) ...");
 
-    // Nach drei ruhigen Sekunden gilt der Index als vollstaendig -- aber erst,
-    // wenn ueberhaupt schon etwas kam. Der Peer laesst sich mit dem Start des
-    // Index-Senders Zeit.
+    // Nach drei Sekunden ohne neue Nachricht gilt der Index als vollstaendig.
+    // Das gilt erst, wenn ueberhaupt schon eine Index-Nachricht eingetroffen
+    // ist, denn der Peer beginnt oft mit Verzoegerung zu senden.
     var deadline = DateTime.UtcNow + o.Wait;
     while (DateTime.UtcNow < deadline && !readLoop.IsCompleted)
     {
@@ -128,9 +129,9 @@ static async Task<int> RunAsync(CommandLineOptions o)
 
     if (readLoop.IsFaulted)
     {
-        // Ein unbekanntes Geraet laesst Syncthing direkt nach dem Hello fallen,
-        // ohne je einen ClusterConfig zu schicken. Das ist der mit Abstand
-        // haeufigste Grund, warum hier nichts ankommt.
+        // Syncthing trennt die Verbindung zu einem unbekannten Geraet direkt
+        // nach dem Hello, ohne einen ClusterConfig zu schicken. Das ist der
+        // mit Abstand haeufigste Grund, warum hier nichts ankommt.
         if (!sawClusterConfig)
         {
             PrintNotAuthorizedHint(identity.Id, o.Folder);
@@ -203,8 +204,8 @@ static async Task FetchAsync(BepConnection connection, CommandLineOptions o, Bep
 
 static void PrintNotAuthorizedHint(DeviceId me, string folderId)
 {
-    // Ein unbekanntes Geraet laesst Syncthing direkt nach dem Hello fallen,
-    // ohne je einen ClusterConfig zu schicken. Das ist der mit Abstand
+    // Syncthing trennt die Verbindung zu einem unbekannten Geraet direkt nach
+    // dem Hello, ohne einen ClusterConfig zu schicken. Das ist der mit Abstand
     // haeufigste Grund, warum hier nichts ankommt.
     Console.Error.WriteLine();
     Console.Error.WriteLine($"""
@@ -284,7 +285,7 @@ static (string Host, int Port) SplitHostPort(string address)
     return (address[..colon], int.Parse(address[(colon + 1)..]));
 }
 
-/// <summary>Sehr einfache Kommandozeilenauswertung -- kein Bedarf fuer mehr.</summary>
+/// <summary>Sehr einfache Kommandozeilenauswertung. Mehr wird hier nicht gebraucht.</summary>
 internal sealed record CommandLineOptions
 {
     public string Home { get; init; } = "synct-home";

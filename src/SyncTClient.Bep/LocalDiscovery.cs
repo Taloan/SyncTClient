@@ -8,21 +8,25 @@ using SyncTClient.Bep.Proto;
 namespace SyncTClient.Bep;
 
 /// <summary>
-/// Die Erkennung im eigenen Netz: rufen und zuhören.
+/// Die Erkennung im eigenen Netz: Ankündigungen senden und empfangen.
 /// </summary>
 /// <remarks>
-/// Ohne diese Hälfte bleibt ein Gerät unsichtbar. Eine Gegenstelle, bei der
-/// als Adresse "dynamic" steht, sucht genau hier -- findet sie nichts, ruft
-/// sie nie an, und die Frage "möchte sich verbinden" stellt sich nie.
+/// Ohne diesen Teil bleibt ein Gerät im lokalen Netz unsichtbar. Eine
+/// Gegenstelle mit der Adresse "dynamic" sucht genau hier. Findet sie nichts,
+/// baut sie keine Verbindung auf, und die Anfrage "möchte sich verbinden"
+/// erscheint nie.
 ///
-/// Das Paket ist ein Magic und ein Protobuf, verschickt an den Rundruf des
-/// Netzes. Wer eine Adresse ohne Host nennt ("tcp://0.0.0.0:22000"), meint
-/// die Absenderadresse seines Pakets -- die eigene IP kennt ein Rechner mit
-/// mehreren Netzwerkkarten nicht zuverlaessig, der Empfaenger dagegen schon.
+/// Das Paket besteht aus einem Magic und einem Protobuf und geht an den
+/// Rundruf des Netzes. Eine Adresse ohne Host ("tcp://0.0.0.0:22000") bedeutet
+/// die Absenderadresse des Pakets. Ein Rechner mit mehreren Netzwerkkarten
+/// kennt seine eigene IP nicht zuverlaessig, der Empfaenger dagegen schon.
 /// </remarks>
 public sealed class LocalDiscovery : IAsyncDisposable
 {
-    /// <summary>Derselbe Port wie bei Syncthing -- sonst hoert uns niemand.</summary>
+    /// <summary>
+    /// Derselbe Port wie bei Syncthing. Auf einem anderen Port empfaengt
+    /// niemand die Ankuendigungen.
+    /// </summary>
     public const int Port = 21027;
 
     /// <summary>Dasselbe Magic wie vor dem Hello.</summary>
@@ -30,7 +34,10 @@ public sealed class LocalDiscovery : IAsyncDisposable
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
-    /// <summary>Nach dieser Zeit ohne Lebenszeichen gilt ein Geraet als weg.</summary>
+    /// <summary>
+    /// Nach dieser Zeit ohne Lebenszeichen gilt ein Geraet als nicht mehr
+    /// erreichbar.
+    /// </summary>
     private static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(90);
 
     private readonly DeviceIdentity _identity;
@@ -58,15 +65,16 @@ public sealed class LocalDiscovery : IAsyncDisposable
     public event Action<DeviceId, string>? Discovered;
 
     /// <summary>
-    /// Beginnt zu rufen und zuzuhören. Ein belegter Port ist kein Grund
-    /// aufzugeben -- rufen laesst sich auch ohne zuzuhoeren.
+    /// Beginnt zu senden und zu empfangen. Ein belegter Port ist kein Grund
+    /// abzubrechen. Ankuendigungen lassen sich auch dann senden, wenn keine
+    /// empfangen werden koennen.
     /// </summary>
     public bool Start()
     {
         try
         {
-            // Ohne ReuseAddress kaeme ein echtes Syncthing auf demselben
-            // Rechner nicht mehr an den Port -- oder wir nicht.
+            // Ohne ReuseAddress koennte ein echtes Syncthing auf demselben
+            // Rechner den Port nicht mehr belegen, oder dieser Client nicht.
             _socket = new UdpClient { EnableBroadcast = true };
             _socket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             _socket.Client.Bind(new IPEndPoint(IPAddress.Any, Port));
@@ -93,13 +101,14 @@ public sealed class LocalDiscovery : IAsyncDisposable
         {
             if (!_seen.TryGetValue(key, out var entry)) return [];
 
-            // Eine alte Auskunft ist schlechter als keine: sie schickt uns an
-            // eine Adresse, an der schon lange niemand mehr ist.
+            // Eine veraltete Auskunft ist schlechter als keine. Sie verweist
+            // auf eine Adresse, unter der das Geraet nicht mehr erreichbar
+            // ist.
             return DateTime.UtcNow - entry.Seen > Lifetime ? [] : entry.Addresses;
         }
     }
 
-    // ------------------------------------------------------------ Rufen
+    // ------------------------------------------------------------ Senden
 
     private async Task AnnounceLoopAsync(CancellationToken ct)
     {
@@ -121,10 +130,11 @@ public sealed class LocalDiscovery : IAsyncDisposable
             InstanceId = _instance
         };
 
-        // Die eigenen Adressen ausdruecklich nennen. Der Empfaenger duerfte
-        // sie sonst aus dem Absender des Pakets nehmen -- und der ist falsch,
-        // sobald etwas dazwischen umschreibt: ein Container mit eigener
-        // Bruecke sieht dann seine Bruecke statt uns und ruft sich selbst an.
+        // Die eigenen Adressen ausdruecklich nennen. Der Empfaenger nimmt
+        // sonst den Absender des Pakets, und der ist falsch, sobald etwas
+        // dazwischen die Adresse umschreibt. Ein Container mit eigener
+        // Bruecke sieht dann die Bruecke statt dieses Geraets und verbindet
+        // sich mit sich selbst.
         foreach (var address in LocalAddresses())
             announce.Addresses.Add($"tcp://{address}:{_listenPort}");
 
@@ -143,11 +153,13 @@ public sealed class LocalDiscovery : IAsyncDisposable
             // Ein Netz, das gerade nicht erreichbar ist, darf die anderen
             // nicht aufhalten.
             try { _socket!.Send(packet, packet.Length, new IPEndPoint(target, Port)); }
-            catch (SocketException) { /* dieses Netz eben nicht */ }
+            catch (SocketException) { /* dieses Netz wird uebersprungen */ }
         }
     }
 
-    /// <summary>Die eigenen IPv4-Adressen, unter denen wir ansprechbar sind.</summary>
+    /// <summary>
+    /// Die eigenen IPv4-Adressen, unter denen dieses Geraet erreichbar ist.
+    /// </summary>
     private static IEnumerable<IPAddress> LocalAddresses()
         => OwnIPv4().Select(u => u.Address);
 
@@ -156,8 +168,8 @@ public sealed class LocalDiscovery : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// 255.255.255.255 geht bei mehreren Netzwerkkarten nur ueber eine davon.
-    /// Deshalb zusaetzlich der gerichtete Rundruf je Karte -- ausgerechnet aus
-    /// Adresse und Maske.
+    /// Deshalb wird zusaetzlich je Karte der gerichtete Rundruf verschickt. Er
+    /// wird aus Adresse und Maske berechnet.
     /// </remarks>
     private static IEnumerable<IPAddress> BroadcastAddresses()
     {
@@ -178,7 +190,7 @@ public sealed class LocalDiscovery : IAsyncDisposable
         }
     }
 
-    /// <summary>Jede IPv4-Adresse einer Netzwerkkarte, die etwas taugt.</summary>
+    /// <summary>Jede brauchbare IPv4-Adresse einer Netzwerkkarte.</summary>
     private static IEnumerable<UnicastIPAddressInformation> OwnIPv4()
     {
         foreach (var adapter in NetworkInterface.GetAllNetworkInterfaces())
@@ -190,8 +202,8 @@ public sealed class LocalDiscovery : IAsyncDisposable
             {
                 if (unicast.Address.AddressFamily != AddressFamily.InterNetwork) continue;
 
-                // 169.254.x.x heisst "keine Adresse bekommen" -- darunter ist
-                // niemand zu erreichen.
+                // 169.254.x.x bedeutet, dass keine Adresse zugeteilt wurde.
+                // Unter dieser Adresse ist niemand erreichbar.
                 var bytes = unicast.Address.GetAddressBytes();
                 if (bytes[0] == 169 && bytes[1] == 254) continue;
 
@@ -200,7 +212,7 @@ public sealed class LocalDiscovery : IAsyncDisposable
         }
     }
 
-    // ------------------------------------------------------------ Zuhören
+    // ------------------------------------------------------------ Empfangen
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
@@ -237,8 +249,8 @@ public sealed class LocalDiscovery : IAsyncDisposable
 
         var device = DeviceId.FromBytes(announce.Id.Span);
 
-        // Uns selbst zu finden waere nichts wert -- und der Rundruf kommt bei
-        // uns selbst wieder an.
+        // Der Rundruf kommt auch bei diesem Geraet selbst wieder an. Das
+        // eigene Geraet wird nicht als Fund behandelt.
         if (device == _identity.Id) return;
 
         var addresses = announce.Addresses
@@ -264,13 +276,13 @@ public sealed class LocalDiscovery : IAsyncDisposable
     }
 
     /// <summary>
-    /// Setzt die Absenderadresse ein, wo der Rufer keine nennen konnte.
+    /// Setzt die Absenderadresse ein, wenn die Ankuendigung keinen Host nennt.
     /// </summary>
     private static string? WithSource(string address, IPAddress source)
     {
         if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)) return null;
 
-        // Nur TCP: alles andere koennen wir ohnehin nicht anwaehlen.
+        // Nur TCP. Andere Protokolle kann dieser Client nicht anwaehlen.
         if (!uri.Scheme.StartsWith("tcp", StringComparison.OrdinalIgnoreCase)) return null;
 
         var host = uri.Host;

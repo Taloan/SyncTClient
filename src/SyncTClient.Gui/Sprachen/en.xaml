@@ -32,12 +32,12 @@
   <s:String x:Key="S.Col.Peer">Remote device</s:String>
   <s:String x:Key="S.Col.FolderId">Folder ID</s:String>
   <s:String x:Key="S.Col.Folder">Folder</s:String>
-  <s:String x:Key="S.Main.MenuHint">Right-click a share to see what you can do with it.</s:String>
+  <s:String x:Key="S.Main.MenuHint">Right-click a share to open the menu of available actions.</s:String>
   <s:String x:Key="S.Menu.Connect">Connect share</s:String>
   <s:String x:Key="S.Menu.Pause">Pause</s:String>
   <s:String x:Key="S.Menu.Resume">Resume</s:String>
   <s:String x:Key="S.Menu.Open">Open folder</s:String>
-  <s:String x:Key="S.Menu.Settings">Folder settings</s:String>
+  <s:String x:Key="S.Menu.Settings">Share settings</s:String>
   <s:String x:Key="S.Menu.Unbind">Disconnect share</s:String>
   <s:String x:Key="S.Peers.Disconnect">Disconnect</s:String>
   <s:String x:Key="S.Peer.TitleEdit">Edit remote device</s:String>
@@ -45,7 +45,7 @@
   <s:String x:Key="S.Main.TransfersAndLog">Transfers and log</s:String>
   <s:String x:Key="S.Main.Transfers">Transfers</s:String>
   <s:String x:Key="S.Main.Log">Log</s:String>
-  <s:String x:Key="S.Main.Idle">nothing in flight</s:String>
+  <s:String x:Key="S.Main.Idle">no transfers</s:String>
   <s:String x:Key="S.Main.Stats">Statistics</s:String>
   <s:String x:Key="S.Main.Network">NETWORK</s:String>
   <s:String x:Key="S.Main.Rate">Rate</s:String>
@@ -58,34 +58,34 @@
   <s:String x:Key="S.Main.Span5">5 minutes</s:String>
   <s:String x:Key="S.Main.Span30">30 minutes</s:String>
   <s:String x:Key="S.Main.Span180">3 hours</s:String>
-  <s:String x:Key="S.Main.NodesTip">Who carries this folder?</s:String>
+  <s:String x:Key="S.Main.NodesTip">Nodes that carry this share</s:String>
 
   <s:String x:Key="S.Device.ScanHint">On the mobile device in Syncthing: add device, then scan this code.</s:String>
-  <s:String x:Key="S.Device.OwnIdHint">Add this ID as a device on the remote device and share the folders you want with it. They then show up in the list as offered.</s:String>
+  <s:String x:Key="S.Device.OwnIdHint">Add this ID as a device on the remote device and share the folders you want with it. The shares then appear in the list as offered.</s:String>
   <s:String x:Key="S.Device.OwnId">This device’s ID</s:String>
   <s:String x:Key="S.Device.Copy">Copy to clipboard</s:String>
   <s:String x:Key="S.Device.ConfigFile">Configuration file</s:String>
   <s:String x:Key="S.Device.StartGroup">Start and window</s:String>
   <s:String x:Key="S.Device.Autostart">Start with Windows</s:String>
-  <s:String x:Key="S.Device.StartMinimized">Start minimised</s:String>
+  <s:String x:Key="S.Device.StartMinimized">Start minimized</s:String>
   <s:String x:Key="S.Device.CloseToTray">Close to the notification area</s:String>
-  <s:String x:Key="S.Device.StartHint">All three apply immediately. With the notification area ticked, the X only hides the window — you quit through the icon's context menu, and a double-click brings the window back. Together with “start minimised” no window opens at all. Whether Windows starts the program lives in the registry, not in the configuration file.</s:String>
+  <s:String x:Key="S.Device.StartHint">All three settings apply immediately. With “Close to the notification area” enabled, the X only hides the window. To quit the program, use the icon’s context menu; a double-click shows the window again. Together with “Start minimized”, no window opens at startup. The autostart entry is stored in the registry, not in the configuration file.</s:String>
   <s:String x:Key="S.Tray.Open">Open</s:String>
   <s:String x:Key="S.Tray.Quit">Quit</s:String>
   <s:String x:Key="S.Tray.Tip">SyncTClient — running in the background</s:String>
 
   <s:String x:Key="S.Peer.TitleAdd">Add remote device</s:String>
   <s:String x:Key="S.Peer.Name">Name (your choice)</s:String>
-  <s:String x:Key="S.Peer.AddressHint">Host and port, for example 192.168.1.42:22000. Without a port, 22000 is assumed. Leave it empty to ask the discovery server where the device is on every connect.</s:String>
+  <s:String x:Key="S.Peer.AddressHint">Host and port, for example 192.168.1.42:22000. Without a port, 22000 is assumed. If you leave this empty, discovery is asked for the device’s current address on every connect.</s:String>
   <s:String x:Key="S.Peer.DeviceId">Remote device ID</s:String>
   <s:String x:Key="S.Peer.IdHint">In the remote device’s Syncthing UI under “This Device → Identification”.</s:String>
   <s:String x:Key="S.Peer.AutoConnect">Connect automatically at startup</s:String>
   <s:String x:Key="S.Peer.Discovery">Look up the address on the discovery server</s:String>
   <s:String x:Key="S.Peer.Relay">Connect through a relay when there is no direct route</s:String>
-  <s:String x:Key="S.Peer.RelayHint">Both are for a remote device with no port open to the outside. A relay runs on someone else’s bandwidth and is slower than any direct route — it is used only when no direct one can be made.</s:String>
+  <s:String x:Key="S.Peer.RelayHint">Both are needed for a remote device with no port open to the outside. A relay routes the connection through someone else’s machine and is slower than any direct connection. It is used only when no direct connection can be established.</s:String>
   <s:String x:Key="S.Peer.Address">Address</s:String>
 
-  <s:String x:Key="S.Peers.Hint">Syncthing requires both sides to know each other. A remote device must share its folders with this device explicitly. Only then do they show up in the list, ready to connect.</s:String>
+  <s:String x:Key="S.Peers.Hint">Syncthing requires both sides to know each other. A remote device must share its folders with this device explicitly. Only then do the shares appear in the list and can be connected.</s:String>
   <s:String x:Key="S.Peers.Connect">Connect</s:String>
   <s:String x:Key="S.Peers.Title">Remote devices</s:String>
   <s:String x:Key="S.Peers.State">State</s:String>
@@ -100,43 +100,43 @@
   <s:String x:Key="S.Mode.Always">Keep fully local</s:String>
   <s:String x:Key="S.Share.MinCopies">Evict only at … copies</s:String>
   <s:String x:Key="S.Share.Thumbs">Create thumbnails on demand</s:String>
-  <s:String x:Key="S.Share.CopiesHint">Evicting means throwing bytes away. A file is evicted only once this many other nodes carry it completely. With a single server, 1 is right; with several nodes you may want 2. 0 turns the check off.</s:String>
-  <s:String x:Key="S.Share.TreeQuestion">What should appear at all?</s:String>
+  <s:String x:Key="S.Share.CopiesHint">Evicting deletes the local data. A file is evicted only once this many other nodes carry it completely. With a single server, 1 is appropriate; with several nodes, use 2. 0 turns the check off.</s:String>
+  <s:String x:Key="S.Share.TreeQuestion">What should be shown?</s:String>
   <s:String x:Key="S.Share.SaveHint">Changes take effect when the share is restarted.</s:String>
 
   <s:String x:Key="S.Accept.Title">Connect share</s:String>
   <s:String x:Key="S.Accept.LocalFolder">Local folder</s:String>
-  <s:String x:Key="S.Accept.PathHint">This is where the folder appears in Explorer. The directory is created if it does not exist yet.</s:String>
-  <s:String x:Key="S.Accept.ModeQuestion">How should the folder be kept?</s:String>
+  <s:String x:Key="S.Accept.PathHint">This is the path where the share appears in Explorer. The directory is created if it does not exist yet.</s:String>
+  <s:String x:Key="S.Accept.ModeQuestion">How should the share be kept?</s:String>
   <s:String x:Key="S.Accept.TreeQuestion">What should be included?</s:String>
-  <s:String x:Key="S.Accept.Hint">Branches you leave unchecked never appear — they cost neither space nor index.</s:String>
+  <s:String x:Key="S.Accept.Hint">Branches you leave unchecked are not created. They use no disk space and are not listed in the index.</s:String>
 
   <s:String x:Key="S.Settings.Title">Settings</s:String>
   <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
   <s:String x:Key="S.Settings.CacheDir">Cache directory</s:String>
-  <s:String x:Key="S.Settings.CacheDirHint">This is where the cached files live — and they are the shares themselves: Windows fills the placeholders in place, and “evicting” means emptying them again. Not everything in here is cache: pinned files and folders in “keep fully local” mode stay. New shares land here; ones already connected stay where they are (folder settings).</s:String>
+  <s:String x:Key="S.Settings.CacheDirHint">This directory holds the shares themselves. Windows fills the placeholders in place, and evicting empties them again. Not everything in here is cache: pinned files and shares in “keep fully local” mode are kept. New shares are created here; shares that are already connected stay where they are (share settings).</s:String>
   <s:String x:Key="S.Settings.Budget">Cache budget (GB)</s:String>
   <s:String x:Key="S.Settings.MinFree">Minimum free space (GB)</s:String>
-  <s:String x:Key="S.Settings.LimitsHint">Two limits; whichever is reached first applies. When one is exceeded, whatever has gone unopened longest is evicted — across all folders. Pinned files and folders in “keep fully local” mode stay. For free space, 0 means no limit.</s:String>
+  <s:String x:Key="S.Settings.LimitsHint">Two limits apply; whichever is reached first takes effect. When a limit is exceeded, whatever has gone unopened longest is evicted, across all shares. Pinned files and shares in “keep fully local” mode are kept. For free space, 0 turns that limit off.</s:String>
   <s:String x:Key="S.Settings.ClearCache">Clear cache now …</s:String>
   <s:String x:Key="S.Settings.DataGroup">DATA</s:String>
   <s:String x:Key="S.Settings.DataDir">Data directory</s:String>
-  <s:String x:Key="S.Settings.DataDirHint">Device certificate and index — the thumbnails live in the cache directory. A change takes effect at the next start; existing data does not move along, and without a certificate at the new place a new device ID is created.</s:String>
+  <s:String x:Key="S.Settings.DataDirHint">This directory holds the device certificate and the index; the thumbnails are stored in the cache directory. A change takes effect at the next start. Existing data is not moved, and if there is no certificate at the new location, a new device ID is created.</s:String>
   <s:String x:Key="S.Settings.NetGroup">CONNECTIONS</s:String>
-  <s:String x:Key="S.Settings.Listen">Accept calls from other devices</s:String>
-  <s:String x:Key="S.Settings.ListenHint">Without this, SyncTClient only calls out. A remote device that has just added this device would never get through — and the “wants to connect” prompt would never appear. An unknown caller is shown to you before anything happens.</s:String>
+  <s:String x:Key="S.Settings.Listen">Accept incoming connections from other devices</s:String>
+  <s:String x:Key="S.Settings.ListenHint">Without this, SyncTClient only opens connections itself. A remote device that has just added this device cannot reach it, and the “wants to connect” prompt does not appear. Unknown devices are shown to you before a connection is made.</s:String>
   <s:String x:Key="S.Settings.ListenPort">Port for incoming connections</s:String>
   <s:String x:Key="S.Settings.Parallelism">Parallel block requests</s:String>
-  <s:String x:Key="S.Settings.LocalDiscovery">Call and listen on the local network</s:String>
-  <s:String x:Key="S.Settings.LocalDiscoveryHint">A call into the local network every 30 seconds (UDP 21027), and an ear open for the calls of others. Without it this device stays invisible: a remote device whose address reads “dynamic” will not find it and never calls.</s:String>
+  <s:String x:Key="S.Settings.LocalDiscovery">Discover and be discoverable on the local network</s:String>
+  <s:String x:Key="S.Settings.LocalDiscoveryHint">An announcement is sent to the local network every 30 seconds (UDP 21027), and announcements from other devices are received. Without this, the device cannot be found on the local network: a remote device whose address reads “dynamic” will not find it and will not connect.</s:String>
   <s:String x:Key="S.Settings.Announce">Tell the discovery server where this device can be reached</s:String>
-  <s:String x:Key="S.Settings.AnnounceHint">The same for outside the local network, signed with the device certificate. The server learns this line’s public IP address in the process.</s:String>
+  <s:String x:Key="S.Settings.AnnounceHint">The same for connections outside the local network, signed with the device certificate. The server learns this connection’s public IP address in the process.</s:String>
   <s:String x:Key="S.Settings.Lookup">Ask the discovery server for remote devices without a fixed address</s:String>
-  <s:String x:Key="S.Settings.LookupHint">Needed for a remote device with no port open to the outside: it has no fixed address and instead tells the server how it can be reached. The server learns which device is being asked for — and your public IP address along the way.</s:String>
+  <s:String x:Key="S.Settings.LookupHint">Needed for a remote device with no port open to the outside: it has no fixed address and instead tells the server how it can be reached. The server learns which device is being requested, and your public IP address as well.</s:String>
   <s:String x:Key="S.Settings.Servers">Discovery servers (one per line)</s:String>
-  <s:String x:Key="S.Settings.ServersHint">The roles are in the address: “nolookup” only accepts announcements, “noannounce” only answers questions. For announcements there is one server each for IPv4 and IPv6 — which address a server sees depends on how it is reached.</s:String>
+  <s:String x:Key="S.Settings.ServersHint">The role is part of the address: “nolookup” only accepts announcements, “noannounce” only answers queries. For announcements there is one server each for IPv4 and IPv6. Which address a server sees depends on the protocol used to reach it.</s:String>
   <s:String x:Key="S.Settings.Relays">Use relays when there is no direct route</s:String>
-  <s:String x:Key="S.Settings.RelaysHint">Master switch. It can be turned off per remote device as well — Remote devices → Edit. A relay routes the connection through someone else’s machine; it stays encrypted, but it gets slow.</s:String>
+  <s:String x:Key="S.Settings.RelaysHint">Master switch. Relays can also be turned off per remote device, under Remote devices → Edit. A relay routes the connection through someone else’s machine. The connection stays encrypted, but it becomes slower.</s:String>
 
   <s:String x:Key="S.Settings.LookGroup">APPEARANCE</s:String>
   <s:String x:Key="S.Settings.Language">Language</s:String>
@@ -145,15 +145,15 @@
   <s:String x:Key="S.Settings.Light">Light</s:String>
   <s:String x:Key="S.Settings.Dark">Dark</s:String>
   <s:String x:Key="S.Accept.NotEmptyTitle">The folder is not empty</s:String>
-  <s:String x:Key="S.Accept.NotEmpty">There is already something in this folder.
+  <s:String x:Key="S.Accept.NotEmpty">This folder already contains files.
 
-What is in it stays, and becomes the content of this share. It is not sent to the remote device for now — the write path is not there yet.
+These files are kept and become the content of this share. They are not sent to the remote device for now, because the write path is not implemented yet.
 
 Use this folder anyway?</s:String>
 
   <s:String x:Key="M.ConfigUnreadable">Configuration not readable: {0}</s:String>
-  <s:String x:Key="M.NoPeer">No remote device yet. Copy the device ID from “This device” and enter it on the remote device, then come back here to “Remote devices …”.</s:String>
-  <s:String x:Key="M.Configured">{0} remote device(s), {1} folder(s) configured.</s:String>
+  <s:String x:Key="M.NoPeer">No remote device yet. Enter the device ID from “This device” on the remote device, then open “Remote devices …” here.</s:String>
+  <s:String x:Key="M.Configured">{0} remote device(s), {1} share(s) configured.</s:String>
   <s:String x:Key="M.FreeUnknown">free space unknown</s:String>
   <s:String x:Key="M.FreeShould">{0}
 {1} should stay free</s:String>
@@ -161,10 +161,10 @@ Use this folder anyway?</s:String>
   <s:String x:Key="M.CacheOf">{0} of {1}</s:String>
   <s:String x:Key="M.CacheNoBudget">{0} (no budget)</s:String>
   <s:String x:Key="M.Previews">{0} thumbnails ({1})</s:String>
-  <s:String x:Key="M.UsedUnknown">In use: unknown — no share is running. Plus {0}.</s:String>
+  <s:String x:Key="M.UsedUnknown">In use: unknown, because no share is active. Plus {0}.</s:String>
   <s:String x:Key="M.Used">In use: {0} in {1} files, plus {2}.</s:String>
-  <s:String x:Key="M.NothingLocal">Nothing to clear — nothing evictable is held locally.</s:String>
-  <s:String x:Key="M.NothingRunning">Nothing to clear — no share is running.</s:String>
+  <s:String x:Key="M.NothingLocal">Nothing to clear. No evictable files are held locally.</s:String>
+  <s:String x:Key="M.NothingRunning">Nothing to clear. No share is active.</s:String>
   <s:String x:Key="M.Cleared">{0} files evicted ({1}), {2} thumbnails discarded ({3}).</s:String>
   <s:String x:Key="M.WantsToConnect">“{0}” wants to connect.</s:String>
   <s:String x:Key="M.WantsToConnectBody">“{0}” wants to connect.
@@ -176,59 +176,59 @@ Add as a remote device?</s:String>
   <s:String x:Key="M.UnknownPeer">Unknown remote device</s:String>
   <s:String x:Key="M.Rejected">“{0}” rejected.</s:String>
   <s:String x:Key="M.PeerAdded">Remote device {0} added.</s:String>
-  <s:String x:Key="M.PeerChanged">Remote device {0} changed — effective on the next connect.</s:String>
+  <s:String x:Key="M.PeerChanged">Remote device {0} changed. Effective on the next connect.</s:String>
   <s:String x:Key="M.RemovePeer">Remove remote device “{0}”?</s:String>
-  <s:String x:Key="M.RemovePeerShares">Remove remote device “{0}” with {1} folder(s)?
+  <s:String x:Key="M.RemovePeerShares">Remove remote device “{0}” with {1} share(s)?
 
-The shares will be disconnected. Files already downloaded stay where they are.</s:String>
+The shares will be disconnected. Files already downloaded are kept.</s:String>
   <s:String x:Key="M.Remove">Remove</s:String>
-  <s:String x:Key="M.Asking">Asking the remote device about {0} …</s:String>
-  <s:String x:Key="M.ContentUnavailable">The contents of {0} could not be fetched: {1}</s:String>
+  <s:String x:Key="M.Asking">Requesting {0} from the remote device …</s:String>
+  <s:String x:Key="M.ContentUnavailable">The contents of {0} could not be retrieved: {1}</s:String>
   <s:String x:Key="M.NotConnected">{0} not connected.</s:String>
   <s:String x:Key="M.Connecting">Connecting {0} at {1} …</s:String>
   <s:String x:Key="M.Connected">{0} connected.</s:String>
   <s:String x:Key="M.ConnectFailed">Connecting failed: {0}</s:String>
   <s:String x:Key="M.UnbindBody">Disconnect share “{0}”?
 
-The placeholders under {1} are unregistered, index and thumbnails discarded.
-Files already downloaded stay where they are.</s:String>
-  <s:String x:Key="M.NoShareSelected">No connected folder selected.</s:String>
-  <s:String x:Key="M.SavedScope">Saved — {0} selected. Effective after the next connect.</s:String>
+The placeholders under {1} are unregistered, and index and thumbnails are discarded.
+Files already downloaded are kept.</s:String>
+  <s:String x:Key="M.NoShareSelected">No connected share selected.</s:String>
+  <s:String x:Key="M.SavedScope">Saved. {0} selected, effective after the next connect.</s:String>
   <s:String x:Key="M.ScopeAll">everything</s:String>
   <s:String x:Key="M.ScopeBranches">{0} branch(es)</s:String>
-  <s:String x:Key="M.NoPath">{0} does not exist (yet).</s:String>
+  <s:String x:Key="M.NoPath">{0} does not exist.</s:String>
   <s:String x:Key="M.OpenFailed">Opening failed: {0}</s:String>
-  <s:String x:Key="M.SavedHome">Saved — the data directory takes effect at the next start.</s:String>
+  <s:String x:Key="M.SavedHome">Saved. The data directory takes effect at the next start.</s:String>
   <s:String x:Key="M.Saved">Saved.</s:String>
   <s:String x:Key="M.SaveFailed">Saving failed: {0}</s:String>
   <s:String x:Key="D.Copied">Device ID copied to the clipboard.</s:String>
   <s:String x:Key="D.QrFailed">QR code cannot be drawn: {0}</s:String>
-  <s:String x:Key="D.AutostartFailed">The autostart entry cannot be changed: {0}</s:String>
-  <s:String x:Key="A.NoIndex">No index — you can take all or nothing.</s:String>
-  <s:String x:Key="A.HintOnDemand">Only placeholders appear at first; contents arrive the first time you open them and are subject to the program-wide cache budget.</s:String>
-  <s:String x:Key="A.HintAlways">Everything is downloaded right away and kept permanently; the cache budget leaves this folder alone.</s:String>
+  <s:String x:Key="D.AutostartFailed">The autostart entry could not be changed: {0}</s:String>
+  <s:String x:Key="A.NoIndex">No index available. You can only take all or nothing.</s:String>
+  <s:String x:Key="A.HintOnDemand">Only placeholders are created at first. Contents are downloaded the first time you open them and are subject to the program-wide cache budget.</s:String>
+  <s:String x:Key="A.HintAlways">Everything is downloaded right away and kept permanently. The cache budget does not apply to this share.</s:String>
   <s:String x:Key="A.NoFolder">A local folder is required.</s:String>
   <s:String x:Key="A.PathNotFull">The local folder needs a full path.</s:String>
   <s:String x:Key="A.TreeSummary">{0} files, {1} in total</s:String>
   <s:String x:Key="P.IdIncomplete">The device ID is incomplete.</s:String>
-  <s:String x:Key="G.ClearBody">All cached files become placeholders again; the thumbnails are discarded.
+  <s:String x:Key="G.ClearBody">All cached files become placeholders again, and the thumbnails are discarded.
 
-Pinned files and folders in “keep fully local” mode stay. Nothing is lost — whatever is needed again comes back, and costs bandwidth once more.</s:String>
+Pinned files and shares in “keep fully local” mode are kept. No data is lost. Contents that are needed again are downloaded once more and use bandwidth again.</s:String>
   <s:String x:Key="G.ClearTitle">Clear cache</s:String>
   <s:String x:Key="G.Clearing">Clearing …</s:String>
   <s:String x:Key="G.ClearFailed">Clearing failed: {0}</s:String>
   <s:String x:Key="G.BudgetInvalid">The cache budget must be a whole number in GB, at least 1.</s:String>
   <s:String x:Key="G.FreeInvalid">The space to keep free must be a whole number in GB (0 = no limit).</s:String>
-  <s:String x:Key="G.ParallelInvalid">Parallel block requests: a number of 1 or more.</s:String>
+  <s:String x:Key="G.ParallelInvalid">The number of parallel block requests must be at least 1.</s:String>
   <s:String x:Key="G.PortInvalid">The port must be between 1 and 65535.</s:String>
   <s:String x:Key="G.HomeMissing">A data directory is required.</s:String>
   <s:String x:Key="G.FreeOn">Free on {0}: {1}</s:String>
   <s:String x:Key="G.FreeUnknown">Free space on this drive: cannot be determined.</s:String>
   <s:String x:Key="N.NotConnected">Offered, but not connected.</s:String>
   <s:String x:Key="N.Running">running …</s:String>
-  <s:String x:Key="S2.NoIndex">No index yet — start the folder once.</s:String>
-  <s:String x:Key="S2.CacheOnDemand">The cache budget is program-wide and sits under “Settings …”. When it is exceeded, whatever has gone unopened longest is evicted — across all folders. Pinned files stay.</s:String>
-  <s:String x:Key="S2.CacheAlways">In this mode everything is kept locally; the program-wide budget leaves this folder alone.</s:String>
+  <s:String x:Key="S2.NoIndex">No index yet. Start the share once.</s:String>
+  <s:String x:Key="S2.CacheOnDemand">The cache budget is program-wide and is set under “Settings …”. When it is exceeded, whatever has gone unopened longest is evicted, across all shares. Pinned files are kept.</s:String>
+  <s:String x:Key="S2.CacheAlways">In this mode all contents are kept locally. The program-wide budget does not apply to this share.</s:String>
   <s:String x:Key="S2.CopiesInvalid">The number of copies must be 0 or more.</s:String>
   <s:String x:Key="S2.Summary">{0} files, {1} in total</s:String>
   <s:String x:Key="R.Ready">ready</s:String>
@@ -242,8 +242,8 @@ Pinned files and folders in “keep fully local” mode stay. Nothing is lost �
   <s:String x:Key="R.PhaseContent">fetching contents</s:String>
   <s:String x:Key="R.PhaseWaiting">waiting</s:String>
   <s:String x:Key="R.NotConnectedHint">Not connected yet.</s:String>
-  <s:String x:Key="R.CopiesNone">No reachable node carries this folder — placeholders cannot be opened right now. Whether evicting is allowed still follows the last announcement received, not reachability.</s:String>
-  <s:String x:Key="R.CopiesSome">Reachable nodes carrying the content: {0}. About unconnected nodes we know nothing — the number is a lower bound.</s:String>
+  <s:String x:Key="R.CopiesNone">No reachable node carries this share. Placeholders cannot be opened right now. Whether eviction is allowed still follows the last announcement received, not reachability.</s:String>
+  <s:String x:Key="R.CopiesSome">Reachable nodes carrying the content: {0}. No information is available about nodes that are not connected, so this number is a lower bound.</s:String>
   <s:String x:Key="R.ModeAlways">fully local</s:String>
   <s:String x:Key="R.ModeOnDemand">on demand</s:String>
   <s:String x:Key="I.Connecting">connecting ...</s:String>
@@ -251,5 +251,27 @@ Pinned files and folders in “keep fully local” mode stay. Nothing is lost �
   <s:String x:Key="I.Error">error</s:String>
   <s:String x:Key="I.ErrorWith">error: {0}</s:String>
   <s:String x:Key="I.Disconnected">disconnected</s:String>
+
+  <s:String x:Key="S.FolderId">Folder ID {0}</s:String>
+
+  <s:String x:Key="S.Menu.ClearCache">Clear cache …</s:String>
+  <s:String x:Key="S.Menu.ClearThumbs">Discard thumbnails …</s:String>
+  <s:String x:Key="G.ClearThumbsTitle">Discard thumbnails</s:String>
+  <s:String x:Key="G.ClearThumbsBody">All thumbnails are deleted.
+
+They are created again as soon as the folders are opened. Each one requires transferring a block again.
+
+Discard anyway?</s:String>
+  <s:String x:Key="M.ClearedCache">{0} files evicted ({1}).</s:String>
+  <s:String x:Key="M.ClearedThumbs">{0} thumbnails discarded ({1}).</s:String>
+  <s:String x:Key="M.NothingThumbs">There were no thumbnails.</s:String>
+
+  <s:String x:Key="M.LimitTitle">The file will not be downloaded</s:String>
+  <s:String x:Key="M.LimitBudget">“{0}” is {1} and does not fit into the cache budget of {2}.
+
+Raise the budget in the settings, or set the share to “keep fully local”. The budget then does not apply to it.</s:String>
+  <s:String x:Key="M.LimitFree">“{0}” needs {1}. That much cannot be freed without dropping below the limit of {2} free disk space.
+
+Lower the limit in the settings, or make room on the drive.</s:String>
 
 </ResourceDictionary>

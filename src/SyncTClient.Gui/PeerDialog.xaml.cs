@@ -6,7 +6,7 @@ namespace SyncTClient.Gui;
 
 public partial class PeerDialog : Window
 {
-    /// <summary>Die Gegenstelle, die geändert wird -- oder null für eine neue.</summary>
+    /// <summary>Die Gegenstelle, die geändert wird. Null steht für eine neue.</summary>
     private readonly PeerConfig? _existing;
 
     public PeerConfig Result { get; private set; } = new();
@@ -33,20 +33,20 @@ public partial class PeerDialog : Window
 
     private void OnAdd(object sender, RoutedEventArgs e)
     {
-        // Eine leere Adresse ist erlaubt: dann sucht die Erkennung.
+        // Eine leere Adresse ist erlaubt. Die Adresse wird dann ueber die Erkennung ermittelt.
         var address = AddressBox.Text.Trim();
         if (address.Length > 0 && !address.Contains(':')) address += ":22000";
 
-        // Lieber hier ablehnen als spaeter bei der Verbindung: die Device-ID
-        // traegt Pruefziffern, ein Tippfehler faellt sofort auf.
+        // Lieber hier ablehnen als spaeter beim Verbindungsaufbau. Die
+        // Device-ID traegt Pruefziffern, ein Tippfehler faellt sofort auf.
         if (!DeviceId.TryParse(DeviceIdBox.Text.Trim(), out var id, out var error) || id == DeviceId.Empty)
         {
             Hint.Text = error ?? App.S("P.IdIncomplete");
             return;
         }
 
-        // Beim Aendern dieselbe Instanz behalten: sie haengt in der
-        // Konfiguration, und daran haengen die Freigaben.
+        // Beim Aendern dieselbe Instanz behalten. Sie steht in der
+        // Konfiguration, und die Freigaben verweisen darauf.
         Result = _existing ?? new PeerConfig();
 
         Result.Name = NameBox.Text.Trim();

@@ -6,14 +6,15 @@ namespace SyncTClient.Mount;
 /// Holt das eingebettete Vorschaubild aus dem Kopf einer JPEG-Datei.
 /// </summary>
 /// <remarks>
-/// Kameras legen im EXIF-Block eine kleine JPEG-Kopie ab -- typischerweise
-/// 160x120 bis 320x240. Sie steht weit vorn in der Datei, weshalb wenige
-/// Kilobyte genuegen: bei den Testbildern reichten 64 KB fuer eine Vorschau
-/// von 256x171, waehrend die ganze Datei 32,8 MB hat.
+/// Kameras legen im EXIF-Block eine kleine JPEG-Kopie ab, typischerweise
+/// 160x120 bis 320x240. Sie steht weit vorn in der Datei, deshalb genuegen
+/// wenige Kilobyte. Bei den Testbildern reichten 64 KB fuer eine Vorschau von
+/// 256x171, waehrend die ganze Datei 32,8 MB hat.
 ///
-/// Bewusst von Hand geparst statt ueber eine Bilddekodierung: die arbeitet
-/// auf einem abgeschnittenen Datenstrom nicht zuverlaessig, und wir wollen
-/// die eingebetteten Bytes ohnehin unveraendert weiterreichen.
+/// Der Block wird von Hand geparst statt ueber eine Bilddekodierung. Eine
+/// Bilddekodierung arbeitet auf einem abgeschnittenen Datenstrom nicht
+/// zuverlaessig, und die eingebetteten Bytes werden ohnehin unveraendert
+/// weitergereicht.
 /// </remarks>
 public static class ExifThumbnail
 {
@@ -32,10 +33,10 @@ public static class ExifThumbnail
     /// </summary>
     public static byte[]? TryExtract(ReadOnlySpan<byte> jpegPrefix)
     {
-        // Ein Byte-Parser auf abgeschnittenen Daten stolpert frueher oder
-        // spaeter ueber eine Laengenangabe, die nicht mehr passt. Das ist kein
-        // Fehler, sondern der Normalfall bei unvollstaendigen Dateien -- dann
-        // gibt es eben keine Vorschau.
+        // Ein Byte-Parser trifft auf abgeschnittenen Daten frueher oder
+        // spaeter auf eine Laengenangabe, die nicht mehr passt. Das ist kein
+        // Fehler, sondern der Normalfall bei unvollstaendigen Dateien. In
+        // diesem Fall gibt es keine Vorschau.
         try
         {
             var exif = FindExifSegment(jpegPrefix);
@@ -73,7 +74,7 @@ public static class ExifThumbnail
             var payloadLength = segmentLength - 2;
             if (payloadStart + payloadLength > data.Length)
             {
-                // Abgeschnitten -- soweit nehmen, wie vorhanden.
+                // Abgeschnitten: nur so weit lesen, wie Daten vorhanden sind.
                 payloadLength = data.Length - payloadStart;
                 if (payloadLength <= 0) return default;
             }
@@ -95,7 +96,7 @@ public static class ExifThumbnail
     }
 
     /// <summary>
-    /// Liest die zweite Bildverzeichnisstruktur (IFD1) -- dort beschreibt die
+    /// Liest die zweite Bildverzeichnisstruktur (IFD1). Dort beschreibt die
     /// Kamera das Vorschaubild.
     /// </summary>
     private static byte[]? TryReadFromTiff(ReadOnlySpan<byte> tiff, ReadOnlySpan<byte> wholeFile)
@@ -135,12 +136,12 @@ public static class ExifThumbnail
 
         if (thumbOffset == 0 || thumbLength == 0) return null;
         if (thumbOffset + thumbLength > (uint)tiff.Length) return null;
-        // Unplausibel grosse Angaben nicht vertrauen.
+        // Unplausibel grossen Angaben wird nicht vertraut.
         if (thumbLength > 4 * 1024 * 1024) return null;
 
         var thumbnail = tiff.Slice((int)thumbOffset, (int)thumbLength);
 
-        // Muss selbst ein JPEG sein.
+        // Das Vorschaubild muss selbst ein JPEG sein.
         if (thumbnail.Length < 4 || thumbnail[0] != 0xFF || thumbnail[1] != 0xD8) return null;
 
         return thumbnail.ToArray();

@@ -7,7 +7,7 @@ namespace SyncTClient.Bep;
 /// <summary>
 /// Eine Syncthing-Geraete-ID: der SHA-256-Hash des DER-kodierten Zertifikats.
 /// Die Textform ist Base32 mit eingestreuten Pruefziffern, gruppiert zu je
-/// sieben Zeichen -- kompatibel zu <c>lib/protocol/deviceid.go</c>.
+/// sieben Zeichen. Sie ist kompatibel zu <c>lib/protocol/deviceid.go</c>.
 /// </summary>
 public readonly struct DeviceId : IEquatable<DeviceId>
 {
@@ -143,7 +143,7 @@ public readonly struct DeviceId : IEquatable<DeviceId>
 
     // ------------------------------------------------------------ Pruefziffern
     //
-    // Kein echter Luhn -- Syncthing verwendet eine eigene Variante ueber dem
+    // Kein echter Luhn. Syncthing verwendet eine eigene Variante ueber dem
     // Base32-Alphabet. Siehe lib/protocol/luhn.go.
 
     private static char Luhn32(ReadOnlySpan<char> s)
@@ -164,7 +164,9 @@ public readonly struct DeviceId : IEquatable<DeviceId>
         return Base32Alphabet[(n - sum % n) % n];
     }
 
-    /// <summary>52 Zeichen -> 56 Zeichen, je 13 Zeichen gefolgt von einer Pruefziffer.</summary>
+    /// <summary>
+    /// Macht aus 52 Zeichen 56: je 13 Zeichen gefolgt von einer Pruefziffer.
+    /// </summary>
     private static string Luhnify(string s)
     {
         if (s.Length != 52)
@@ -215,7 +217,9 @@ public readonly struct DeviceId : IEquatable<DeviceId>
         return true;
     }
 
-    /// <summary>56 Zeichen -> acht Siebenergruppen, durch Bindestriche getrennt.</summary>
+    /// <summary>
+    /// Teilt 56 Zeichen in acht Siebenergruppen, durch Bindestriche getrennt.
+    /// </summary>
     private static string Chunkify(string s)
     {
         var chunks = s.Length / 7;

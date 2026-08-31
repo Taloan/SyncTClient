@@ -13,7 +13,9 @@
     </Grid.RowDefinitions>
 
     <StackPanel Grid.Row="0">
-      <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" Margin="0,0,0,10" />
+      <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" />
+      <TextBlock x:Name="SubTitleText" Foreground="{DynamicResource Gedaempft}"
+                 FontSize="11" Margin="0,2,0,10" />
 
       <Label Content="{DynamicResource S.Share.LocalPath}" />
       <TextBox x:Name="LocalPathBox" />

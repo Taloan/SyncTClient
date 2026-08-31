@@ -5,9 +5,9 @@ using System.Runtime.CompilerServices;
 namespace SyncTClient.Gui;
 
 /// <summary>
-/// Ein Knoten im Auswahlbaum. Das Haekchen kennt drei Zustaende: ganz
-/// ausgewaehlt, gar nicht, oder teilweise -- letzteres ergibt sich aus den
-/// Kindern und laesst sich nicht direkt anklicken.
+/// Ein Knoten im Auswahlbaum. Das Haekchen hat drei Zustaende: ganz
+/// ausgewaehlt, gar nicht ausgewaehlt und teilweise ausgewaehlt. Der dritte
+/// Zustand ergibt sich aus den Kindern und laesst sich nicht direkt anklicken.
 /// </summary>
 public sealed class FolderNode : INotifyPropertyChanged
 {
@@ -72,7 +72,7 @@ public sealed class FolderNode : INotifyPropertyChanged
         }
 
         // Nach oben neu berechnen: der Elternknoten ist teilweise ausgewaehlt,
-        // sobald sich seine Kinder uneinig sind.
+        // sobald seine Kinder unterschiedliche Zustaende haben.
         Parent?.RefreshFromChildren();
     }
 
@@ -88,7 +88,7 @@ public sealed class FolderNode : INotifyPropertyChanged
         _updating = false;
     }
 
-    /// <summary>Setzt den Zustand ohne Weitergabe -- fuers Aufbauen aus der Konfiguration.</summary>
+    /// <summary>Setzt den Zustand ohne Weitergabe an Eltern und Kinder. Fuer den Aufbau aus der Konfiguration.</summary>
     public void InitializeChecked(bool value)
     {
         _isChecked = value;
@@ -151,7 +151,7 @@ public sealed class FolderNode : INotifyPropertyChanged
             if (!entry.IsDirectory)
             {
                 // Groesse und Anzahl bis zur Wurzel hochzaehlen, damit jeder
-                // Knoten zeigt, was seine Auswahl kostet.
+                // Knoten den Umfang seiner Auswahl anzeigen kann.
                 for (var walker = node; walker is not null; walker = walker.Parent)
                 {
                     walker.FileCount++;

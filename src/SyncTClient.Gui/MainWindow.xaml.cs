@@ -37,14 +37,15 @@ public partial class MainWindow : Window
     private double _peak;
 
     /// <summary>
-    /// Es wird wirklich beendet -- das X darf dann nicht mehr verstecken.
+    /// Das Programm wird wirklich beendet. Das X darf das Fenster dann nicht
+    /// mehr verstecken.
     /// </summary>
     private bool _exiting;
 
-    /// <summary>Wieviele Vorschaubilder liegen, ueber alle Freigaben.</summary>
+    /// <summary>Wann die Vorschaubilder zuletzt gezaehlt wurden.</summary>
     /// <remarks>
     /// Gezaehlt wird ueber das Verzeichnis. Im Sekundentakt waere das
-    /// verschwendete Arbeit -- Vorschaubilder entstehen langsam.
+    /// verschwendete Arbeit, denn Vorschaubilder entstehen langsam.
     /// </remarks>
     private DateTime _thumbsRead = DateTime.MinValue;
 
@@ -60,7 +61,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Meldungen kommen aus dem Threadpool; Bindungen wollen den
+        // Meldungen kommen aus dem Threadpool. Bindungen benoetigen den
         // Oberflaechen-Thread.
         TransferInfo.UiContext = SynchronizationContext.Current;
 
@@ -74,9 +75,9 @@ public partial class MainWindow : Window
         BuildRowMenu();
         RestoreColumns();
 
-        // Der Zustand muss stehen, bevor die Anwendung Show() ruft -- danach
-        // waere es ein Fenster, das sich vor den Augen des Benutzers wieder
-        // wegduckt.
+        // Der Zustand muss feststehen, bevor die Anwendung Show() ruft. Danach
+        // wuerde sich das Fenster vor den Augen des Benutzers wieder
+        // minimieren.
         if (_config.StartMinimized) WindowState = WindowState.Minimized;
         ApplyTray();
 
@@ -104,9 +105,9 @@ public partial class MainWindow : Window
     /// ausgeschriebenem Datenverzeichnis.
     /// </summary>
     /// <remarks>
-    /// Eine einzige Instanz, absichtlich. An ihr haengt das Cache-Budget, und
-    /// das gilt fuer alle Freigaben zusammen -- je Gegenstelle ein eigenes
-    /// waere kein programmweites mehr.
+    /// Absichtlich eine einzige Instanz. An ihr haengt das Cache-Budget, und
+    /// das gilt fuer alle Freigaben zusammen. Je Gegenstelle ein eigenes
+    /// Budget waere kein programmweites Budget mehr.
     /// </remarks>
     private AppConfig _runtime = new();
 
@@ -115,9 +116,8 @@ public partial class MainWindow : Window
     private void Load()
     {
         // Die Oberflaeche richtet sich selbst ein. Wer sie oeffnet, soll seine
-        // Device-ID sehen und weitergeben koennen -- ein Befehl auf der
-        // Konsole waere ein Umweg durch ein Werkzeug, das er gerade nicht
-        // benutzt.
+        // Device-ID sehen und weitergeben koennen. Ein Befehl auf der Konsole
+        // waere ein Umweg ueber ein Werkzeug, das gerade nicht benutzt wird.
         var firstRun = !File.Exists(_configPath);
 
         try
@@ -146,8 +146,8 @@ public partial class MainWindow : Window
             Parallelism = _config.Parallelism
         };
 
-        // Aussehen und Sprache stehen in derselben Datei wie alles andere --
-        // also gelten sie ab hier, nicht erst beim naechsten Start.
+        // Aussehen und Sprache stehen in derselben Datei wie alles andere.
+        // Sie gelten ab hier und nicht erst beim naechsten Start.
         App.ApplyTheme(_config.Theme);
         App.ApplyLanguage(_config.Language);
 
@@ -175,21 +175,22 @@ public partial class MainWindow : Window
         share.TransferStarted += t => Dispatcher.Invoke(() => AddTransfer(t));
         share.TransferFinished += _ => Dispatcher.Invoke(TrimTransfers);
         share.CacheChanged += () => Dispatcher.Invoke(RefreshRows);
+        share.LimitReached += hit => Dispatcher.Invoke(() => ShowLimit(hit));
 
-        // Die Zeile fuer diesen Ordner kennt ihn noch nicht -- er wurde
+        // Die Tabelle enthaelt fuer diesen Ordner noch keine Zeile. Er wurde
         // gerade erst uebernommen oder verbunden.
         RebuildRows();
     });
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
-        // Minimiert starten und ein Symbol im Infobereich heisst zusammen: gar
-        // kein Fenster. Verstecken laesst es sich erst hier -- Show() kommt von
-        // der Anwendung, nicht von uns.
+        // Minimiert starten und ein Symbol im Infobereich bedeutet zusammen:
+        // gar kein Fenster. Verstecken laesst es sich erst hier, denn Show()
+        // ruft die Anwendung selbst auf.
         if (_config.StartMinimized && _tray is not null) Hide();
 
-        // Die Oberflaeche ist der Sync-Dienst: wer sie oeffnet, will in aller
-        // Regel, dass es laeuft.
+        // Die Oberflaeche ist zugleich der Sync-Dienst. Wer sie oeffnet, will
+        // in aller Regel, dass der Abgleich laeuft.
         foreach (var item in _peers.Where(p => p.Config.AutoConnect).ToList())
             await ConnectAsync(item);
     }
@@ -274,7 +275,7 @@ public partial class MainWindow : Window
         var series = _meter.Series(window, Buckets);
         Chart.Show(series);
 
-        // Die aktuelle Rate ist die juengste Saeule der kurzen Spanne -- bei
+        // Die aktuelle Rate ist die juengste Saeule der kurzen Spanne. Bei
         // drei Stunden waere ein Korb 90 Sekunden lang und die Anzeige traege.
         var jetzt = _meter.Series(TimeSpan.FromSeconds(5), 1)[0];
         RateDown.Text = Format.Rate(jetzt.Read);
@@ -289,8 +290,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Der Cache ist einer -- die Anzeige zeigt darum die Summe, nicht die
-    /// gerade ausgewaehlte Zeile.
+    /// Es gibt nur einen Cache. Die Anzeige zeigt darum die Summe und nicht
+    /// die gerade ausgewaehlte Zeile.
     /// </summary>
     private void UpdateCache()
     {
@@ -312,8 +313,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Der freie Platz auf dem Laufwerk des Caches -- die zweite Grenze, und
-    /// die einzige, die auch von aussen bewegt wird.
+    /// Der freie Platz auf dem Laufwerk des Caches. Das ist die zweite Grenze
+    /// und die einzige, die sich auch von aussen aendert.
     /// </summary>
     private void UpdateFreeSpace()
     {
@@ -354,8 +355,8 @@ public partial class MainWindow : Window
     /// Rechtsklick auf die Kopfzeile blendet Spalten ein und aus.
     /// </summary>
     /// <remarks>
-    /// Name und Status bleiben immer stehen -- eine Tabelle ohne Bezeichnung
-    /// und ohne Zustand waere nur noch eine Zahlenwand.
+    /// Name und Status bleiben immer sichtbar. Ohne Bezeichnung und ohne
+    /// Zustand waere die Tabelle nur noch eine Ansammlung von Zahlen.
     /// </remarks>
     private void BuildColumnMenu()
     {
@@ -381,8 +382,8 @@ public partial class MainWindow : Window
             menu.Items.Add(item);
         }
 
-        // An die Kopfzeile, nicht an das ganze Gitter: ein Rechtsklick auf
-        // eine Zeile meint die Zeile, nicht die Spalten.
+        // An die Kopfzeile, nicht an das ganze Gitter. Ein Rechtsklick auf
+        // eine Zeile bezieht sich auf die Zeile, nicht auf die Spalten.
         var basis = TryFindResource(typeof(DataGridColumnHeader)) as Style;
         var kopfzeile = basis is null
             ? new Style(typeof(DataGridColumnHeader))
@@ -393,11 +394,11 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Was sich mit einem Share anstellen lässt -- am Share selbst.
+    /// Was sich mit einem Share tun lässt, direkt am Share.
     /// </summary>
     /// <remarks>
-    /// Eine Knopfleiste über der Tabelle sagte dasselbe, nur weiter weg: die
-    /// Knöpfe galten für die ausgewählte Zeile, standen aber nicht bei ihr.
+    /// Eine Knopfleiste über der Tabelle bot dieselben Befehle. Die Knöpfe
+    /// galten für die ausgewählte Zeile, standen aber nicht bei ihr.
     /// </remarks>
     private void BuildRowMenu()
     {
@@ -418,7 +419,7 @@ public partial class MainWindow : Window
 
         ShareGrid.ContextMenu = menu;
 
-        // Ohne Zeile gibt es nichts zu tun -- dann bleibt es zu.
+        // Ohne ausgewaehlte Zeile gibt es nichts zu tun. Das Menue bleibt dann zu.
         ShareGrid.ContextMenuOpening += (_, e) => { if (_row is null) e.Handled = true; };
     }
 
@@ -426,7 +427,7 @@ public partial class MainWindow : Window
     {
         var item = new MenuItem();
 
-        // Als Verweis, nicht als Text: dann folgt der Eintrag der Sprache.
+        // Als Verweis, nicht als Text. So folgt der Eintrag der eingestellten Sprache.
         item.SetResourceReference(HeaderedItemsControl.HeaderProperty, schluessel);
         item.Click += klick;
         return item;
@@ -434,8 +435,8 @@ public partial class MainWindow : Window
 
     private void OnGridRightClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        // Der Rechtsklick soll die Zeile treffen, auf die er zeigt -- sonst
-        // gälte das Menü für die vorher ausgewählte.
+        // Der Rechtsklick soll die Zeile treffen, auf die er zeigt. Sonst
+        // gälte das Menü für die vorher ausgewählte Zeile.
         var quelle = e.OriginalSource as DependencyObject;
         while (quelle is not null and not DataGridRow)
             quelle = System.Windows.Media.VisualTreeHelper.GetParent(quelle);
@@ -454,7 +455,7 @@ public partial class MainWindow : Window
                 .Where(c => c.Visibility != Visibility.Visible)
                 .Select(c => c.Header?.ToString() ?? ""));
         }
-        catch (IOException) { /* dann eben beim naechsten Mal */ }
+        catch (IOException) { /* die Spaltenauswahl wird dann beim naechsten Mal geschrieben */ }
     }
 
     private void RestoreColumns()
@@ -484,7 +485,7 @@ public partial class MainWindow : Window
 
     private void OnTransfersToggled(object sender, RoutedEventArgs e)
     {
-        // Die Zeile muss mitgehen, sonst bliebe ein leerer Streifen stehen --
+        // Die Zeile muss mitgehen. Sonst bliebe ein leerer Streifen stehen,
         // und der Ziehgriff haette nichts mehr zu ziehen.
         if (TransferRow is null || Splitter is null) return;
 
@@ -505,10 +506,10 @@ public partial class MainWindow : Window
     /// Was der Cache gerade hält.
     /// </summary>
     /// <remarks>
-    /// Die Buchführung liegt in den laufenden Freigaben -- steht keine, ist
-    /// die Zahl nicht bekannt, und dann sagt sie das lieber als eine Null.
-    /// Die Vorschaubilder sind unabhaengig davon zu zaehlen: sie liegen als
-    /// Dateien da.
+    /// Die Buchführung liegt in den laufenden Freigaben. Läuft keine, ist die
+    /// Zahl nicht bekannt, und die Anzeige meldet das statt einer Null. Die
+    /// Vorschaubilder werden unabhaengig davon gezaehlt, denn sie liegen als
+    /// Dateien vor.
     /// </remarks>
     private string CacheUsage()
     {
@@ -526,20 +527,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Leert den Cache und meldet, was er noch hielt.
+    /// Leert den Cache und die Vorschaubilder und meldet, was frei wurde.
     /// </summary>
     /// <remarks>
-    /// Die Vorschaubilder gehoeren dazu: sie liegen im selben Verzeichnis,
-    /// sind aus fremden Dateien entstanden und entstehen jederzeit neu.
+    /// Beides zusammen, wie es der Einstellungsdialog anfordert. Die
+    /// Vorschaubilder liegen im selben Verzeichnis und entstehen bei Bedarf
+    /// neu.
     /// </remarks>
-    private async Task<string> ClearCacheAsync()
+    private async Task<string> ClearAllAsync()
     {
         var (files, bytes) = await _runtime.Cache.ClearAsync();
         var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Clear();
-
-        // Sonst zeigt die Leiste noch fuenf Sekunden lang die alten Zahlen.
-        _thumbsRead = DateTime.MinValue;
-        RefreshRows();
+        Refreshed();
 
         if (files == 0 && thumbs.Count == 0)
             return _rows.Any(r => r.Share is not null)
@@ -549,6 +548,43 @@ public partial class MainWindow : Window
         return App.S("M.Cleared",
             Format.Count(files), Format.Bytes(bytes),
             Format.Count(thumbs.Count), Format.Bytes(thumbs.Bytes));
+    }
+
+    /// <summary>Nur die zwischengespeicherten Dateien; die Vorschaubilder bleiben.</summary>
+    private async void OnClearCache(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, App.S("G.ClearBody"), App.S("G.ClearTitle"),
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+            return;
+
+        var (files, bytes) = await _runtime.Cache.ClearAsync();
+        Refreshed();
+
+        Status(files == 0
+            ? _rows.Any(r => r.Share is not null) ? App.S("M.NothingLocal") : App.S("M.NothingRunning")
+            : App.S("M.ClearedCache", Format.Count(files), Format.Bytes(bytes)));
+    }
+
+    /// <summary>Nur den Vorrat an Vorschaubildern.</summary>
+    private void OnClearThumbnails(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show(this, App.S("G.ClearThumbsBody"), App.S("G.ClearThumbsTitle"),
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+            return;
+
+        var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Clear();
+        Refreshed();
+
+        Status(thumbs.Count == 0
+            ? App.S("M.NothingThumbs")
+            : App.S("M.ClearedThumbs", Format.Count(thumbs.Count), Format.Bytes(thumbs.Bytes)));
+    }
+
+    /// <summary>Zahlen sofort neu erheben statt bis zum naechsten Takt zu warten.</summary>
+    private void Refreshed()
+    {
+        _thumbsRead = DateTime.MinValue;
+        RefreshRows();
     }
 
     // ------------------------------------------------------------ Anrufe
@@ -562,8 +598,8 @@ public partial class MainWindow : Window
     /// Nach jedem Laden neu: alles drei haengt an der Geraete-Identitaet und
     /// am Port, und beides kommt von dort.
     ///
-    /// Rufen ohne zu lauschen waere eine Einladung an eine Tuer, die es nicht
-    /// gibt -- deshalb haengen Erkennung und Anmeldung am Lauscher.
+    /// Ein Ruf ins Netz ohne laufenden Lauscher nennt eine Adresse, unter der
+    /// niemand antwortet. Erkennung und Anmeldung haengen deshalb am Lauscher.
     /// </remarks>
     private async void RestartNetwork()
     {
@@ -581,7 +617,7 @@ public partial class MainWindow : Window
         }
 
         _listener = listener;
-        AppendLog($"Nehme Anrufe auf Port {listener.Port} entgegen.");
+        AppendLog($"Nehme Verbindungen auf Port {listener.Port} entgegen.");
 
         if (_config.LocalDiscovery)
         {
@@ -608,8 +644,8 @@ public partial class MainWindow : Window
 
     private async Task StopNetworkAsync()
     {
-        // Erst freigeben, dann neu belegen -- sonst sind die Ports besetzt,
-        // und zwar von uns selbst.
+        // Erst freigeben, dann neu belegen. Sonst sind die Ports durch das
+        // eigene Programm belegt.
         var listener = _listener;
         var local = _local;
         var announcer = _announcer;
@@ -628,8 +664,9 @@ public partial class MainWindow : Window
         => Dispatcher.Invoke(() => HandleIncoming(connection, remote));
 
     /// <summary>
-    /// Ein Geraet hat angerufen. Bekannte kommen durch, alle anderen werden
-    /// vorgestellt -- in die Liste schleicht sich niemand.
+    /// Ein Geraet hat angerufen. Bekannte Geraete werden angenommen, bei allen
+    /// anderen wird nachgefragt. Ohne Bestaetigung kommt kein Geraet in die
+    /// Liste.
     /// </summary>
     private async void HandleIncoming(BepConnection connection, IPEndPoint? remote)
     {
@@ -665,7 +702,7 @@ public partial class MainWindow : Window
 
         if (peer is null || peer.Host.State is PeerState.Verbunden or PeerState.Verbindet)
         {
-            // Eine zweite Leitung zur selben Gegenstelle waere eine zu viel.
+            // Eine zweite Verbindung zur selben Gegenstelle wird nicht gebraucht.
             await connection.DisposeAsync();
             return;
         }
@@ -687,7 +724,7 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Fragt nach. Ein Fenster, das noch nicht gezeigt wurde, darf kein
-    /// Besitzer sein -- der Anruf kann kommen, bevor es steht.
+    /// Besitzer sein. Der Anruf kann eintreffen, bevor das Fenster steht.
     /// </summary>
     private MessageBoxResult Ask(string text, string caption)
         => IsLoaded
@@ -698,8 +735,9 @@ public partial class MainWindow : Window
     /// Unter welcher Adresse wir die Gegenstelle spaeter selbst erreichen.
     /// </summary>
     /// <remarks>
-    /// Ihr Quellport ist fluechtig und waere zum Zurueckrufen wertlos; gemeint
-    /// ist der Port, auf dem sie ihrerseits lauscht -- bei Syncthing 22000.
+    /// Ihr Quellport ist fluechtig und zum Zurueckrufen nicht zu gebrauchen.
+    /// Gemeint ist der Port, auf dem sie ihrerseits lauscht. Bei Syncthing ist
+    /// das 22000.
     /// </remarks>
     private static string AddressOf(IPEndPoint? remote)
     {
@@ -798,7 +836,7 @@ public partial class MainWindow : Window
 
     private void OnShowPeers(object sender, RoutedEventArgs e)
     {
-        // Der Klick kommt aus einer Zelle; deren Datensatz ist gemeint, nicht
+        // Der Klick kommt aus einer Zelle. Gemeint ist deren Datensatz, nicht
         // zwangslaeufig die ausgewaehlte Zeile.
         if ((sender as Hyperlink)?.DataContext is not ShareRow row) return;
 
@@ -808,12 +846,12 @@ public partial class MainWindow : Window
     // ------------------------------------------------------------ Freigaben
 
     /// <summary>
-    /// Übernimmt einen angebotenen Ordner -- aber erst, nachdem gefragt wurde.
+    /// Übernimmt einen angebotenen Ordner, aber erst nach einer Rückfrage.
     /// </summary>
     /// <remarks>
-    /// In zwei Schritten: erst den Index holen, damit im Dialog steht, was
-    /// drin ist; im Explorer entsteht dabei nichts. Erst die Bestätigung legt
-    /// den Ordner an. Wer abbricht, hinterlässt keine Spur.
+    /// In zwei Schritten: erst den Index holen, damit im Dialog steht, was der
+    /// Ordner enthält. Im Explorer entsteht dabei nichts. Erst die Bestätigung
+    /// legt den Ordner an. Ein Abbruch hinterlässt nichts.
     /// </remarks>
     private async void OnAcceptFolder(object sender, RoutedEventArgs e)
     {
@@ -917,8 +955,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Der Doppelklick tut das Naheliegende: was noch nicht verbunden ist,
-    /// wird verbunden; was verbunden ist, wird geöffnet.
+    /// Der Doppelklick verbindet einen noch nicht verbundenen Ordner und
+    /// öffnet einen verbundenen.
     /// </summary>
     private void OnGridDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -941,8 +979,9 @@ public partial class MainWindow : Window
 
         try
         {
-            // Explorer ausdruecklich: ein anderer Dateimanager als Standard
-            // wuerde die Platzhalter mit eigener Dekodierung anfassen.
+            // Ausdruecklich der Explorer. Ein anderer Dateimanager als
+            // Standard wuerde die Platzhalter mit eigener Dekodierung
+            // behandeln.
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "explorer.exe",
@@ -961,8 +1000,8 @@ public partial class MainWindow : Window
         { Owner = this }.ShowDialog();
 
     /// <summary>
-    /// Was der Geraetedialog an Fenster-Einstellungen aendert, gilt sofort:
-    /// geschrieben und angewandt, ohne Umweg ueber einen Neustart.
+    /// Was der Geraetedialog an Fenster-Einstellungen aendert, gilt sofort. Die
+    /// Werte werden geschrieben und angewandt, ein Neustart ist nicht noetig.
     /// </summary>
     private void SaveWindowBehaviour()
     {
@@ -972,8 +1011,8 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Das Symbol im Infobereich gibt es nur, wenn das X das Fenster verstecken
-    /// soll. Ohne Symbol waere ein verstecktes Fenster nicht mehr zu holen --
-    /// beides ist dieselbe Entscheidung.
+    /// soll. Ohne Symbol liesse sich ein verstecktes Fenster nicht mehr
+    /// zurueckholen. Beides ist dieselbe Entscheidung.
     /// </summary>
     private void ApplyTray()
     {
@@ -1003,13 +1042,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Die Einstellungen des Programms. Sie haengen an keiner Freigabe --
-    /// sonst kaeme niemand an sie heran, der noch keine hat.
+    /// Die Einstellungen des Programms. Sie haengen an keiner Freigabe. Sonst
+    /// waeren sie fuer jemanden, der noch keine Freigabe hat, nicht erreichbar.
     /// </summary>
     private void OnShowProgramSettings(object sender, RoutedEventArgs e)
     {
         var dialog = new ProgramSettingsWindow(
-            _config, Path.GetDirectoryName(_configPath)!, CacheUsage, ClearCacheAsync)
+            _config, Path.GetDirectoryName(_configPath)!, CacheUsage, ClearAllAsync)
         {
             Owner = this
         };
@@ -1066,6 +1105,30 @@ public partial class MainWindow : Window
             state == ShareState.Pausiert ? "S.Menu.Resume" : "S.Menu.Pause");
     }
 
+    /// <summary>Wann zuletzt zu welcher Datei gewarnt wurde.</summary>
+    /// <remarks>
+    /// Windows fragt nach einer abgelehnten Datei sofort wieder an. Ohne
+    /// Sperre entstünde binnen Sekunden ein Stapel gleicher Fenster.
+    /// </remarks>
+    private readonly Dictionary<string, DateTime> _complained = [];
+
+    private void ShowLimit(CacheLimitHit hit)
+    {
+        var key = $"{hit.FolderId}/{hit.Name}";
+        if (_complained.TryGetValue(key, out var last) && DateTime.UtcNow - last < TimeSpan.FromMinutes(1))
+            return;
+
+        _complained[key] = DateTime.UtcNow;
+
+        var name = Path.GetFileName(hit.Name);
+        var text = hit.Budget
+            ? App.S("M.LimitBudget", name, Format.Bytes(hit.Needed), Format.Bytes(hit.Limit))
+            : App.S("M.LimitFree", name, Format.Bytes(hit.Needed), Format.Bytes(hit.Limit));
+
+        Status(text.Split('\n')[0]);
+        MessageBox.Show(this, text, App.S("M.LimitTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
     private void AppendLog(string line) => Dispatcher.Invoke(() =>
     {
         LogBox.AppendText($"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
@@ -1084,8 +1147,9 @@ public partial class MainWindow : Window
 
     private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        // Das X beendet nicht, es versteckt. Beendet wird ueber das
-        // Kontextmenue des Symbols -- und das kommt hier ueber Quit() an.
+        // Das X beendet das Programm nicht, es versteckt das Fenster. Beendet
+        // wird ueber das Kontextmenue des Symbols, das hier ueber Quit()
+        // ankommt.
         if (_tray is not null && !_exiting)
         {
             e.Cancel = true;
@@ -1106,7 +1170,7 @@ public partial class MainWindow : Window
         foreach (var peer in _peers)
         {
             try { await peer.Host.DisposeAsync(); }
-            catch { /* beim Beenden belanglos */ }
+            catch { /* Fehler beim Beenden werden nicht mehr behandelt */ }
         }
     }
 }

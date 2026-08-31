@@ -4,7 +4,8 @@ using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 namespace SyncTClient.Bep;
 
 /// <summary>
-/// Holt Dateiinhalte blockweise vom Peer -- die Hydration eines Platzhalters.
+/// Holt Dateiinhalte blockweise vom Peer. Das ist die Hydration eines
+/// Platzhalters.
 /// </summary>
 public static class FileFetcher
 {
@@ -12,10 +13,9 @@ public static class FileFetcher
     /// Laedt einen zusammenhaengenden Bereich einer Datei.
     /// </summary>
     /// <remarks>
-    /// Genau diese Signatur braucht spaeter der CfAPI-Callback: Windows meldet
+    /// Genau diese Signatur braucht spaeter der CfAPI-Callback. Windows meldet
     /// beim Zugriff auf einen Platzhalter einen Offset und eine Laenge, nicht
-    /// die ganze Datei. Blockweiser Zufallszugriff ist also nicht nur moeglich,
-    /// sondern der Normalfall.
+    /// die ganze Datei. Blockweiser Zufallszugriff ist damit der Normalfall.
     /// </remarks>
     public static async Task<byte[]> FetchRangeAsync(
         BepConnection connection, string folderId, BepFileInfo file,
@@ -55,9 +55,9 @@ public static class FileFetcher
                     throw new InvalidDataException(
                         $"Block {position}: {data.Length} statt {block.Size} Bytes.");
 
-                // Jeder Block traegt seinen Hash im Index -- also pruefen wir ihn
-                // auch. Das faengt sowohl Uebertragungsfehler als auch einen
-                // Peer, der etwas anderes liefert als angekuendigt.
+                // Jeder Block traegt seinen Hash im Index, deshalb wird er hier
+                // geprueft. Das erkennt Uebertragungsfehler und einen Peer,
+                // der etwas anderes liefert als angekuendigt.
                 if (!SHA256.HashData(data).AsSpan().SequenceEqual(block.Hash.Span))
                     throw new InvalidDataException(
                         $"Block {position} von \"{file.Name}\": Hash stimmt nicht.");

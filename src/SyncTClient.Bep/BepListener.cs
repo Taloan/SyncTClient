@@ -4,21 +4,23 @@ using System.Net.Sockets;
 namespace SyncTClient.Bep;
 
 /// <summary>
-/// Nimmt Anrufe anderer Geräte entgegen.
+/// Nimmt eingehende Verbindungen anderer Geräte entgegen.
 /// </summary>
 /// <remarks>
-/// Ohne diesen Teil kennt der Client nur eine Richtung: er ruft an. Wer nur
-/// anruft, erfährt nie, dass ihn jemand kennenlernen möchte -- die Frage
-/// "möchte sich verbinden" kann nur stellen, wer angerufen wird.
+/// Ohne diesen Teil baut der Client nur ausgehende Verbindungen auf. Dann
+/// erfährt er nie, dass ein anderes Gerät sich verbinden möchte. Die Anfrage
+/// "möchte sich verbinden" erreicht nur die Seite, die die Verbindung
+/// entgegennimmt.
 ///
-/// Der Handschlag laeuft hier zu Ende, bevor irgendjemand gefragt wird: erst
-/// wenn TLS steht und das Hello ausgetauscht ist, steht fest, <em>wer</em>
-/// anruft. Ein Anrufer, der dabei schweigt, faellt nach kurzer Zeit heraus
-/// und haelt keine Verbindung offen.
+/// Der Handschlag wird hier vollstaendig abgeschlossen, bevor der Benutzer
+/// gefragt wird. Erst wenn TLS steht und das Hello ausgetauscht ist, steht
+/// fest, welches Gerät die Verbindung aufbaut. Eine Gegenstelle, die dabei
+/// nichts sendet, wird nach Ablauf der Frist abgebrochen und haelt keine
+/// Verbindung offen.
 /// </remarks>
 public sealed class BepListener : IAsyncDisposable
 {
-    /// <summary>So lange darf ein Anrufer fuer TLS und Hello brauchen.</summary>
+    /// <summary>So lange darf eine Gegenstelle fuer TLS und Hello brauchen.</summary>
     private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(15);
 
     private readonly DeviceIdentity _identity;
@@ -36,19 +38,25 @@ public sealed class BepListener : IAsyncDisposable
         _log = log;
     }
 
-    /// <summary>Eine Gegenstelle hat angerufen und den Handschlag bestanden.</summary>
+    /// <summary>
+    /// Eine Gegenstelle hat sich verbunden und den Handschlag bestanden.
+    /// </summary>
     /// <remarks>
-    /// Kommt aus dem Threadpool. Wer die Verbindung nicht uebernimmt, muss sie
-    /// schliessen -- sonst bleibt sie stehen.
+    /// Wird aus dem Threadpool aufgerufen. Wer die Verbindung nicht
+    /// uebernimmt, muss sie schliessen. Andernfalls bleibt sie offen.
     /// </remarks>
     public event Action<BepConnection, IPEndPoint?>? Incoming;
 
-    /// <summary>Der Port, auf dem tatsaechlich gelauscht wird. 0 heisst: gar nicht.</summary>
+    /// <summary>
+    /// Der Port, auf dem tatsaechlich gelauscht wird. 0 bedeutet, dass nicht
+    /// gelauscht wird.
+    /// </summary>
     public int Port { get; private set; }
 
     /// <summary>
-    /// Beginnt zu lauschen. Ein belegter Port ist kein Grund aufzugeben -- der
-    /// Client kann weiter selbst anrufen, er wird nur nicht angerufen.
+    /// Beginnt zu lauschen. Ein belegter Port ist kein Grund abzubrechen. Der
+    /// Client kann weiterhin selbst Verbindungen aufbauen, nimmt dann aber
+    /// keine entgegen.
     /// </summary>
     public bool Start(int port)
     {
@@ -56,7 +64,8 @@ public sealed class BepListener : IAsyncDisposable
         {
             _listener = new TcpListener(IPAddress.IPv6Any, port);
 
-            // Ein Socket fuer beide Familien; sonst blieben IPv4-Anrufer aussen vor.
+            // Ein Socket fuer beide Adressfamilien. Sonst erreichen uns keine
+            // Verbindungen ueber IPv4.
             _listener.Server.SetSocketOption(SocketOptionLevel.IPv6, SocketOptionName.IPv6Only, false);
             _listener.Start();
 
@@ -66,7 +75,7 @@ public sealed class BepListener : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log($"Port {port} laesst sich nicht belegen ({ex.Message}). Eingehende Anrufe bleiben aus.");
+            _log($"Port {port} laesst sich nicht belegen ({ex.Message}). Eingehende Verbindungen sind nicht moeglich.");
             _listener = null;
             Port = 0;
             return false;
@@ -88,12 +97,12 @@ public sealed class BepListener : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _log($"Warte nicht mehr auf Anrufe: {ex.Message}");
+                _log($"Nehme keine Verbindungen mehr entgegen: {ex.Message}");
                 return;
             }
 
-            // Der Handschlag darf die Schleife nicht aufhalten: ein zaeher
-            // Anrufer wuerde sonst alle anderen blockieren.
+            // Der Handschlag darf die Schleife nicht aufhalten. Eine langsame
+            // Gegenstelle wuerde sonst alle anderen blockieren.
             _ = Task.Run(() => HandshakeAsync(tcp, ct), CancellationToken.None);
         }
     }
@@ -121,7 +130,7 @@ public sealed class BepListener : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log($"Anruf von {remote?.Address.ToString() ?? "unbekannt"} kam nicht zustande: {ex.Message}");
+            _log($"Verbindung von {remote?.Address.ToString() ?? "unbekannt"} kam nicht zustande: {ex.Message}");
             tcp.Dispose();
         }
     }

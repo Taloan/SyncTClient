@@ -10,14 +10,15 @@ namespace SyncTClient.Mount;
 /// <remarks>
 /// Genau so macht es Microsofts CloudMirror-Beispiel: kein Eintrag als
 /// eigenstaendiges Programm, sondern <c>CoRegisterClassObject</c> aus dem
-/// Anbieterprozess. Wer den Ordner bereitstellt, beantwortet auch die Fragen
-/// dazu -- das erspart einen zweiten Prozess und einen zweiten Zustand.
+/// Anbieterprozess. Derselbe Prozess, der den Ordner bereitstellt, beantwortet
+/// auch die Anfragen dazu. Das erspart einen zweiten Prozess und einen zweiten
+/// Zustand.
 ///
 /// Gemessen: ohne diese Anmeldung scheitert eine Aktivierung ueber
 /// <c>CLSCTX_LOCAL_SERVER</c> mit <c>REGDB_E_CLASSNOTREG</c>, mit ihr liefert
 /// sie die Vorschau. Die Eintragung als In-Prozess-DLL bleibt daneben
-/// bestehen; welchen der beiden Wege die Shell im Einzelfall waehlt, bestimmt
-/// sie selbst.
+/// bestehen. Welchen der beiden Wege die Shell im Einzelfall waehlt,
+/// entscheidet sie selbst.
 /// </remarks>
 public static class ThumbnailService
 {
@@ -41,12 +42,12 @@ public static class ThumbnailService
                 Name = "Vorschau-Erzeuger"
             };
 
-            // Mehrthread-Apartment, nicht STA -- und das ist hier wesentlich.
+            // Mehrthread-Apartment, nicht STA. Das ist hier wesentlich.
             //
             // Im Einzelthread-Apartment reiht COM alle Aufrufe auf einem
             // Thread auf. Solange die Vorschauen fertig auf der Platte lagen,
-            // fiel das nicht auf. Seit wir den Dateikopf bei Bedarf holen,
-            // wartet jeder Aufruf aufs Netz, und der naechste kommt erst
+            // fiel das nicht auf. Seit der Dateikopf bei Bedarf geholt wird,
+            // wartet jeder Aufruf auf das Netz, und der naechste kommt erst
             // danach an die Reihe: gemessen 69 Bilder in 45 Sekunden. Im MTA
             // stellt COM die Aufrufe nebenlaeufig zu, und die Drossel weiter
             // unten bestimmt das Tempo statt der Apartment-Grenze.
@@ -73,15 +74,15 @@ public static class ThumbnailService
                 return;
             }
 
-            // Erst ab hier duerfen Anfragen ankommen -- so geht keine
+            // Erst ab hier duerfen Anfragen ankommen. So geht keine Anfrage
             // verloren, die zwischen Anmeldung und Bereitschaft eintrifft.
             CoResumeClassObjects();
 
             try
             {
-                // Im MTA stellt COM die Aufrufe auf eigenen Threads zu; eine
-                // Nachrichtenschleife braucht es dafuer nicht. Dieser Thread
-                // haelt nur die Anmeldung am Leben.
+                // Im MTA stellt COM die Aufrufe auf eigenen Threads zu. Eine
+                // Nachrichtenschleife wird dafuer nicht gebraucht. Dieser
+                // Thread haelt nur die Anmeldung aufrecht.
                 _stop.Wait();
             }
             finally

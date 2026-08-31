@@ -3,14 +3,13 @@
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Fragt Windows nach der Vorschau einer Datei -- genau so, wie der Explorer
-/// es tut.
+/// Fragt Windows nach der Vorschau einer Datei, genau so wie der Explorer.
 /// </summary>
 /// <remarks>
-/// Dateimanager bringen eigene Bilddekodierung mit und umgehen die
-/// Shell-Erweiterung; ein Blick in einen von ihnen sagt also nichts darueber,
-/// ob unsere Registrierung greift. <c>IShellItemImageFactory</c> ist der Weg,
-/// den Windows selbst nimmt.
+/// Andere Dateimanager bringen eine eigene Bilddekodierung mit und umgehen
+/// die Shell-Erweiterung. Ein Blick in einen von ihnen sagt also nichts
+/// darueber, ob unsere Registrierung greift. <c>IShellItemImageFactory</c> ist
+/// der Weg, den Windows selbst nimmt.
 /// </remarks>
 public static class ThumbnailCheck
 {
@@ -25,7 +24,7 @@ public static class ThumbnailCheck
 
         var result = 1;
 
-        // Die Shell will einen Einzelthread-Apartment.
+        // Die Shell verlangt ein Einzelthread-Apartment.
         var thread = new Thread(() => result = Ask(full));
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -58,10 +57,10 @@ public static class ThumbnailCheck
 
         try
         {
-            // Verschiedene Flag-Kombinationen: THUMBNAILONLY verbietet jeden
+            // Verschiedene Flag-Kombinationen. THUMBNAILONLY verbietet jeden
             // Rueckfall und blockiert offenbar auch den Weg ueber den
-            // Sync-Root-Anbieter -- selbst OneDrive scheitert damit. Was der
-            // Explorer wirklich schickt, faellt hier auf.
+            // Sync-Root-Anbieter; selbst OneDrive scheitert damit. Welche
+            // Flags der Explorer tatsaechlich schickt, zeigt dieser Vergleich.
             var probes = new (string Name, int Flags)[]
             {
                 ("Standard        ", 0x00),

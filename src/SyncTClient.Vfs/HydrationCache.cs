@@ -7,24 +7,25 @@ using Windows.Win32.Storage.FileSystem;
 namespace SyncTClient.Vfs;
 
 /// <summary>
-/// Der selbstverwaltete lokale Cache: hydrierte Dateien bis zu einem Budget,
-/// darueber hinaus fliegt raus, was am laengsten nicht angefasst wurde.
+/// Der selbstverwaltete lokale Cache: hydrierte Dateien bis zu einem Budget.
+/// Wird das Budget ueberschritten, wird verdraengt, worauf am laengsten nicht
+/// zugegriffen wurde.
 /// </summary>
 /// <remarks>
-/// Zwei Dinge, die gern verwechselt werden, sind hier bewusst getrennt:
+/// Zwei Vorgaenge sind hier bewusst getrennt:
 ///
-/// <b>Invalidierung</b> -- die Datei hat sich geaendert, die vorgehaltenen
-/// Bytes sind falsch. Das ist Korrektheit und passiert unabhaengig von jeder
-/// Groesse.
+/// <b>Invalidierung</b>: die Datei hat sich geaendert, die vorgehaltenen
+/// Bytes sind falsch. Das ist eine Frage der Korrektheit und geschieht
+/// unabhaengig von jeder Groesse.
 ///
-/// <b>Verdraengung</b> -- der Cache ist voll, irgendetwas muss weichen. Ohne
-/// diesen zweiten Mechanismus waechst der Cache unbegrenzt: Fotos aendern sich
-/// nie, ein einmal geoeffnetes Bild von 2019 haette also nie einen Grund zu
-/// gehen, und "bei Bedarf herunterladen" liefe nach ein paar Monaten auf eine
-/// Vollkopie hinaus.
+/// <b>Verdraengung</b>: der Cache ist voll, es muss etwas weichen. Ohne
+/// diesen zweiten Mechanismus waechst der Cache unbegrenzt. Fotos aendern
+/// sich nie, ein einmal geoeffnetes Bild von 2019 wuerde also nie entfernt,
+/// und "bei Bedarf herunterladen" ergaebe nach einigen Monaten eine
+/// Vollkopie.
 ///
-/// Angeheftete Dateien -- im Explorer "Immer auf diesem Geraet behalten" --
-/// sind von der Verdraengung ausgenommen.
+/// Angeheftete Dateien, im Explorer "Immer auf diesem Geraet behalten", sind
+/// von der Verdraengung ausgenommen.
 /// </remarks>
 public sealed class HydrationCache
 {
@@ -32,8 +33,9 @@ public sealed class HydrationCache
     private const uint FileAttributePinned = 0x0008_0000;
 
     /// <summary>
-    /// FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS -- gesetzt, solange der Inhalt
-    /// noch nicht lokal liegt. Fehlt in .NETs FileAttributes ebenfalls.
+    /// FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS. Das Attribut ist gesetzt, solange
+    /// der Inhalt noch nicht lokal liegt. Fehlt in .NETs FileAttributes
+    /// ebenfalls.
     /// </summary>
     private const uint FileAttributeRecallOnDataAccess = 0x0040_0000;
 
@@ -51,27 +53,30 @@ public sealed class HydrationCache
         _budget = budget;
         Load();
 
-        // Das Budget gilt fuer alle Freigaben zusammen; ohne Anmeldung zaehlt
-        // diese hier nicht mit.
+        // Das Budget gilt fuer alle Freigaben zusammen. Ohne Anmeldung zaehlt
+        // diese Freigabe nicht mit.
         budget?.Register(this);
     }
 
     /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
     public long MaxBytes => _budget?.MaxBytes ?? 0;
 
-    /// <summary>Meldet sich vom Budget ab -- die Freigabe laeuft nicht mehr.</summary>
+    /// <summary>
+    /// Meldet diesen Cache vom Budget ab. Die Freigabe laeuft nicht mehr.
+    /// </summary>
     public void LeaveBudget() => _budget?.Forget(this);
 
     /// <summary>
-    /// Zweite Meinung, bevor eine Datei verdraengt wird.
+    /// Zusaetzliche Pruefung, bevor eine Datei verdraengt wird.
     /// </summary>
     /// <remarks>
-    /// Der Cache kennt nur Groessen und Zugriffszeiten. Ob es die letzte
-    /// Kopie einer Datei im Netz ist, weiss allein die Freigabe -- sie sieht
-    /// die Indizes der Gegenstellen. Verdraengen heisst Bytes wegwerfen, und
-    /// das darf nur, wer sie wiederbeschaffen kann.
+    /// Der Cache speichert nur Groesse und Zugriffszeit. Ob eine Datei die
+    /// letzte Kopie im Netz ist, weiss allein die Freigabe, denn sie sieht die
+    /// Indizes der Gegenstellen. Beim Verdraengen werden die lokalen Bytes
+    /// geloescht. Das ist nur zulaessig, wenn sie sich erneut beschaffen
+    /// lassen.
     ///
-    /// Ohne gesetzte Meinung wird verdraengt wie bisher.
+    /// Ist kein Rueckruf gesetzt, wird ohne diese Pruefung verdraengt.
     /// </remarks>
     public Func<string, bool>? MayEvict { get; set; }
 
@@ -127,12 +132,13 @@ public sealed class HydrationCache
     // ------------------------------------------------------------ Verdraengung
 
     /// <summary>
-    /// Sorgt dafuer, dass das gemeinsame Budget wieder eingehalten wird. Wer
-    /// weichen muss, entscheidet das Budget -- es allein sieht alle Freigaben.
+    /// Sorgt dafuer, dass das gemeinsame Budget wieder eingehalten wird.
+    /// Welche Dateien weichen, entscheidet das Budget, denn nur es sieht alle
+    /// Freigaben.
     /// </summary>
     public Task EnforceBudgetAsync() => _budget?.EnforceAsync() ?? Task.CompletedTask;
 
-    /// <summary>Was hier verdraengt werden duerfte.</summary>
+    /// <summary>Die Dateien, die hier verdraengt werden duerfen.</summary>
     internal IEnumerable<(string Path, long Bytes, DateTimeOffset LastAccess)> EvictionCandidates()
         => _entries
             .Where(e => !IsPinned(e.Key))
@@ -149,12 +155,15 @@ public sealed class HydrationCache
         return true;
     }
 
-    /// <summary>Schreibt die Buchfuehrung fort -- nach einer Verdraengungsrunde.</summary>
+    /// <summary>
+    /// Schreibt die Buchfuehrung nach einer Verdraengungsrunde fort.
+    /// </summary>
     internal void Persist() => Save();
 
     /// <summary>
     /// Gleicht die Buchfuehrung mit der Platte ab. Noetig beim Start, weil
-    /// zwischen zwei Laeufen jemand Dateien angefasst oder freigegeben haben kann.
+    /// zwischen zwei Laeufen Dateien geoeffnet oder freigegeben worden sein
+    /// koennen.
     /// </summary>
     public void ReconcileWithDisk()
     {
@@ -168,8 +177,8 @@ public sealed class HydrationCache
             seen.Add(relative);
 
             var info = new FileInfo(full);
-            // Ein dehydrierter Platzhalter traegt RecallOnDataAccess; ohne das
-            // Attribut liegen die Bytes tatsaechlich lokal.
+            // Ein dehydrierter Platzhalter traegt RecallOnDataAccess. Fehlt das
+            // Attribut, liegen die Bytes tatsaechlich lokal.
             var hydrated = ((uint)info.Attributes & FileAttributeRecallOnDataAccess) == 0;
 
             if (hydrated)
@@ -202,15 +211,16 @@ public sealed class HydrationCache
 
         try
         {
-            // Schreibzugriff ist noetig; ReadWrite-Freigabe, damit ein Leser
-            // die Datei nicht blockiert.
+            // Schreibzugriff ist noetig. Die ReadWrite-Freigabe verhindert,
+            // dass ein Leser die Datei blockiert.
             using var handle = File.OpenHandle(full, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
 
             // Eine lokal geaenderte Datei ist nicht mehr abgeglichen, und
             // Dehydrieren wuerde die Aenderung verwerfen. Windows lehnt das
-            // von sich aus ab -- aber die Absage kaeme im selben Zweig an wie
-            // "gerade in Benutzung, spaeter noch einmal", und dann wuesste
-            // niemand, dass hier eine Aenderung liegt, die nirgends hingeht.
+            // von sich aus ab. Diese Absage kaeme aber im selben Zweig an wie
+            // "gerade in Benutzung, spaeter erneut versuchen". Dann bliebe
+            // unbemerkt, dass hier eine Aenderung liegt, die nirgends
+            // hingeschrieben wird.
             if (IsInSync(handle) == false)
             {
                 _log?.Invoke($"  \"{relativePath}\" ist lokal geaendert und bleibt liegen " +
@@ -221,7 +231,7 @@ public sealed class HydrationCache
 
             unsafe
             {
-                // Laenge -1 heisst: die ganze Datei.
+                // Laenge -1 bedeutet die ganze Datei.
                 var result = PInvoke.CfDehydratePlaceholder(
                     handle, 0, -1, CF_DEHYDRATE_FLAGS.CF_DEHYDRATE_FLAG_NONE, null);
 
@@ -236,7 +246,7 @@ public sealed class HydrationCache
         }
         catch (IOException)
         {
-            // In Benutzung -- beim naechsten Durchgang erneut versuchen.
+            // In Benutzung. Beim naechsten Durchgang erneut versuchen.
             return false;
         }
         catch (UnauthorizedAccessException)
@@ -246,13 +256,13 @@ public sealed class HydrationCache
     }
 
     /// <summary>
-    /// Ist die Datei mit der Gegenstelle abgeglichen?
+    /// Gibt an, ob die Datei mit der Gegenstelle abgeglichen ist.
     /// </summary>
     /// <returns>
-    /// <c>false</c> nur, wenn Windows das ausdruecklich verneint;
-    /// <c>true</c> auch dann, wenn sich die Frage nicht beantworten liess --
-    /// die eigentliche Sicherung ist die Weigerung der Cloud-Filter-Schicht,
-    /// diese Pruefung macht sie nur sichtbar.
+    /// <c>false</c> nur, wenn Windows den Abgleich ausdruecklich verneint.
+    /// <c>true</c> auch dann, wenn sich der Zustand nicht ermitteln liess. Die
+    /// eigentliche Sicherung ist die Weigerung der Cloud-Filter-Schicht, diese
+    /// Pruefung macht sie nur sichtbar.
     /// </returns>
     private unsafe bool IsInSync(Microsoft.Win32.SafeHandles.SafeFileHandle handle)
     {
@@ -268,8 +278,8 @@ public sealed class HydrationCache
         var state = PInvoke.CfGetPlaceholderStateFromFileInfo(
             &info, FILE_INFO_BY_HANDLE_CLASS.FileAttributeTagInfo);
 
-        // Was kein Platzhalter ist, hat auch keinen Abgleichzustand -- eine
-        // gewoehnliche Datei im Ordner geht uns nichts an.
+        // Was kein Platzhalter ist, hat keinen Abgleichzustand. Eine
+        // gewoehnliche Datei im Ordner wird hier nicht behandelt.
         if ((state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER) == 0) return true;
 
         return (state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC) != 0;

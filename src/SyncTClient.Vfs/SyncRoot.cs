@@ -5,8 +5,8 @@ using Windows.Win32.Storage.CloudFilters;
 namespace SyncTClient.Vfs;
 
 /// <summary>
-/// Meldet ein Verzeichnis bei Windows als Sync-Root an. Erst danach darf
-/// darin ueberhaupt ein Platzhalter entstehen.
+/// Meldet ein Verzeichnis bei Windows als Sync-Root an. Erst danach kann darin
+/// ein Platzhalter angelegt werden.
 /// </summary>
 public static class SyncRoot
 {
@@ -37,22 +37,23 @@ public static class SyncRoot
             var policies = new CF_SYNC_POLICIES
             {
                 StructSize = (uint)sizeof(CF_SYNC_POLICIES),
-                // FULL statt PARTIAL, und das ist ein bewusster Tausch.
+                // FULL statt PARTIAL. Das ist ein bewusster Tausch.
                 //
                 // PARTIAL sagt Windows zu, dass Lesezugriffe auf einen noch
-                // unvollstaendigen Platzhalter bedient werden. Klingt
-                // sparsamer -- ist es aber nicht, denn die Shell nimmt das
-                // Angebot an: fuer ein Vorschaubild liest sie die Datei
-                // einfach selbst, statt den angemeldeten Vorschau-Erzeuger zu
-                // fragen. Gemessen am Explorer: beim blossen Durchblaettern
-                // eines Ordners wuchs der Cache auf 79 MB, und der Erzeuger
-                // wurde kein einziges Mal aufgerufen.
+                // unvollstaendigen Platzhalter bedient werden. Das wirkt
+                // sparsamer, ist es aber nicht: die Shell nutzt diese Zusage
+                // und liest fuer ein Vorschaubild die Datei selbst, statt den
+                // angemeldeten Vorschau-Erzeuger zu fragen. Gemessen im
+                // Explorer: beim blossen Durchblaettern eines Ordners wuchs
+                // der Cache auf 79 MB, und der Erzeuger wurde kein einziges
+                // Mal aufgerufen.
                 //
-                // FULL heisst dagegen: jeder Zugriff kostet die ganze Datei.
-                // Damit kann die Shell nicht mehr eben mal hineinlesen und
-                // greift auf die Anbieterkette zurueck -- also auf unseren
-                // Vorrat aus den Dateikoepfen, der ohne Netz auskommt.
-                // Nextcloud macht es genauso (vfs_cfapi, CfApiWrapper).
+                // FULL bedeutet, dass jeder Zugriff die ganze Datei
+                // nachlaedt. Die Shell kann dann nicht mehr teilweise
+                // hineinlesen und greift auf die Anbieterkette zurueck, also
+                // auf unseren Vorrat aus den Dateikoepfen, der ohne Netz
+                // auskommt. Nextcloud macht es genauso (vfs_cfapi,
+                // CfApiWrapper).
                 Hydration = new CF_HYDRATION_POLICY
                 {
                     Primary = CF_HYDRATION_POLICY_PRIMARY.CF_HYDRATION_POLICY_FULL,
@@ -74,9 +75,9 @@ public static class SyncRoot
             {
                 // Ohne diese beiden Flags haelt Windows den Wurzelordner fuer
                 // unvollstaendig und verlangt beim ersten Auflisten eine
-                // On-Demand-Population -- die wir nicht bedienen, weil wir alle
-                // Platzhalter selbst anlegen. Die Folge waere ein Timeout schon
-                // beim blossen Oeffnen des Ordners.
+                // On-Demand-Population. Diese wird nicht bedient, weil alle
+                // Platzhalter selbst angelegt werden. Die Folge waere ein
+                // Timeout schon beim Oeffnen des Ordners.
                 var result = PInvoke.CfRegisterSyncRoot(
                     pathPtr, &registration, &policies,
                     CF_REGISTER_FLAGS.CF_REGISTER_FLAG_UPDATE
@@ -95,7 +96,7 @@ public static class SyncRoot
 
     /// <summary>
     /// Hebt die Registrierung auf. Bereits angelegte Platzhalter bleiben als
-    /// Dateien liegen -- dehydrierte werden dabei zu leeren Huellen.
+    /// Dateien liegen. Dehydrierte Platzhalter werden dabei zu leeren Dateien.
     /// </summary>
     public static void Unregister(string path)
         => Marshal.ThrowExceptionForHR(PInvoke.CfUnregisterSyncRoot(path));

@@ -9,9 +9,9 @@ namespace SyncTClient.Gui;
 /// </summary>
 /// <remarks>
 /// Deckt beide Faelle ab: einen uebernommenen Ordner und einen, den die
-/// Gegenstelle nur anbietet. Sie in einer Liste zu fuehren erspart die Frage,
-/// wo ein angebotener Ordner denn hingehoert -- er steht da, wo er nach dem
-/// Uebernehmen auch stehen wird, nur ohne Zahlen.
+/// Gegenstelle nur anbietet. Beide stehen in derselben Liste. Ein angebotener
+/// Ordner steht damit an der Stelle, an der er nach dem Uebernehmen ebenfalls
+/// steht, nur ohne Zahlen.
 /// </remarks>
 public sealed class ShareRow(PeerItem peer, string folderId, string label, ShareHost? share)
     : INotifyPropertyChanged
@@ -46,7 +46,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         _ => App.S("R.PhaseWaiting")
     };
 
-    /// <summary>Haken, wenn alles steht -- wie bei Resilio die gruene Spalte.</summary>
+    /// <summary>Haken, wenn der Abgleich abgeschlossen ist. Entspricht der gruenen Spalte in Resilio.</summary>
     public bool Ready => Share is { State: ShareState.Bereit, Phase: SyncPhase.Fertig };
 
     // --------------------------------------------------------------- Knoten
@@ -60,23 +60,24 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     // ------------------------------------------------------- Vollständige Kopien
 
     /// <summary>
-    /// Wie viele erreichbare Knoten den Inhalt tragen -- wir selbst nicht
-    /// mitgezählt.
+    /// Wie viele erreichbare Knoten den Inhalt vorhalten. Der eigene Knoten
+    /// ist nicht mitgezählt.
     /// </summary>
     public int Copies => Share?.ReachableCopies ?? 0;
 
     public string CopiesText => Accepted ? Copies.ToString() : "—";
 
     /// <summary>
-    /// Warnt, wenn die Platzhalter an einem seidenen Faden hängen.
+    /// Warnt, wenn kein erreichbarer Knoten den Inhalt mehr vorhält.
     /// </summary>
     /// <remarks>
-    /// Ein Platzhalter ist ein Versprechen auf eine Datei. Hält niemand mehr
-    /// den Inhalt, ist das Versprechen wertlos -- und das sieht man dem
-    /// Ordner nicht an, weil die Namen weiter dastehen.
+    /// Ein Platzhalter verweist auf eine Datei, deren Inhalt anderswo liegt.
+    /// Hält kein Knoten den Inhalt mehr vor, ist die Datei nicht mehr
+    /// abrufbar. Dem Ordner sieht man das nicht an, weil die Namen weiter
+    /// angezeigt werden.
     ///
-    /// Die Zahl ist eine Untergrenze: über Knoten, mit denen wir gerade nicht
-    /// verbunden sind, wissen wir nichts.
+    /// Die Zahl ist eine Untergrenze. Über Knoten, mit denen gerade keine
+    /// Verbindung besteht, ist nichts bekannt.
     /// </remarks>
     public bool CopiesAtRisk => Accepted && Copies < 1;
 
@@ -92,8 +93,8 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     /// Sichtbar, solange der Abgleich laeuft.
     /// </summary>
     /// <remarks>
-    /// Ein Balken, der dauerhaft auf 100 steht, sagt nichts und lenkt vom
-    /// einen ab, der tatsaechlich laeuft.
+    /// Ein Balken, der dauerhaft auf 100 steht, traegt keine Information und
+    /// lenkt von den Balken ab, deren Abgleich tatsaechlich laeuft.
     /// </remarks>
     public bool Busy => Share is not null
                         && Share.Phase != SyncPhase.Fertig
@@ -136,8 +137,8 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public string LastTransferText => Share?.LastTransfer is { } t ? t.ToString("HH:mm:ss") : "—";
 
-    // Rohwerte zum Sortieren. Die Textspalten zeigen "9,4 MB" und "944 MB" --
-    // alphabetisch stuende das kleinere davon hinten.
+    // Rohwerte zum Sortieren. Die Textspalten zeigen "9,4 MB" und "944 MB".
+    // Alphabetisch sortiert stuende der kleinere Wert hinten.
     public long ReceivedValue => Share?.BytesReceived ?? -1;
     public long SizeValue => Share?.IndexBytes ?? -1;
     public long LocalSizeValue => Share?.CacheUsedBytes ?? -1;
@@ -158,8 +159,8 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public void Refresh()
     {
-        // Alles auf einmal: die Zeile ist klein, und einzelne Meldungen
-        // waeren mehr Buchhaltung als Ersparnis.
+        // Alles auf einmal melden. Die Zeile ist klein, und einzelne
+        // Meldungen waeren mehr Aufwand als Ersparnis.
         foreach (var name in new[]
                  {
                      nameof(Name), nameof(StatusText), nameof(Ready), nameof(Accepted),

@@ -4,18 +4,18 @@ namespace SyncTClient.Mount;
 public readonly record struct ThroughputPoint(double Read, double Written);
 
 /// <summary>
-/// Fuehrt Buch ueber den Durchsatz der letzten Stunden.
+/// Zeichnet den Durchsatz der letzten Stunden auf.
 /// </summary>
 /// <remarks>
-/// Gespeichert wird sekundengenau in einem Ringpuffer -- drei Stunden sind
-/// 10800 Werte je Richtung, also ein paar Zehntel Megabyte. Das ist billiger
+/// Gespeichert wird sekundengenau in einem Ringpuffer. Drei Stunden sind
+/// 10800 Werte je Richtung, also ein paar Zehntel Megabyte. Das ist guenstiger,
 /// als mehrere Aufloesungen nebeneinander zu pflegen, und jede gewuenschte
 /// Zeitspanne laesst sich daraus zusammenfassen.
 ///
-/// Die Verbindungen liefern nur Gesamtzaehler seit dem Verbinden. Hier
-/// entsteht daraus die Rate, indem jede Sekunde die Differenz zur Vorsekunde
-/// gebildet wird. Faellt ein Zaehler zurueck -- eine Verbindung wurde neu
-/// aufgebaut --, gilt die Differenz als null statt als negativer Ausschlag.
+/// Die Verbindungen liefern nur Gesamtzaehler seit dem Verbinden. Daraus
+/// entsteht hier die Rate, indem jede Sekunde die Differenz zur Vorsekunde
+/// gebildet wird. Faellt ein Zaehler zurueck, weil eine Verbindung neu
+/// aufgebaut wurde, gilt die Differenz als null statt als negativer Ausschlag.
 /// </remarks>
 public sealed class ThroughputMeter : IDisposable
 {
@@ -52,7 +52,7 @@ public sealed class ThroughputMeter : IDisposable
             {
                 Total = (read, written);
 
-                // Der erste Wert hat keinen Vorgaenger und waere sonst ein
+                // Der erste Wert hat keinen Vorgaenger und ergaebe sonst einen
                 // Ausschlag in Hoehe des gesamten bisherigen Verkehrs.
                 if (_primed)
                 {
@@ -72,7 +72,7 @@ public sealed class ThroughputMeter : IDisposable
         }
         catch
         {
-            // Ein Messfehler darf den Zeitgeber nicht abwuergen.
+            // Ein Messfehler darf den Zeitgeber nicht beenden.
         }
     }
 
@@ -91,7 +91,8 @@ public sealed class ThroughputMeter : IDisposable
 
             for (var b = 0; b < buckets; b++)
             {
-                // Rueckwaerts von jetzt: Korb 0 liegt am weitesten zurueck.
+                // Gerechnet wird rueckwaerts von jetzt. Korb 0 liegt am
+                // weitesten zurueck.
                 var fromEnd = (int)Math.Round((buckets - b) * perBucket);
                 var toEnd = (int)Math.Round((buckets - b - 1) * perBucket);
 

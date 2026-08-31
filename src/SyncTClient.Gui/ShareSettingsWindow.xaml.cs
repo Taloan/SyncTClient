@@ -6,7 +6,7 @@ using SyncTClient.Mount;
 
 namespace SyncTClient.Gui;
 
-/// <summary>Die Einstellungen einer Freigabe -- Modus, Budget, Teilbaum.</summary>
+/// <summary>Die Einstellungen einer Freigabe: Modus, Budget und Teilbaum.</summary>
 public partial class ShareSettingsWindow : Window
 {
     private readonly ShareConfig _share;
@@ -21,6 +21,11 @@ public partial class ShareSettingsWindow : Window
         _share = share;
         _homeDirectory = homeDirectory;
         TitleText.Text = title;
+
+        // Das Label vergibt die Gegenstelle, und sie kann es aendern. Die
+        // Kennung ist die Identitaet der Freigabe. Sie steht im Pfad, im
+        // Protokoll und im Dateinamen des Index.
+        SubTitleText.Text = App.S("S.FolderId", share.FolderId);
 
         _loading = true;
         LocalPathBox.Text = share.LocalPath;
@@ -81,7 +86,7 @@ public partial class ShareSettingsWindow : Window
 
     private void UpdateCacheEnabled()
     {
-        // Bei "vollstaendig lokal" wird nie verdraengt -- dann gibt es auch
+        // Bei "vollstaendig lokal" wird nie verdraengt. Damit gibt es auch
         // nichts, wofuer eine Mindestzahl an Kopien gelten koennte.
         var onDemand = ModeBox.SelectedIndex == 0;
         CopiesPanel.IsEnabled = onDemand;
@@ -117,9 +122,9 @@ public partial class ShareSettingsWindow : Window
         if (_tree is not null)
         {
             // Der Baum zeigt nur Verzeichnisse. Eintraege, die auf einzelne
-            // Dateien zeigen, kann er nicht darstellen -- die wuerden beim
-            // Speichern stillschweigend verschwinden. Also behalten wir sie,
-            // solange nicht ohnehin alles ausgewaehlt ist.
+            // Dateien zeigen, kann er nicht darstellen. Sie wuerden beim
+            // Speichern ohne Hinweis verschwinden und werden deshalb
+            // uebernommen, solange nicht ohnehin alles ausgewaehlt ist.
             var selection = FolderNode.CollectIncluded(_tree);
             if (selection.Count > 0)
             {

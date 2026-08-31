@@ -21,8 +21,8 @@ public static class BepFraming
     public const int MaxMessageLength = 500 * 1000 * 1000;
 
     /// <summary>
-    /// Schreibt eine Nachricht unkomprimiert. Das ist immer zulaessig -- die
-    /// Gegenseite entscheidet unabhaengig davon, ob sie selbst komprimiert.
+    /// Schreibt eine Nachricht unkomprimiert. Das ist immer zulaessig. Ob die
+    /// Gegenseite selbst komprimiert, entscheidet sie unabhaengig davon.
     /// </summary>
     public static async Task WriteMessageAsync(
         Stream stream, MessageType type, IMessage message, CancellationToken ct)
@@ -74,7 +74,7 @@ public static class BepFraming
 
     /// <summary>
     /// Syncthing nutzt das LZ4-<em>Block</em>format mit vorangestellter
-    /// Originalgroesse als uint32 BE -- nicht das Frame-Format.
+    /// Originalgroesse als uint32 BE. Das Frame-Format wird nicht verwendet.
     /// </summary>
     private static byte[] DecompressLz4(byte[] compressed)
     {
