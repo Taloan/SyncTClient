@@ -251,8 +251,8 @@
                             Binding="{Binding FilesText}" SortMemberPath="FilesValue" />
         <DataGridTextColumn x:Name="ColThumbs" Header="{DynamicResource S.Col.Thumbs}" Width="110" Visibility="Collapsed"
                             Binding="{Binding ThumbsText}" SortMemberPath="ThumbsValue" />
-        <DataGridTextColumn x:Name="ColBudget" Header="{DynamicResource S.Col.Budget}" Width="110" Visibility="Collapsed"
-                            Binding="{Binding BudgetText}" SortMemberPath="BudgetValue" />
+        <DataGridTextColumn x:Name="ColLimit" Header="{DynamicResource S.Col.Limit}" Width="110" Visibility="Collapsed"
+                            Binding="{Binding LimitText}" SortMemberPath="LimitValue" />
         <DataGridTextColumn x:Name="ColMode" Header="{DynamicResource S.Col.Mode}" Width="130" Visibility="Collapsed"
                             Binding="{Binding ModeText}" />
         <DataGridTextColumn x:Name="ColLast" Header="{DynamicResource S.Col.LastTransfer}" Width="130" Visibility="Collapsed"

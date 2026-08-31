@@ -26,7 +26,7 @@
   <s:String x:Key="S.Col.LocalSize">Local size</s:String>
   <s:String x:Key="S.Col.Files">Files</s:String>
   <s:String x:Key="S.Col.Thumbs">Thumbnails</s:String>
-  <s:String x:Key="S.Col.Budget">Cache budget</s:String>
+  <s:String x:Key="S.Col.Limit">Usage limit</s:String>
   <s:String x:Key="S.Col.Mode">Mode</s:String>
   <s:String x:Key="S.Col.LastTransfer">Last transfer</s:String>
   <s:String x:Key="S.Col.Peer">Remote device</s:String>
@@ -115,7 +115,7 @@
   <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
   <s:String x:Key="S.Settings.CacheDir">Cache directory</s:String>
   <s:String x:Key="S.Settings.CacheDirHint">This directory holds the shares themselves. Windows fills the placeholders in place; when the space is freed again, the placeholder remains. Not everything in here is cache: pinned files and shares in “keep fully local” mode are kept. New shares are created here, ones already connected stay where they are.</s:String>
-  <s:String x:Key="S.Settings.Budget">Cache budget (GB)</s:String>
+  <s:String x:Key="S.Settings.CacheLimit">Usage limit (GB)</s:String>
   <s:String x:Key="S.Settings.MinFree">Minimum free space (GB)</s:String>
   <s:String x:Key="S.Settings.LimitsHint">Two limits apply; whichever is reached first takes effect. When a limit is exceeded, the space of the files that went unopened longest is freed — across all shares. Pinned files and shares in “keep fully local” mode are kept. For free space, 0 means no limit.</s:String>
   <s:String x:Key="S.Settings.ClearCache">Clear cache now …</s:String>
@@ -159,7 +159,7 @@ Use this folder anyway?</s:String>
 {1} should stay free</s:String>
   <s:String x:Key="M.Free">{0} free on {1}</s:String>
   <s:String x:Key="M.CacheOf">{0} of {1} used</s:String>
-  <s:String x:Key="M.CacheNoBudget">{0} used, no budget set</s:String>
+  <s:String x:Key="M.CacheNoLimit">{0} used, no usage limit set</s:String>
   <s:String x:Key="M.Previews">{0} thumbnails ({1})</s:String>
   <s:String x:Key="M.UsedUnknown">In use: unknown, because no share is active. Plus {0}.</s:String>
   <s:String x:Key="M.Used">In use: {0} in {1} files, plus {2}.</s:String>
@@ -205,8 +205,8 @@ Files already downloaded are kept.</s:String>
   <s:String x:Key="D.QrFailed">QR code cannot be drawn: {0}</s:String>
   <s:String x:Key="D.AutostartFailed">The autostart entry could not be changed: {0}</s:String>
   <s:String x:Key="A.NoIndex">No index available. You can only take all or nothing.</s:String>
-  <s:String x:Key="A.HintOnDemand">Only placeholders are created at first. Contents are downloaded the first time you open them and are subject to the program-wide cache budget.</s:String>
-  <s:String x:Key="A.HintAlways">Everything is downloaded right away and kept permanently. The cache budget does not apply to this share.</s:String>
+  <s:String x:Key="A.HintOnDemand">At first only placeholders are created. Contents are downloaded the first time you open them and are subject to the volume’s usage limit.</s:String>
+  <s:String x:Key="A.HintAlways">Everything is downloaded right away and kept permanently. The usage limit does not apply to this share.</s:String>
   <s:String x:Key="A.NoFolder">A local folder is required.</s:String>
   <s:String x:Key="A.PathNotFull">The local folder needs a full path.</s:String>
   <s:String x:Key="A.TreeSummary">{0} files, {1} in total</s:String>
@@ -217,7 +217,7 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="G.ClearTitle">Clear cache</s:String>
   <s:String x:Key="G.Clearing">Clearing …</s:String>
   <s:String x:Key="G.ClearFailed">Clearing failed: {0}</s:String>
-  <s:String x:Key="G.BudgetInvalid">The cache budget must be a whole number in GB, at least 1.</s:String>
+  <s:String x:Key="G.LimitInvalid">The usage limit must be a whole number in GB, at least 1.</s:String>
   <s:String x:Key="G.FreeInvalid">The space to keep free must be a whole number in GB (0 = no limit).</s:String>
   <s:String x:Key="G.ParallelInvalid">The number of parallel block requests must be at least 1.</s:String>
   <s:String x:Key="G.PortInvalid">The port must be between 1 and 65535.</s:String>
@@ -227,8 +227,8 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="N.NotConnected">Offered, but not connected.</s:String>
   <s:String x:Key="N.Running">running …</s:String>
   <s:String x:Key="S2.NoIndex">No index yet. Start the share once.</s:String>
-  <s:String x:Key="S2.CacheOnDemand">The cache budget is program-wide and set under “Settings …”. When it is exceeded, the space of the files that went unopened longest is freed — across all shares. Pinned files are kept.</s:String>
-  <s:String x:Key="S2.CacheAlways">In this mode all contents are kept locally. The program-wide budget does not apply to this share.</s:String>
+  <s:String x:Key="S2.CacheOnDemand">The usage limit applies per volume and is set under “Settings …”. When it is exceeded, the space of the files that went unopened longest is freed — across all shares on that volume. Pinned files are kept.</s:String>
+  <s:String x:Key="S2.CacheAlways">In this mode all contents are kept locally. The usage limit does not apply to this share.</s:String>
   <s:String x:Key="S2.CopiesInvalid">The number of copies must be at least 1.</s:String>
   <s:String x:Key="S2.Summary">{0} files, {1} in total</s:String>
   <s:String x:Key="R.Ready">ready</s:String>
@@ -267,9 +267,9 @@ Discard anyway?</s:String>
   <s:String x:Key="M.NothingThumbs">There were no thumbnails.</s:String>
 
   <s:String x:Key="M.LimitTitle">The file will not be downloaded</s:String>
-  <s:String x:Key="M.LimitBudget">“{0}” is {1} and does not fit into the cache budget of {2}.
+  <s:String x:Key="M.LimitUsage">“{0}” is {1} and does not fit into the usage limit of {2}.
 
-Raise the budget in the settings, or set the share to “keep fully local”. The budget then does not apply to it.</s:String>
+Raise the usage limit in the settings, or set the share to “keep fully local”. The limit then does not apply to it.</s:String>
   <s:String x:Key="M.LimitFree">“{0}” needs {1}. That much cannot be freed without dropping below the limit of {2} free disk space.
 
 Lower the limit in the settings, or make room on the drive.</s:String>

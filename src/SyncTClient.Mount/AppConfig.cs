@@ -7,10 +7,10 @@ namespace SyncTClient.Mount;
 /// <summary>Wie ein Share lokal vorgehalten wird.</summary>
 public enum ShareMode
 {
-    /// <summary>Nur Platzhalter; Inhalte kommen beim Zugriff und unterliegen dem Cache-Budget.</summary>
+    /// <summary>Nur Platzhalter; Inhalte kommen beim Zugriff und unterliegen dem Verbrauchs Limit.</summary>
     OnDemand,
 
-    /// <summary>Alles wird lokal vorgehalten; das Cache-Budget gilt nicht.</summary>
+    /// <summary>Alles wird lokal vorgehalten; das Verbrauchs Limit gilt nicht.</summary>
     AlwaysLocal
 }
 
@@ -486,16 +486,16 @@ public sealed class AppConfig
     /// </summary>
     public PeerConfig? Peer { get; set; }
 
-    private CacheBudget? _budget;
+    private CacheLimits? _limits;
 
     /// <summary>Die Ueberwachung des belegten Platzes.</summary>
     /// <remarks>
-    /// Das Budget bekommt die Grenzen nicht mitgegeben, sondern fragt sie hier
+    /// Das Limit bekommt die Grenzen nicht mitgegeben, sondern fragt sie hier
     /// nach. So wirkt eine Aenderung in den Einstellungen sofort und nicht
     /// erst beim naechsten Start.
     /// </remarks>
     [JsonIgnore]
-    public CacheBudget Cache => _budget ??= new CacheBudget(LimitsFor);
+    public CacheLimits Cache => _limits ??= new CacheLimits(LimitsFor);
 
     [JsonIgnore]
     public string SharesRootOrDefault => string.IsNullOrWhiteSpace(SharesRoot)

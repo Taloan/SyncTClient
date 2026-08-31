@@ -149,7 +149,7 @@ if (args.Contains("--init"))
 
     AppConfig.Template(peerAddress, peerDevice, initialFolder).Save(configPath);
     Console.WriteLine($"Vorlage geschrieben: {Path.GetFullPath(configPath)}");
-    Console.WriteLine("Darin Modus, Cache-Obergrenze und Teilbaum-Auswahl anpassen, dann ohne --init starten.");
+    Console.WriteLine("Darin Modus, Verbrauchs Limit und Teilbaum-Auswahl anpassen, dann ohne --init starten.");
     return 0;
 }
 
@@ -224,13 +224,13 @@ try
     var stop = new TaskCompletionSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
 
-    // Das Budget wird nach jeder Hydration geprueft. Dieser Takt deckt die
+    // Das Limit wird nach jeder Hydration geprueft. Dieser Takt deckt die
     // Faelle ab, in denen von aussen etwas dazukommt.
     while (!stop.Task.IsCompleted)
     {
         var tick = await Task.WhenAny(stop.Task, Task.Delay(TimeSpan.FromMinutes(1), cts.Token));
         if (tick == stop.Task) break;
-        foreach (var share in peers.SelectMany(p => p.Shares)) await share.EnforceBudgetAsync();
+        foreach (var share in peers.SelectMany(p => p.Shares)) await share.EnforceLimitsAsync();
     }
 }
 catch (Exception ex)
@@ -340,7 +340,7 @@ int BlockCheck()
             // Ein dehydrierter Platzhalter wird gezaehlt und nicht gelesen.
             // Ihn zu lesen wuerde ihn herunterladen. Bei einer Bibliothek
             // dieser Groesse waeren das Stunden Uebertragung und ein vielfach
-            // ueberschrittenes Cache-Budget. RECALL_ON_DATA_ACCESS ist das
+            // ueberschrittenes Verbrauchs Limit. RECALL_ON_DATA_ACCESS ist das
             // entscheidende Merkmal. Die beiden anderen Attribute bedeuten
             // ebenfalls, dass die Bytes nicht lokal liegen.
             const uint recallOnDataAccess = 0x0040_0000;

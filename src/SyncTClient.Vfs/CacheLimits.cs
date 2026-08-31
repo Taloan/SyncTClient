@@ -46,7 +46,7 @@ public sealed record VolumeUsage(
 /// Datenträgers hinweg. Zuerst weicht, was seit Monaten niemand geöffnet hat,
 /// und nicht das, was zur gerade wachsenden Freigabe gehört.
 /// </remarks>
-public sealed class CacheBudget
+public sealed class CacheLimits
 {
     private readonly List<HydrationCache> _caches = [];
     private readonly SemaphoreSlim _evictionLock = new(1, 1);
@@ -58,7 +58,7 @@ public sealed class CacheBudget
     /// Grenzen werden nicht mitgegeben, sondern erfragt: sie ändern sich in
     /// den Einstellungen, und ein einmal gemerkter Wert wäre danach falsch.
     /// </param>
-    public CacheBudget(Func<string, VolumeLimits> limits) => _limits = limits;
+    public CacheLimits(Func<string, VolumeLimits> limits) => _limits = limits;
 
     /// <summary>Was auf dem Datenträger dieses Pfades gilt.</summary>
     public VolumeLimits LimitsFor(string path) => _limits(RootOf(path));
@@ -134,8 +134,8 @@ public sealed class CacheBudget
         /// <summary>Keine. Die Datei passt.</summary>
         None,
 
-        /// <summary>Die Datei ist größer als das Limit des Datenträgers.</summary>
-        Budget,
+        /// <summary>Die Datei ist größer als das Verbrauchs Limit des Datenträgers.</summary>
+        Usage,
 
         /// <summary>Es bliebe zu wenig auf dem Datenträger frei.</summary>
         FreeSpace
@@ -157,7 +157,7 @@ public sealed class CacheBudget
 
         // Eine Datei, die allein schon größer ist als das Limit, kann nie
         // bleiben. Daran ändert auch Freigeben nichts.
-        if (grenzen.MaxBytes > 0 && bytes > grenzen.MaxBytes) return Limit.Budget;
+        if (grenzen.MaxBytes > 0 && bytes > grenzen.MaxBytes) return Limit.Usage;
         if (grenzen.MinimumFreeBytes <= 0) return Limit.None;
 
         var free = FreeBytesOn(targetPath);
