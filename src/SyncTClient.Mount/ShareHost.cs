@@ -386,6 +386,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public long IndexTotalBytes { get; private set; }
 
+    /// <summary>
+    /// Der Umfang des Abgleichs: alle Namen, die es auf einer der beiden
+    /// Seiten gibt.
+    /// </summary>
+    /// <remarks>
+    /// Der Nenner fuer den Anteil. Nicht der Index allein, denn eine Datei,
+    /// die nur hier liegt, gehoert auch zum Abgleich -- sie muss noch hinaus.
+    /// </remarks>
+    public int SyncTotal { get; private set; }
+
+    public long SyncTotalBytes { get; private set; }
+
     /// <summary>Wann zuletzt ueber den Ordner gegangen wurde.</summary>
     public DateTime LastScan { get; private set; }
 
@@ -425,7 +437,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Dateien kann die Haelfte des Ordners sein; ein Anteil nach
         // Stueckzahl stuende dann bei 99,9 Prozent und waere trotzdem eine
         // halbe Stunde von fertig entfernt.
-        var gesamt = IndexTotalBytes;
+        var gesamt = SyncTotalBytes;
         var offen = Math.Min(OutstandingBytes, gesamt);
 
         SetPhase(SyncPhase.Abgleich,

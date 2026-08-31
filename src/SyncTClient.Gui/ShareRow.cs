@@ -217,10 +217,15 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     /// Der Gegenstand des Vergleichs. Ohne diese Zeile liesse sich der
     /// Rueckstand darunter nicht einordnen -- 444 offene Dateien sind bei
     /// 500 etwas anderes als bei 150.000.
+    ///
+    /// Genommen wird die Zahl aus demselben Durchgang, aus dem auch die
+    /// beiden Zeilen darunter stammen. Der Index enthaelt auch Verzeichnisse
+    /// und Ausgeschlossenes; eine Zeile, die anders zaehlt als die daneben,
+    /// laedt zu einem Vergleich ein, der nicht aufgeht.
     /// </remarks>
-    public string GlobalText => Share is null
+    public string GlobalText => Share is null || Share.IndexFiles == 0
         ? "—"
-        : App.S("R.CountAndSize", Format.Count(Share.IndexCount), Format.Bytes(Share.IndexBytes));
+        : App.S("R.CountAndSize", Format.Count(Share.IndexFiles), Format.Bytes(Share.IndexTotalBytes));
 
     /// <summary>Was im Ordner steht, Platzhalter eingerechnet.</summary>
     public string LocalText => Share is null
