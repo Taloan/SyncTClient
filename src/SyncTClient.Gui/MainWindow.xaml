@@ -303,8 +303,9 @@
                  Zeilen, und die letzte, die hoechste Rate, wurde am unteren
                  Rand abgeschnitten. -->
             <TextBlock Text="{DynamicResource S.Main.Session}" Style="{StaticResource Kopfzeile}" />
-            <TextBlock FontSize="14" Margin="0,0,0,3" ToolTip="{DynamicResource S.Main.SessionTip}"><Run Text="&#x2193; " FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run x:Name="TotalDown" Text="0 B" Foreground="{DynamicResource Ein}" /><Run Text="   &#x2191; " FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run x:Name="TotalUp" Text="0 B" Foreground="{DynamicResource Aus}" /></TextBlock>
-            <TextBlock FontSize="14"><Run Text="{DynamicResource S.Main.Peak}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text=" " /><Run x:Name="PeakRate" Text="0 B/s" /></TextBlock>
+            <TextBlock FontSize="14" Margin="0,0,0,2" ToolTip="{DynamicResource S.Main.SessionTip}"><Run Text="{DynamicResource S.Main.RecvSince}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text="  " /><Run x:Name="TotalDown" Text="0 B" Foreground="{DynamicResource Ein}" /></TextBlock>
+            <TextBlock FontSize="14" Margin="0,0,0,2" ToolTip="{DynamicResource S.Main.SessionTip}"><Run Text="{DynamicResource S.Main.SentSince}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text="  " /><Run x:Name="TotalUp" Text="0 B" Foreground="{DynamicResource Aus}" /></TextBlock>
+            <TextBlock FontSize="14"><Run Text="{DynamicResource S.Main.Peak}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text="  " /><Run x:Name="PeakRate" Text="0 B/s" /></TextBlock>
           </StackPanel>
 
           <!-- Die Zahlen stehen hier, also gehoert das Aufraeumen auch hierher

@@ -50,8 +50,8 @@
   <s:String x:Key="S.Main.Network">NETWORK</s:String>
   <s:String x:Key="S.Main.Rate">Rate</s:String>
   <s:String x:Key="S.Main.Session">SESSION</s:String>
-  <s:String x:Key="S.Main.RecvSince">Received since start</s:String>
-  <s:String x:Key="S.Main.SentSince">Sent since start</s:String>
+  <s:String x:Key="S.Main.RecvSince">Received</s:String>
+  <s:String x:Key="S.Main.SentSince">Sent</s:String>
   <s:String x:Key="S.Main.Peak">Peak rate</s:String>
   <s:String x:Key="S.Main.Cache">CACHE</s:String>
   <s:String x:Key="S.Main.Preview">THUMBNAILS</s:String>

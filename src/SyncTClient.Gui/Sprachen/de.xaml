@@ -49,8 +49,8 @@
   <s:String x:Key="S.Main.Network">NETZWERK</s:String>
   <s:String x:Key="S.Main.Rate">Rate</s:String>
   <s:String x:Key="S.Main.Session">SITZUNG</s:String>
-  <s:String x:Key="S.Main.RecvSince">Empfangen seit Programmstart</s:String>
-  <s:String x:Key="S.Main.SentSince">Gesendet seit Programmstart</s:String>
+  <s:String x:Key="S.Main.RecvSince">Empfangen</s:String>
+  <s:String x:Key="S.Main.SentSince">Gesendet</s:String>
   <s:String x:Key="S.Main.Peak">Höchste Rate</s:String>
   <s:String x:Key="S.Main.Cache">CACHE</s:String>
   <s:String x:Key="S.Main.Preview">VORSCHAU</s:String>
