@@ -260,6 +260,8 @@ public partial class MainWindow : Window
 
     private void RefreshRows()
     {
+        ApplyPause();
+
         foreach (var peer in _peers) peer.Refresh();
         foreach (var row in _rows) row.Refresh();
         UpdateButtons();
@@ -365,6 +367,45 @@ public partial class MainWindow : Window
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDoubleClickTime();
+
+    /// <summary>
+    /// Haelt den Abgleich an oder setzt ihn fort.
+    /// </summary>
+    /// <remarks>
+    /// Angehalten heisst: keine Inhalte mehr holen. Die Platzhalter bleiben
+    /// stehen, der Index laeuft weiter mit -- sonst waere nach dem Fortsetzen
+    /// erst einmal ein voller Abgleich faellig.
+    /// </remarks>
+    private void OnTogglePauseAll(object? sender = null, RoutedEventArgs? e = null)
+    {
+        _config.Paused = !_config.Paused;
+        Persist();
+
+        ApplyPause();
+        RefreshRows();
+
+        Status(App.S(_config.Paused ? "M.PausedAll" : "M.ResumedAll"));
+    }
+
+    /// <summary>
+    /// Zieht den Modus auf alle Freigaben nach.
+    /// </summary>
+    /// <remarks>
+    /// Laeuft bei jeder Auffrischung und nicht nur beim Umschalten. Eine
+    /// Freigabe, die gerade erst hochfaehrt, laesst sich noch nicht anhalten;
+    /// ohne diese Nachfuehrung liefe sie los, sobald sie bereit ist, und der
+    /// Modus waere eine einmalige Handlung statt einer Einstellung.
+    /// </remarks>
+    private void ApplyPause()
+    {
+        foreach (var share in _rows.Select(r => r.Share).OfType<ShareHost>())
+        {
+            if (_config.Paused) share.Pause();
+            else share.Resume();
+        }
+
+        PauseAllButton.Content = App.S(_config.Paused ? "S.Main.ResumeAll" : "S.Main.PauseAll");
+    }
 
     private void OnShareSelected(object sender, SelectionChangedEventArgs e)
     {
@@ -1265,7 +1306,7 @@ public partial class MainWindow : Window
     {
         if (_config.CloseToTray)
         {
-            _tray ??= new TrayIcon(this, Quit);
+            _tray ??= new TrayIcon(this, Quit, () => OnTogglePauseAll());
         }
         else
         {

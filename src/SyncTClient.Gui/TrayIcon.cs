@@ -109,6 +109,7 @@ public sealed class TrayIcon : IDisposable
     private readonly Action _exit;
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ToolStripMenuItem _open = new();
+    private readonly Forms.ToolStripMenuItem _pause = new();
     private readonly Forms.ToolStripMenuItem _quit = new();
     private readonly TrayBadge _plaketten = new();
 
@@ -116,16 +117,20 @@ public sealed class TrayIcon : IDisposable
 
     /// <param name="window">Das Fenster, das gezeigt und geholt wird.</param>
     /// <param name="exit">Was "Beenden" ausloest. Diese Klasse beendet selbst nichts.</param>
-    public TrayIcon(Window window, Action exit)
+    /// <param name="togglePause">Haelt den Abgleich an oder setzt ihn fort.</param>
+    public TrayIcon(Window window, Action exit, Action togglePause)
     {
         _window = window;
         _exit = exit;
 
         _open.Click += (_, _) => Restore();
+        _pause.Click += (_, _) => togglePause();
         _quit.Click += (_, _) => _exit();
 
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add(_open);
+        menu.Items.Add(_pause);
+        menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add(_quit);
 
         _icon = new Forms.NotifyIcon
@@ -166,6 +171,7 @@ public sealed class TrayIcon : IDisposable
     public void Translate()
     {
         _open.Text = App.S("S.Tray.Open");
+        _pause.Text = App.S(_status == TrayStatus.Pausiert ? "S.Tray.Resume" : "S.Tray.Pause");
         _quit.Text = App.S("S.Tray.Quit");
         _icon.Text = Beschriftung(_status);
     }
@@ -184,6 +190,7 @@ public sealed class TrayIcon : IDisposable
         _status = status;
         _icon.Icon = Zeichen(status);
         _icon.Text = Beschriftung(status);
+        _pause.Text = App.S(status == TrayStatus.Pausiert ? "S.Tray.Resume" : "S.Tray.Pause");
     }
 
     /// <summary>

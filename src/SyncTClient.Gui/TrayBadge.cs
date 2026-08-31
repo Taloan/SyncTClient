@@ -62,9 +62,13 @@ public sealed class TrayBadge : IDisposable
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
+            // Das Programmsymbol bekommt nicht die ganze Flaeche. Es rueckt
+            // nach links oben und macht rechts unten Platz -- sonst muesste
+            // die Plakette entweder klein bleiben oder das Symbol verdecken.
+            var eigen = (int)(arbeit * 0.84f);
             using (var basis = Basis(arbeit))
             {
-                if (basis is not null) g.DrawImage(basis, 0, 0, arbeit, arbeit);
+                if (basis is not null) g.DrawImage(basis, 0, 0, eigen, eigen);
             }
 
             Plakette(g, status, arbeit);
@@ -119,16 +123,20 @@ public sealed class TrayBadge : IDisposable
     {
         var (grund, zeichen) = Farben(status);
 
-        // Rechts unten, etwas über die Ecke hinausragend -- so wie es
-        // OneDrive und Nextcloud auch halten.
-        var durchmesser = flaeche * 0.56f;
-        var links = flaeche - durchmesser;
-        var oben = flaeche - durchmesser;
-        var feld = new RectangleF(links, oben, durchmesser, durchmesser);
+        // Rechts unten, buendig mit dem Rand. Gross genug, dass das Zeichen
+        // darin bei 16 Punkten noch Form hat: bei kleinerer Plakette blieben
+        // dafuer keine fuenf Punkte uebrig.
+        // Buendig in der rechten unteren Ecke, so weit aussen wie moeglich.
+        // Weiter ginge nur ueber den Rand hinaus, und dort wuerde der Kreis
+        // abgeschnitten.
+        var durchmesser = flaeche * 0.62f;
+        var feld = new RectangleF(
+            flaeche - durchmesser, flaeche - durchmesser, durchmesser, durchmesser);
 
-        // Ein heller Ring trennt die Plakette vom Symbol darunter. Ohne ihn
-        // verschwimmt eine grüne Plakette auf dem grünen Pfeil.
-        using (var ring = new Pen(Color.FromArgb(235, 255, 255, 255), flaeche * 0.045f))
+        // Dunkler Ring statt hellem. Der helle trennte die Plakette zwar vom
+        // Symbol, verschwand aber auf einer hellen Taskleiste; der dunkle
+        // traegt auf beiden.
+        using (var ring = new Pen(Color.FromArgb(225, 26, 30, 34), flaeche * 0.05f))
         {
             using var fuellung = new SolidBrush(grund);
             g.FillEllipse(fuellung, feld);
