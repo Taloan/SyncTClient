@@ -218,6 +218,11 @@ public partial class MainWindow : Window
 
         // Die Oberflaeche ist zugleich der Sync-Dienst. Wer sie oeffnet, will
         // in aller Regel, dass der Abgleich laeuft.
+        // Angehalten heisst angehalten -- auch ueber einen Neustart hinweg.
+        // Sonst waere der Zustand nach dem naechsten Start wieder aufgehoben,
+        // ohne dass jemand ihn aufgehoben haette.
+        if (_config.Paused) return;
+
         foreach (var item in _peers.Where(p => p.Config.AutoConnect).ToList())
             await ConnectAsync(item);
     }
@@ -409,6 +414,44 @@ public partial class MainWindow : Window
         }
 
         PauseAllButton.Content = App.S(_config.Paused ? "S.Main.ResumeAll" : "S.Main.PauseAll");
+        _ = ApplyPauseToPeersAsync();
+    }
+
+    /// <summary>
+    /// Trennt beim Anhalten die Leitungen und baut sie beim Fortsetzen wieder
+    /// auf.
+    /// </summary>
+    /// <remarks>
+    /// "Alles anhalten" soll heissen: kein Datenverkehr. Die Ankuendigungen
+    /// der Gegenstelle sind zwar klein, aber sie sind Verkehr, und wer wegen
+    /// einer knappen Leitung anhaelt, hat kein Interesse an Ausnahmen.
+    ///
+    /// Eine einzelne angehaltene Freigabe trennt dagegen nichts: die Leitung
+    /// gehoert der Gegenstelle und nicht dem Ordner, und die uebrigen Ordner
+    /// derselben Gegenstelle laufen weiter.
+    /// </remarks>
+    private async Task ApplyPauseToPeersAsync()
+    {
+        foreach (var item in _peers.ToList())
+        {
+            try
+            {
+                if (_config.Paused)
+                {
+                    if (item.Host.State == PeerState.Verbunden) await item.Host.SuspendAsync();
+                }
+                else if (item.Config.AutoConnect && item.Host.State == PeerState.Getrennt)
+                {
+                    await ConnectAsync(item);
+                }
+            }
+            catch (Exception ex)
+            {
+                Status($"[{item.Display}] {ex.Message}");
+            }
+        }
+
+        RebuildRows();
     }
 
     /// <summary>Klappt die Zeile auf oder zu.</summary>

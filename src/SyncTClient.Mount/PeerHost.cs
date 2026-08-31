@@ -315,6 +315,15 @@ public sealed class PeerHost : IAsyncDisposable
         // geht in die Ankuendigung ein.
         foreach (var share in shares)
         {
+            // Nach einem Anhalten steht der Ordner noch. Dann bekommt er nur
+            // die neue Leitung; ihn ein zweites Mal aufzubauen hiesse,
+            // Sync-Root und Platzhalter neben die bestehenden zu setzen.
+            if (_shares.TryGetValue(share.FolderId, out var bestehend))
+            {
+                bestehend.Rebind(connection);
+                continue;
+            }
+
             // Die eigene Geraete-ID gehoert in jede eigene Ankuendigung: in
             // modified_by und in den eigenen Zaehler des Versionsvektors.
             var host2 = new ShareHost(share, _app, _log) { OwnDeviceId = _identity.Id };
@@ -328,6 +337,9 @@ public sealed class PeerHost : IAsyncDisposable
 
         foreach (var share in _shares.Values)
         {
+            // Ein Ordner, der schon steht, ist mit der neuen Leitung fertig.
+            if (share.State != ShareState.Gestoppt) continue;
+
             try { await share.StartAsync(connection, token); }
             catch (Exception ex) { _log($"[{share.FolderId}] {ex.Message}"); }
         }
@@ -599,6 +611,34 @@ public sealed class PeerHost : IAsyncDisposable
     {
         Offered = Offered.Select(o => o with { Accepted = _shares.ContainsKey(o.FolderId) }).ToList();
         OfferedChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Legt die Leitung still und laesst die Ordner stehen.
+    /// </summary>
+    /// <remarks>
+    /// Fuer das Anhalten. Trennen wuerde die Sync-Roots aushaengen; dann
+    /// haengt der Explorer an jedem Platzhalter, den jemand anfasst, und der
+    /// Hintergrundlauf hoerte auf, lokal zu indexieren. Angehalten soll
+    /// heissen: keine Leitung -- nicht: kein Ordner.
+    /// </remarks>
+    public async Task SuspendAsync()
+    {
+        if (State != PeerState.Verbunden) return;
+
+        foreach (var share in _shares.Values) share.DropConnection();
+
+        if (_cts is not null) await _cts.CancelAsync();
+
+        if (_connection is not null)
+        {
+            await _connection.DisposeAsync();
+            _connection = null;
+        }
+
+        _readLoop = null;
+        State = PeerState.Getrennt;
+        _log($"[{Display}] Leitung getrennt, Ordner bleiben eingehaengt.");
     }
 
     public async Task DisconnectAsync()
