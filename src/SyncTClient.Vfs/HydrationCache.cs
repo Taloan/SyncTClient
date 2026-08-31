@@ -61,7 +61,7 @@ public sealed class HydrationCache
     }
 
     /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
-    public long MaxBytes => _budget?.MaxBytes ?? 0;
+    public long MaxBytes => _budget?.LimitsFor(RootPath).MaxBytes ?? 0;
 
     /// <summary>
     /// Meldet diesen Cache vom Budget ab. Die Freigabe laeuft nicht mehr.

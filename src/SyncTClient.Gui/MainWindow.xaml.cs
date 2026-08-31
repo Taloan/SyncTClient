@@ -163,6 +163,7 @@ public partial class MainWindow : Window
             SharesRoot = _config.SharesRoot,
             CacheMaxBytes = _config.CacheMaxBytes,
             MinimumFreeBytes = _config.MinimumFreeBytes,
+            VolumeLimits = _config.VolumeLimits,
             Discovery = _config.Discovery,
             Relays = _config.Relays,
             DiscoveryServers = _config.DiscoveryServers,
@@ -490,24 +491,47 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Es gibt nur einen Cache. Die Anzeige zeigt darum die Summe und nicht
-    /// die gerade ausgewaehlte Zeile.
+    /// Der Fuellstand in der Fussleiste.
     /// </summary>
+    /// <remarks>
+    /// Gezeigt wird der Datentraeger, der seiner Grenze am naechsten ist --
+    /// also der, auf dem als naechstes etwas weichen muss. Eine Summe ueber
+    /// alle Laufwerke waere die falsche Zahl: sie kann harmlos aussehen,
+    /// waehrend eine einzelne Platte schon verdraengt.
+    ///
+    /// Bei nur einem Laufwerk ist das dasselbe wie vorher, und die Zeile
+    /// bleibt so knapp wie zuvor.
+    /// </remarks>
     private void UpdateCache()
     {
-        var used = _rows.Select(r => r.Share).OfType<ShareHost>().Sum(s => s.CacheUsedBytes);
-        var max = _config.CacheMaxBytes;
+        var volumes = _config.Cache.Volumes;
+        var used = volumes.Sum(v => v.UsedBytes);
+        var voll = volumes
+            .Where(v => v.MaxBytes > 0)
+            .OrderByDescending(v => (double)v.UsedBytes / v.MaxBytes)
+            .FirstOrDefault();
 
-        if (max > 0)
+        if (voll is not null)
         {
-            CacheBar.Value = Math.Min(100, 100.0 * used / max);
-            CacheText.Text = App.S("M.CacheOf", Format.Bytes(used), Format.Bytes(max));
+            CacheBar.Value = Math.Min(100, 100.0 * voll.UsedBytes / voll.MaxBytes);
+            CacheText.Text = App.S("M.CacheOf", Format.Bytes(voll.UsedBytes), Format.Bytes(voll.MaxBytes));
+
+            // Erst wenn es mehrere gibt, muss dabeistehen, welches gemeint
+            // ist. Bei einem einzigen waere die Angabe nur Ballast.
+            if (volumes.Count > 1)
+                CacheText.Text = voll.Root.TrimEnd(Path.DirectorySeparatorChar) + " " + CacheText.Text;
         }
         else
         {
             CacheBar.Value = 0;
             CacheText.Text = App.S("M.CacheNoBudget", Format.Bytes(used));
         }
+
+        CacheText.ToolTip = volumes.Count > 1
+            ? string.Join(Environment.NewLine, volumes.Select(v =>
+                $"{v.Root.TrimEnd(Path.DirectorySeparatorChar)} {Format.Bytes(v.UsedBytes)}" +
+                (v.MaxBytes > 0 ? $" / {Format.Bytes(v.MaxBytes)}" : "")))
+            : null;
 
         UpdateFreeSpace();
     }
@@ -531,9 +555,8 @@ public partial class MainWindow : Window
         // Ohne Laufwerk ist die Zahl nicht einzuordnen.
         var drive = Path.GetPathRoot(Path.GetFullPath(root))?.TrimEnd(Path.DirectorySeparatorChar) ?? root;
         FreeText.Text = App.S("M.Free", Format.Bytes(free), drive);
-        FreeText.ToolTip = _config.MinimumFreeBytes > 0
-            ? App.S("M.FreeShould", root, Format.Bytes(_config.MinimumFreeBytes))
-            : root;
+        var soll = _config.LimitsFor(Path.GetPathRoot(Path.GetFullPath(root)) ?? root).MinimumFreeBytes;
+        FreeText.ToolTip = soll > 0 ? App.S("M.FreeShould", root, Format.Bytes(soll)) : root;
     }
 
     private void UpdateThumbnails()
