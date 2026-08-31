@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Windows;
@@ -50,6 +51,11 @@ public partial class MainWindow : Window
     private DateTime _thumbsRead = DateTime.MinValue;
 
     private ShareRow? _row;
+
+    private ContextMenu? _columnMenu;
+
+    /// <summary>Welcher Menueintrag zu welcher Spalte gehoert.</summary>
+    private readonly List<(DataGridColumn Column, MenuItem Item)> _columnItems = [];
 
     private MenuItem _menuConnect = new();
     private MenuItem _menuPause = new();
@@ -328,7 +334,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        FreeText.Text = App.S("M.Free", Format.Bytes(free));
+        // Ohne Laufwerk ist die Zahl nicht einzuordnen.
+        var drive = Path.GetPathRoot(Path.GetFullPath(root))?.TrimEnd(Path.DirectorySeparatorChar) ?? root;
+        FreeText.Text = App.S("M.Free", Format.Bytes(free), drive);
         FreeText.ToolTip = _config.MinimumFreeBytes > 0
             ? App.S("M.FreeShould", root, Format.Bytes(_config.MinimumFreeBytes))
             : root;
@@ -343,7 +351,7 @@ public partial class MainWindow : Window
             .Select(s => s.ThumbnailUsage())
             .Aggregate((Count: 0, Bytes: 0L), (a, b) => (a.Count + b.Count, a.Bytes + b.Bytes));
 
-        ThumbText.Text = $"{Format.Count(count)} / {Format.Bytes(bytes)}";
+        ThumbText.Text = App.S("M.PreviewShort", Format.Count(count), Format.Bytes(bytes));
         ThumbText.ToolTip = _config.ThumbnailDirectory;
     }
 
@@ -358,15 +366,33 @@ public partial class MainWindow : Window
     /// Name und Status bleiben immer sichtbar. Ohne Bezeichnung und ohne
     /// Zustand waere die Tabelle nur noch eine Ansammlung von Zahlen.
     /// </remarks>
+    /// <summary>
+    /// Die Beschriftung einer Spalte im Klartext.
+    /// </summary>
+    /// <remarks>
+    /// Der Kopf mancher Spalten ist ein gezeichnetes Symbol. Als Menueintrag
+    /// taugt es nicht, und dasselbe Element liesse sich ohnehin nicht an zwei
+    /// Stellen zugleich einhaengen. Was das Symbol bedeutet, steht in seinem
+    /// Tooltip -- dort wird es abgeholt.
+    /// </remarks>
+    private static string ColumnLabel(DataGridColumn column) => column.Header switch
+    {
+        string text => text,
+        FrameworkElement element when element.ToolTip is string hint => hint,
+        FrameworkElement element when element.ToolTip is TextBlock block => block.Text,
+        _ => column.SortMemberPath ?? ""
+    };
+
     private void BuildColumnMenu()
     {
         var menu = new ContextMenu();
+        _columnItems.Clear();
 
         foreach (var column in ShareGrid.Columns.Skip(2))
         {
             var item = new MenuItem
             {
-                Header = column.Header,
+                Header = ColumnLabel(column),
                 IsCheckable = true,
                 IsChecked = column.Visibility == Visibility.Visible,
                 StaysOpenOnClick = true
@@ -380,6 +406,7 @@ public partial class MainWindow : Window
             };
 
             menu.Items.Add(item);
+            _columnItems.Add((column, item));
         }
 
         // An die Kopfzeile, nicht an das ganze Gitter. Ein Rechtsklick auf
@@ -390,6 +417,7 @@ public partial class MainWindow : Window
             : new Style(typeof(DataGridColumnHeader), basis);
 
         kopfzeile.Setters.Add(new Setter(ContextMenuProperty, menu));
+        _columnMenu = menu;
         ShareGrid.ColumnHeaderStyle = kopfzeile;
     }
 
@@ -446,14 +474,44 @@ public partial class MainWindow : Window
 
     private string ColumnFile => Path.Combine(HomeDirectory, "gui-spalten.txt");
 
+    /// <summary>
+    /// Sichtbarkeit, Breite und Reihenfolge der Spalten.
+    /// </summary>
+    /// <remarks>
+    /// Je Zeile eine Spalte, durch Tabulatoren getrennt: laufende Nummer,
+    /// sichtbar, Breite, Position. Die Breite ist eine Zahl in Punkten oder
+    /// ein Stern fuer die Spalte, die den Rest ausfuellt.
+    ///
+    /// Die laufende Nummer ist die Reihenfolge, in der die Spalten angelegt
+    /// sind, nicht ihre Position auf dem Schirm. Frueher stand hier der
+    /// Kopftext. Das ging so lange gut, wie jede Spalte einen hatte: seit
+    /// einige ein gezeichnetes Symbol tragen, heissen zwei von ihnen gleich,
+    /// und beim Lesen stiessen zwei Zeilen mit demselben Schluessel
+    /// aufeinander. Der Kopftext taugte ohnehin nicht, denn er wechselt mit
+    /// der Sprache.
+    ///
+    /// Aeltere Dateien werden verworfen. Ihre Zeilen beginnen nicht mit einer
+    /// Zahl, und ein Spaltenlayout ist kein Verlust, der eine Umrechnung
+    /// lohnt.
+    /// </remarks>
     private void SaveColumns()
     {
         try
         {
             Directory.CreateDirectory(HomeDirectory);
-            File.WriteAllLines(ColumnFile, ShareGrid.Columns
-                .Where(c => c.Visibility != Visibility.Visible)
-                .Select(c => c.Header?.ToString() ?? ""));
+
+            File.WriteAllLines(ColumnFile, ShareGrid.Columns.Select((column, nummer) =>
+            {
+                var width = column.Width.IsStar
+                    ? "*"
+                    : ((int)Math.Round(column.ActualWidth)).ToString(CultureInfo.InvariantCulture);
+
+                return string.Join('\t',
+                    nummer.ToString(CultureInfo.InvariantCulture),
+                    column.Visibility == Visibility.Visible ? "1" : "0",
+                    width,
+                    column.DisplayIndex.ToString(CultureInfo.InvariantCulture));
+            }));
         }
         catch (IOException) { /* die Spaltenauswahl wird dann beim naechsten Mal geschrieben */ }
     }
@@ -464,43 +522,63 @@ public partial class MainWindow : Window
 
         try
         {
-            var hidden = new HashSet<string>(File.ReadAllLines(ColumnFile), StringComparer.Ordinal);
+            var stored = new Dictionary<int, string[]>();
 
-            foreach (var column in ShareGrid.Columns.Skip(2))
-                column.Visibility = hidden.Contains(column.Header?.ToString() ?? "")
-                    ? Visibility.Collapsed
-                    : Visibility.Visible;
+            foreach (var line in File.ReadAllLines(ColumnFile))
+            {
+                var parts = line.Split('\t');
 
-            if (ShareGrid.ContextMenu is not null)
-                foreach (var item in ShareGrid.ContextMenu.Items.OfType<MenuItem>())
-                    item.IsChecked = !hidden.Contains(item.Header?.ToString() ?? "");
+                if (parts.Length < 4
+                    || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var nummer)
+                    || nummer < 0 || nummer >= ShareGrid.Columns.Count)
+                {
+                    // Eine Datei aus einer aelteren Fassung. Die Vorgabe bleibt.
+                    return;
+                }
+
+                stored[nummer] = parts;
+            }
+
+            // Nach gespeicherter Position sortiert zuweisen. DataGrid schiebt
+            // beim Setzen von DisplayIndex die uebrigen Spalten weiter; in
+            // aufsteigender Reihenfolge bleibt das Ergebnis vorhersagbar.
+            foreach (var (nummer, parts) in stored.OrderBy(e =>
+                         int.Parse(e.Value[3], CultureInfo.InvariantCulture)))
+            {
+                var column = ShareGrid.Columns[nummer];
+
+                // Name und Status bleiben immer sichtbar.
+                if (nummer >= 2)
+                    column.Visibility = parts[1] == "1" ? Visibility.Visible : Visibility.Collapsed;
+
+                if (parts[2] == "*")
+                    column.Width = new DataGridLength(1, DataGridLengthUnitType.Star);
+                else if (double.TryParse(parts[2], NumberStyles.Number, CultureInfo.InvariantCulture, out var width)
+                         && width >= 20)
+                    column.Width = new DataGridLength(width);
+
+                if (int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var index)
+                    && index >= 0 && index < ShareGrid.Columns.Count)
+                {
+                    try { column.DisplayIndex = index; }
+                    catch (ArgumentException) { /* Reihenfolge bleibt, wie sie ist */ }
+                }
+            }
+
+            UpdateColumnMenu();
         }
-        catch (IOException) { /* Standardspalten bleiben */ }
+        catch (Exception ex) when (ex is IOException or FormatException or ArgumentException)
+        {
+            // Ein Spaltenlayout ist kein Grund, das Fenster nicht zu oeffnen.
+        }
     }
 
-    // ------------------------------------------------------------ Einklappen
-
-    /// <summary>Wie hoch der Bereich stand, bevor er eingeklappt wurde.</summary>
-    private GridLength _transferHeight = new(170);
-
-    private void OnTransfersToggled(object sender, RoutedEventArgs e)
+    private void UpdateColumnMenu()
     {
-        // Die Zeile muss mitgehen. Sonst bliebe ein leerer Streifen stehen,
-        // und der Ziehgriff haette nichts mehr zu ziehen.
-        if (TransferRow is null || Splitter is null) return;
-
-        if (TransferPanel.IsExpanded)
-        {
-            TransferRow.Height = _transferHeight;
-            Splitter.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            if (TransferRow.Height.IsAbsolute) _transferHeight = TransferRow.Height;
-            TransferRow.Height = GridLength.Auto;
-            Splitter.Visibility = Visibility.Collapsed;
-        }
+        foreach (var (column, item) in _columnItems)
+            item.IsChecked = column.Visibility == Visibility.Visible;
     }
+
 
     /// <summary>
     /// Was der Cache gerade hält.
@@ -955,20 +1033,35 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Der Doppelklick verbindet einen noch nicht verbundenen Ordner und
-    /// öffnet einen verbundenen.
+    /// Der Doppelklick öffnet die Einstellungen des Shares.
     /// </summary>
+    /// <remarks>
+    /// Bei einem noch nicht verbundenen Share ist das der Verbinden-Dialog.
+    /// Er stellt dieselben Fragen, nur zum ersten Mal. Den Ordner öffnet der
+    /// Verweis in der Spalte "Ordner".
+    /// </remarks>
     private void OnGridDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (_row is null) return;
 
-        if (_row.Accepted) OnOpenFolder(sender, e);
+        if (_row.Accepted) OnShowSettings(sender, e);
         else OnAcceptFolder(sender, e);
     }
 
-    private void OnOpenFolder(object sender, RoutedEventArgs e)
+    /// <summary>Der Verweis in der Spalte "Ordner".</summary>
+    private void OnOpenPath(object sender, RoutedEventArgs e)
     {
-        var path = _row?.Share?.Config.LocalPath;
+        // Der Klick kommt aus einer Zelle. Gemeint ist deren Zeile, nicht
+        // zwangsläufig die ausgewählte.
+        if ((sender as System.Windows.Documents.Hyperlink)?.DataContext is ShareRow row)
+            OpenFolder(row.Share?.Config.LocalPath);
+    }
+
+    private void OnOpenFolder(object sender, RoutedEventArgs e)
+        => OpenFolder(_row?.Share?.Config.LocalPath);
+
+    private void OpenFolder(string? path)
+    {
         if (string.IsNullOrEmpty(path)) return;
 
         if (!Directory.Exists(path))
@@ -1161,6 +1254,7 @@ public partial class MainWindow : Window
 
         _refresh.Stop();
         _meter?.Dispose();
+        SaveColumns();
 
         await StopNetworkAsync();
         await _cts.CancelAsync();

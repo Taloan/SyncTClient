@@ -31,7 +31,11 @@ public partial class ShareSettingsWindow : Window
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
         MinimumCopiesBox.Text = share.MinimumCopies.ToString();
+        ConflictBox.SelectedIndex = (int)share.Conflict;
         ThumbsBox.IsChecked = share.GenerateThumbnails;
+        KeepVersionsBox.IsChecked = share.KeepVersions;
+        VersionDaysBox.Text = share.VersionDays.ToString();
+        UpdateVersionFields();
         UpdateCacheEnabled();
         _loading = false;
 
@@ -91,9 +95,14 @@ public partial class ShareSettingsWindow : Window
         var onDemand = ModeBox.SelectedIndex == 0;
         CopiesPanel.IsEnabled = onDemand;
 
-        CacheHint.Text = onDemand
-            ? App.S("S2.CacheOnDemand")
-            : App.S("S2.CacheAlways");
+        // Als Tooltip statt als Absatz im Fenster. Die Erklaerung wird
+        // einmal gelesen, die Einstellung oft benutzt.
+        ModeBox.ToolTip = new TextBlock
+        {
+            Text = onDemand ? App.S("S2.CacheOnDemand") : App.S("S2.CacheAlways"),
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 420
+        };
     }
 
     private void OnSelectAll(object sender, RoutedEventArgs e)
@@ -108,7 +117,22 @@ public partial class ShareSettingsWindow : Window
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        if (!int.TryParse(MinimumCopiesBox.Text.Trim(), out var copies) || copies < 0)
+        // Ohne Sicherung bleibt der bisherige Wert stehen. Das Feld ist dann
+        // abgeschaltet und sein Inhalt ohne Bedeutung.
+        var days = _share.VersionDays;
+
+        if (KeepVersionsBox.IsChecked == true
+            && (!int.TryParse(VersionDaysBox.Text.Trim(), out days) || days < 1))
+        {
+            MessageBox.Show(this, App.S("S2.DaysInvalid"), Title,
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            VersionDaysBox.Focus();
+            return;
+        }
+
+        if (KeepVersionsBox.IsChecked != true) days = _share.VersionDays;
+
+        if (!int.TryParse(MinimumCopiesBox.Text.Trim(), out var copies) || copies < 1)
         {
             SaveHint.Text = App.S("S2.CopiesInvalid");
             return;
@@ -117,7 +141,10 @@ public partial class ShareSettingsWindow : Window
         _share.MinimumCopies = copies;
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
+        _share.Conflict = (ConflictResolution)Math.Max(0, ConflictBox.SelectedIndex);
         _share.GenerateThumbnails = ThumbsBox.IsChecked == true;
+        _share.KeepVersions = KeepVersionsBox.IsChecked == true;
+        _share.VersionDays = days;
 
         if (_tree is not null)
         {
@@ -143,5 +170,13 @@ public partial class ShareSettingsWindow : Window
         foreach (var child in node.Children)
             foreach (var path in AllPaths(child))
                 yield return path;
+    }
+    private void OnKeepVersionsChanged(object sender, RoutedEventArgs e) => UpdateVersionFields();
+
+    private void UpdateVersionFields()
+    {
+        var an = KeepVersionsBox.IsChecked == true;
+        VersionDaysLabel.IsEnabled = an;
+        VersionDaysBox.IsEnabled = an;
     }
 }
