@@ -425,6 +425,40 @@ public sealed class AppConfig
     /// zurueckschreibt. Die Konsole schreibt nicht zurueck und darf den
     /// Eintrag deshalb hier ersetzen.
     /// </remarks>
+    /// <summary>
+    /// Wo die Konfiguration liegt, wenn niemand etwas anderes sagt.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Faelle, in dieser Reihenfolge:
+    ///
+    /// Liegt eine <c>synct.json</c> beim Programm oder darueber, gilt sie.
+    /// Das ist der tragbare Fall -- Entwicklungsbaum, USB-Stick, ein Ordner,
+    /// den man mitnimmt.
+    ///
+    /// Sonst <c>%LOCALAPPDATA%\SyncTClient</c>. Unter <c>C:\Program Files</c>
+    /// darf ein gewoehnlicher Benutzer nicht schreiben; eine installierte
+    /// Fassung koennte dort weder Zertifikat noch Index anlegen.
+    ///
+    /// Bewusst <em>Local</em> und nicht das wandernde <c>%APPDATA%</c>: das
+    /// Geraetezertifikat ist die Kennung genau dieses Rechners. Wanderte es
+    /// mit, traeten zwei Rechner im Verbund unter derselben Kennung auf. Und
+    /// Index und Vorschaubilder gehen in die hunderte Megabyte -- die will
+    /// niemand bei jeder Anmeldung ueber das Netz schieben.
+    /// </remarks>
+    public static string DefaultConfigPath()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        for (var i = 0; i < 6 && directory is not null; i++, directory = directory.Parent)
+        {
+            var candidate = Path.Combine(directory.FullName, "synct.json");
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SyncTClient", "synct.json");
+    }
+
     public void ResolveAgainst(string configPath)
     {
         var directory = Path.GetDirectoryName(Path.GetFullPath(configPath));
