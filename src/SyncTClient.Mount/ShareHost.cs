@@ -509,16 +509,19 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (!_config.GenerateThumbnails || _syncRootId is null || _thumbnails is null) return;
 
-        var library = ThumbnailProviderRegistration.FindLibrary();
-        if (library is null)
-        {
-            _log($"[{FolderId}] synctthumbs.dll nicht gefunden -- keine Vorschaubilder im Explorer.");
-            return;
-        }
-
         try
         {
-            ThumbnailProviderRegistration.RegisterClass(library, _thumbnails.Directory);
+            ThumbnailProviderRegistration.RegisterStore(_thumbnails.Directory);
+
+            // Die DLL ist die Zugabe, nicht die Bedingung. Bedient wird die
+            // Shell von der Klasse, die der laufende Client anmeldet -- frueher
+            // stieg diese Methode ohne DLL vorzeitig aus, und damit fielen
+            // auch der Eintrag am Sync-Root und der Erzeuger selbst weg. In
+            // einer veroeffentlichten Fassung waeren so gar keine Vorschauen
+            // entstanden.
+            if (ThumbnailProviderRegistration.FindLibrary() is { } library)
+                ThumbnailProviderRegistration.RegisterClass(library);
+
             if (!ThumbnailProviderRegistration.AttachToSyncRoot(_syncRootId))
                 _log($"[{FolderId}] Vorschau-Erweiterung liess sich nicht am Sync-Root eintragen.");
 

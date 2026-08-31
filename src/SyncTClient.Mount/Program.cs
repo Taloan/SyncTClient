@@ -96,7 +96,8 @@ if (Arg("--register-thumbs") is { } thumbStore)
     }
 
     Directory.CreateDirectory(thumbStore);
-    ThumbnailProviderRegistration.RegisterClass(thumbLibrary, Path.GetFullPath(thumbStore));
+    ThumbnailProviderRegistration.RegisterStore(Path.GetFullPath(thumbStore));
+    ThumbnailProviderRegistration.RegisterClass(thumbLibrary);
     Console.WriteLine($"Klasse:  {ThumbnailProviderRegistration.ClassId} -> {thumbLibrary}");
     Console.WriteLine($"Wirt:    {ThumbnailProviderRegistration.AppId} (DllSurrogate)");
     Console.WriteLine($"Vorrat:  {Path.GetFullPath(thumbStore)}");
@@ -148,7 +149,7 @@ if (args.Contains("--init"))
 
     AppConfig.Template(peerAddress, peerDevice, initialFolder).Save(configPath);
     Console.WriteLine($"Vorlage geschrieben: {Path.GetFullPath(configPath)}");
-    Console.WriteLine("Darin Modus, Cache-Budget und Teilbaum-Auswahl anpassen, dann ohne --init starten.");
+    Console.WriteLine("Darin Modus, Cache-Obergrenze und Teilbaum-Auswahl anpassen, dann ohne --init starten.");
     return 0;
 }
 

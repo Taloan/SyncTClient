@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -36,5 +36,20 @@
   <ItemGroup>
     <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
+
+  <!--
+    Dieses Programm ist 64-Bit, und das ist keine Geschmacksfrage.
+
+    Ein 32-Bit-Prozess schreibt unter HKLM\SOFTWARE nach WOW6432Node. Dort
+    sucht der Explorer weder den Sync-Root noch die Vorschau-Erweiterung, und
+    die native Vorschau-DLL gibt es ohnehin nur als x64. Ein x86-Build
+    startet, tut aber nichts von dem, wofuer es das Programm gibt.
+
+    Der Fehler faellt sonst erst beim Ausprobieren des fertigen Pakets auf.
+  -->
+  <Target Name="NurX64" BeforeTargets="Build"
+          Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64'">
+    <Error Text="RuntimeIdentifier ist &quot;$(RuntimeIdentifier)&quot;. SyncTClient laeuft nur als win-x64 -- siehe die Anmerkung in dieser Projektdatei." />
+  </Target>
 
 </Project>
