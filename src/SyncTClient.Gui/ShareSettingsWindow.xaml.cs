@@ -31,12 +31,10 @@ public partial class ShareSettingsWindow : Window
         LabelBox.Text = share.Label;
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
-        MinimumCopiesBox.Text = share.MinimumCopies.ToString();
         ConflictBox.SelectedIndex = (int)share.Conflict;
-        ThumbsBox.IsChecked = share.GenerateThumbnails;
-        KeepVersionsBox.IsChecked = share.KeepVersions;
-        VersionDaysBox.Text = share.VersionDays.ToString();
-        UpdateVersionFields();
+        // 0 bedeutet: nicht aufheben. Ein Kaestchen daneben waere dieselbe
+        // Aussage ein zweites Mal.
+        VersionDaysBox.Text = (share.KeepVersions ? share.VersionDays : 0).ToString();
         UpdateCacheEnabled();
         _loading = false;
 
@@ -94,7 +92,6 @@ public partial class ShareSettingsWindow : Window
         // Bei "vollstaendig lokal" wird nie verdraengt. Damit gibt es auch
         // nichts, wofuer eine Mindestzahl an Kopien gelten koennte.
         var onDemand = ModeBox.SelectedIndex == 0;
-        CopiesPanel.IsEnabled = onDemand;
 
         // Als Tooltip statt als Absatz im Fenster. Die Erklaerung wird
         // einmal gelesen, die Einstellung oft benutzt.
@@ -120,33 +117,20 @@ public partial class ShareSettingsWindow : Window
     {
         // Ohne Sicherung bleibt der bisherige Wert stehen. Das Feld ist dann
         // abgeschaltet und sein Inhalt ohne Bedeutung.
-        var days = _share.VersionDays;
-
-        if (KeepVersionsBox.IsChecked == true
-            && (!int.TryParse(VersionDaysBox.Text.Trim(), out days) || days < 1))
+        if (!int.TryParse(VersionDaysBox.Text.Trim(), out var days) || days < 0)
         {
-            MessageBox.Show(this, App.S("S2.DaysInvalid"), Title,
-                MessageBoxButton.OK, MessageBoxImage.Warning);
+            SaveHint.Text = App.S("S2.DaysInvalid");
             VersionDaysBox.Focus();
             return;
         }
 
-        if (KeepVersionsBox.IsChecked != true) days = _share.VersionDays;
-
-        if (!int.TryParse(MinimumCopiesBox.Text.Trim(), out var copies) || copies < 1)
-        {
-            SaveHint.Text = App.S("S2.CopiesInvalid");
-            return;
-        }
-
-        _share.MinimumCopies = copies;
         _share.Label = LabelBox.Text.Trim();
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.Conflict = (ConflictResolution)Math.Max(0, ConflictBox.SelectedIndex);
-        _share.GenerateThumbnails = ThumbsBox.IsChecked == true;
-        _share.KeepVersions = KeepVersionsBox.IsChecked == true;
-        _share.VersionDays = days;
+        // Null Tage heisst: sofort loeschen, also gar nicht aufheben.
+        _share.KeepVersions = days > 0;
+        _share.VersionDays = Math.Max(1, days);
 
         if (_tree is not null)
         {
@@ -172,13 +156,5 @@ public partial class ShareSettingsWindow : Window
         foreach (var child in node.Children)
             foreach (var path in AllPaths(child))
                 yield return path;
-    }
-    private void OnKeepVersionsChanged(object sender, RoutedEventArgs e) => UpdateVersionFields();
-
-    private void UpdateVersionFields()
-    {
-        var an = KeepVersionsBox.IsChecked == true;
-        VersionDaysLabel.IsEnabled = an;
-        VersionDaysBox.IsEnabled = an;
     }
 }

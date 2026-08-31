@@ -192,6 +192,28 @@ public sealed class AppConfig
     public string DeviceName { get; set; } = Environment.MachineName;
 
     /// <summary>
+    /// Bei wie vielen anderen Knoten eine Datei vollstaendig vorliegen muss,
+    /// bevor sie hier zum Platzhalter werden darf.
+    /// </summary>
+    /// <remarks>
+    /// Programmweit und nicht je Freigabe: es ist eine Sicherheitsvorgabe,
+    /// keine Eigenart eines einzelnen Ordners. Wer sie fuer eine Freigabe
+    /// lockern koennte, wuerde sie irgendwann fuer die falsche lockern.
+    ///
+    /// Mindestens 1. Bei 0 gaebe es keine Zusicherung mehr, dass eine
+    /// freigegebene Datei ueberhaupt noch irgendwo liegt.
+    /// </remarks>
+    public int MinimumCopies { get; set; } = 1;
+
+    /// <summary>Vorschaubilder aus den Dateikoepfen gewinnen.</summary>
+    /// <remarks>
+    /// Ebenfalls programmweit. Die Erweiterung, die sie an die Shell
+    /// liefert, wird einmal angemeldet und gilt fuer alle Freigaben; sie je
+    /// Freigabe an- und abzuschalten haette also gar keine Entsprechung.
+    /// </remarks>
+    public bool GenerateThumbnails { get; set; } = true;
+
+    /// <summary>
     /// Der Abgleich ist angehalten.
     /// </summary>
     /// <remarks>
@@ -383,7 +405,7 @@ public sealed class AppConfig
     /// <summary>Das Budget, das fuer alle Freigaben gemeinsam gilt.</summary>
     [JsonIgnore]
     public CacheBudget Cache => _budget ??=
-        new CacheBudget(CacheMaxBytes, MinimumFreeBytes, SharesRootOrDefault);
+        new CacheBudget(CacheMaxBytes, MinimumFreeBytes);
 
     [JsonIgnore]
     public string SharesRootOrDefault => string.IsNullOrWhiteSpace(SharesRoot)

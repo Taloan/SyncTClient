@@ -1,55 +1,71 @@
 namespace SyncTClient.Vfs;
 
+/// <summary>Was auf einem Datenträger liegt und was davon weichen dürfte.</summary>
+/// <param name="Root">Die Wurzel, etwa <c>C:\</c>.</param>
+/// <param name="UsedBytes">Was die Freigaben auf diesem Datenträger belegen.</param>
+/// <param name="Files">Wie viele Dateien das sind.</param>
+/// <param name="FreeBytes">Freier Platz, oder -1 wenn nicht feststellbar.</param>
+/// <param name="EvictableBytes">Davon freigebbar.</param>
+/// <param name="EvictableFiles">Wie viele Dateien das sind.</param>
+public sealed record VolumeUsage(
+    string Root,
+    long UsedBytes,
+    int Files,
+    long FreeBytes,
+    long EvictableBytes,
+    int EvictableFiles);
+
 /// <summary>
-/// Ein Budget für alle Freigaben zusammen.
+/// Wacht darüber, wie viel Platz die Inhalte der Freigaben belegen.
 /// </summary>
 /// <remarks>
-/// Der Cache ist kein eigenes Verzeichnis. Eine zwischengespeicherte Datei
-/// liegt an ihrem Platz im Explorer und haelt ihre Bytes lokal. Verdraengen
-/// bedeutet, sie wieder zum Platzhalter zu machen. Ein Limit je Freigabe waere
-/// deshalb nur eine Rechenaufgabe fuer den Benutzer. Es gibt eine Platte, also
-/// gibt es ein Budget.
+/// Es gibt kein Cache-Verzeichnis. Eine geholte Datei liegt an ihrem Platz im
+/// Explorer und hält ihre Bytes dort. Freigeben bedeutet, sie wieder zum
+/// Platzhalter zu machen -- gleicher Name, gleicher Ort, nur ohne Inhalt.
 ///
-/// Verdraengt wird ueber alle Freigaben hinweg nach Zugriffszeit. Zuerst
-/// weichen Dateien, auf die seit Monaten niemand zugegriffen hat, und nicht
-/// die Dateien der Freigabe, die gerade waechst.
+/// Gerechnet wird <b>je Datenträger</b> und nicht programmweit. Freigaben
+/// können auf verschiedenen Laufwerken liegen, und ein gemeinsames Limit
+/// hülfe dann niemandem: es würde Dateien auf einer leeren Platte freigeben,
+/// weil eine andere volläuft. Der freie Platz ist ohnehin eine Eigenschaft
+/// des Datenträgers, nicht des Programms.
+///
+/// Freigegeben wird nach Zugriffszeit, über alle Freigaben desselben
+/// Datenträgers hinweg. Zuerst weicht, was seit Monaten niemand geöffnet hat,
+/// und nicht das, was zur gerade wachsenden Freigabe gehört.
 /// </remarks>
 public sealed class CacheBudget
 {
     private readonly List<HydrationCache> _caches = [];
     private readonly SemaphoreSlim _evictionLock = new(1, 1);
 
-    private readonly string _probePath;
-
-    public CacheBudget(long maxBytes, long minimumFreeBytes, string probePath)
+    public CacheBudget(long maxBytes, long minimumFreeBytes)
     {
         MaxBytes = maxBytes;
         MinimumFreeBytes = minimumFreeBytes;
-        _probePath = probePath;
     }
 
-    /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
+    /// <summary>
+    /// Höchstens so viel darf auf <em>jedem</em> Datenträger belegt sein.
+    /// 0 oder kleiner bedeutet: kein Limit.
+    /// </summary>
     public long MaxBytes { get; }
 
     /// <summary>
-    /// So viel soll auf dem Laufwerk frei bleiben. 0 bedeutet, dass der freie
-    /// Platz nicht beruecksichtigt wird.
+    /// So viel soll auf <em>jedem</em> Datenträger frei bleiben. 0 bedeutet,
+    /// dass der freie Platz nicht berücksichtigt wird.
     /// </summary>
     /// <remarks>
-    /// Das ist die zweite Grenze. Ein Budget allein reicht nicht, wenn andere
-    /// Programme die Platte fuellen. Der Cache haelt dann sein Budget ein, die
+    /// Die zweite Grenze. Ein Limit allein reicht nicht, wenn andere Programme
+    /// die Platte füllen: die Freigaben halten dann ihr Limit ein, und die
     /// Platte ist trotzdem voll.
     /// </remarks>
     public long MinimumFreeBytes { get; }
 
-    /// <summary>
-    /// Der freie Platz auf dem Laufwerk des Caches. -1 bedeutet, dass er sich
-    /// nicht feststellen laesst.
-    /// </summary>
-    public long FreeBytes => FreeBytesOn(_probePath);
+    /// <summary>Wohin die Bilanz gemeldet wird.</summary>
+    public Action<string>? Log { get; set; }
 
     /// <summary>
-    /// Der freie Platz auf dem Laufwerk, auf dem dieser Pfad liegt.
+    /// Der freie Platz auf dem Datenträger, auf dem dieser Pfad liegt.
     /// </summary>
     /// <remarks>
     /// Gemeint ist der Platz, der diesem Benutzer zusteht. Bei einem
@@ -59,37 +75,49 @@ public sealed class CacheBudget
     {
         try
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(path));
-            return string.IsNullOrEmpty(root) ? -1 : new DriveInfo(root).AvailableFreeSpace;
+            return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))!).AvailableFreeSpace;
         }
-        catch
+        catch (Exception)
         {
-            // Netzlaufwerk, abgezogener Stick oder fehlende Rechte. Dann gilt
-            // nur das Budget.
             return -1;
         }
     }
 
-    /// <summary>
-    /// Wie viel der Cache halten darf. Zwei Grenzen, es gilt die schaerfere.
-    /// </summary>
-    private long LimitFor(long used)
+    private static string RootOf(string path)
     {
-        var limit = MaxBytes > 0 ? MaxBytes : long.MaxValue;
-        var free = FreeBytes;
-
-        if (MinimumFreeBytes <= 0 || free < 0) return limit;
-
-        // Jedes freigegebene Byte ist ein Byte mehr frei.
-        var missing = MinimumFreeBytes - free;
-        return missing <= 0 ? limit : Math.Min(limit, Math.Max(0, used - missing));
+        try { return Path.GetPathRoot(Path.GetFullPath(path)) ?? path; }
+        catch (Exception) { return path; }
     }
 
-    /// <summary>
-    /// Wohin die Bilanz gemeldet wird. Es gilt der zuerst gesetzte Empfaenger.
-    /// </summary>
-    public Action<string>? Log { get; set; }
+    // ------------------------------------------------------------ Bestand
 
+    /// <summary>Was auf welchem Datenträger liegt, ein Eintrag je Laufwerk.</summary>
+    public IReadOnlyList<VolumeUsage> Volumes
+    {
+        get
+        {
+            HydrationCache[] caches;
+            lock (_caches) caches = [.. _caches];
+
+            return [.. caches
+                .GroupBy(c => RootOf(c.RootPath), StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g =>
+                {
+                    var kandidaten = g.SelectMany(c => c.EvictionCandidates()).ToList();
+
+                    return new VolumeUsage(
+                        g.Key,
+                        g.Sum(c => c.UsedBytes),
+                        g.Sum(c => c.FileCount),
+                        FreeBytesOn(g.Key),
+                        kandidaten.Sum(e => e.Bytes),
+                        kandidaten.Count);
+                })];
+        }
+    }
+
+    /// <summary>Was alle Datenträger zusammen belegen.</summary>
     public long UsedBytes
     {
         get { lock (_caches) return _caches.Sum(c => c.UsedBytes); }
@@ -101,56 +129,41 @@ public sealed class CacheBudget
         /// <summary>Keine. Die Datei passt.</summary>
         None,
 
-        /// <summary>Die Datei ist groesser als das Budget des Caches.</summary>
+        /// <summary>Die Datei ist größer als das Limit des Datenträgers.</summary>
         Budget,
 
-        /// <summary>Es bliebe zu wenig auf der Platte frei.</summary>
+        /// <summary>Es bliebe zu wenig auf dem Datenträger frei.</summary>
         FreeSpace
-    }
-
-    /// <summary>
-    /// Wie viele Bytes sich freigeben liessen.
-    /// </summary>
-    /// <remarks>
-    /// Angeheftete Dateien und Dateien, die sonst nirgends vollstaendig
-    /// vorliegen, zaehlen nicht mit. Sie duerfen nicht verdraengt werden und
-    /// stehen deshalb nicht als Reserve zur Verfuegung.
-    /// </remarks>
-    public long EvictableBytes
-    {
-        get
-        {
-            HydrationCache[] caches;
-            lock (_caches) caches = [.. _caches];
-
-            return caches.Sum(c => c.EvictionCandidates().Sum(e => e.Bytes));
-        }
     }
 
     /// <summary>
     /// Prüft vor dem Holen, ob eine Datei dieser Größe Platz hat.
     /// </summary>
     /// <remarks>
-    /// Ohne diese Prüfung laeuft der Download an, verdraengt unterwegs den
-    /// gesamten uebrigen Cache und wird am Ende selbst verworfen. Das kostet
-    /// Uebertragung ohne Ergebnis. Stattdessen wird vorher abgesagt und der
-    /// Grund genannt.
+    /// Ohne diese Prüfung läuft der Download an, gibt unterwegs alles andere
+    /// auf demselben Datenträger frei und wird am Ende selbst verworfen. Das
+    /// kostet Übertragung ohne Ergebnis. Stattdessen wird vorher abgesagt und
+    /// der Grund genannt.
     /// </remarks>
-    public Limit CanHold(long bytes)
+    public Limit CanHold(long bytes, string targetPath)
     {
-        // Eine Datei, die allein schon groesser ist als das Budget, kann nie
-        // bleiben. Daran aendert auch Verdraengen nichts.
+        // Eine Datei, die allein schon größer ist als das Limit, kann nie
+        // bleiben. Daran ändert auch Freigeben nichts.
         if (MaxBytes > 0 && bytes > MaxBytes) return Limit.Budget;
-
         if (MinimumFreeBytes <= 0) return Limit.None;
 
-        var free = FreeBytes;
+        var free = FreeBytesOn(targetPath);
         if (free < 0) return Limit.None;
 
-        // Verdraengbares zaehlt als Reserve. Es wuerde beim Holen ohnehin
-        // weichen und gibt seinen Platz frei.
-        return free + EvictableBytes - bytes < MinimumFreeBytes ? Limit.FreeSpace : Limit.None;
+        var root = RootOf(targetPath);
+        var freigebbar = Volumes.FirstOrDefault(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase))
+            ?.EvictableBytes ?? 0;
+
+        // Freigebbares zählt als Reserve. Es würde beim Holen ohnehin weichen.
+        return free + freigebbar - bytes < MinimumFreeBytes ? Limit.FreeSpace : Limit.None;
     }
+
+    // ------------------------------------------------------------ Anmeldung
 
     public void Register(HydrationCache cache)
     {
@@ -164,72 +177,98 @@ public sealed class CacheBudget
         lock (_caches) _caches.Remove(cache);
     }
 
-    /// <summary>
-    /// Dehydriert, bis das Budget wieder eingehalten wird. Aelteste Zugriffe
-    /// zuerst, ueber alle Freigaben hinweg. Angeheftete Dateien bleiben
-    /// erhalten.
-    /// </summary>
+    // ------------------------------------------------------------ Freigeben
+
+    /// <summary>Zieht die Grenzen auf jedem Datenträger nach.</summary>
     public async Task EnforceAsync()
     {
-        var used = UsedBytes;
-        var limit = LimitFor(used);
+        foreach (var volume in Volumes)
+        {
+            var limit = LimitFor(volume);
+            if (limit == long.MaxValue || volume.UsedBytes <= limit) continue;
 
-        if (limit == long.MaxValue || used <= limit) return;
-
-        await ShrinkToAsync(limit, "verdraengt").ConfigureAwait(false);
+            await ShrinkToAsync(volume.Root, limit, "freigegeben").ConfigureAwait(false);
+        }
     }
 
     /// <summary>
-    /// Gibt alles frei, was freigegeben werden darf. Aus den Dateien werden
-    /// wieder Platzhalter.
+    /// Gibt frei, was freigegeben werden darf -- auf einem Datenträger oder
+    /// auf allen.
     /// </summary>
     /// <remarks>
-    /// Angeheftete Dateien bleiben erhalten, und die Mindestzahl an Kopien
-    /// gilt auch hier. Auch auf Knopfdruck wird die letzte Kopie einer Datei
+    /// Angeheftete Dateien bleiben, und die Platzhalter-Schwelle gilt auch
+    /// hier. Auch auf Knopfdruck wird die letzte Kopie einer Datei im Netz
     /// nicht verworfen.
     /// </remarks>
-    public Task<(int Files, long Bytes)> ClearAsync() => ShrinkToAsync(0, "geleert");
+    public async Task<(int Files, long Bytes)> ClearAsync(string? root = null)
+    {
+        var summe = (Files: 0, Bytes: 0L);
 
-    private async Task<(int Files, long Bytes)> ShrinkToAsync(long limit, string reason)
+        foreach (var volume in Volumes)
+        {
+            if (root is not null && !volume.Root.Equals(root, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var (files, bytes) = await ShrinkToAsync(volume.Root, 0, "freigegeben").ConfigureAwait(false);
+            summe = (summe.Files + files, summe.Bytes + bytes);
+        }
+
+        return summe;
+    }
+
+    /// <summary>Bis wohin dieser Datenträger schrumpfen muss.</summary>
+    private long LimitFor(VolumeUsage volume)
+    {
+        var limit = MaxBytes > 0 ? MaxBytes : long.MaxValue;
+
+        if (MinimumFreeBytes <= 0 || volume.FreeBytes < 0) return limit;
+
+        // Jedes freigegebene Byte ist ein Byte mehr frei.
+        var fehlend = MinimumFreeBytes - volume.FreeBytes;
+        return fehlend <= 0 ? limit : Math.Min(limit, Math.Max(0, volume.UsedBytes - fehlend));
+    }
+
+    private async Task<(int Files, long Bytes)> ShrinkToAsync(string root, long limit, string reason)
     {
         await _evictionLock.WaitAsync().ConfigureAwait(false);
         try
         {
             HydrationCache[] caches;
-            lock (_caches) caches = [.. _caches];
+            lock (_caches)
+                caches = [.. _caches.Where(c => RootOf(c.RootPath).Equals(root, StringComparison.OrdinalIgnoreCase))];
 
-            var used = caches.Sum(c => c.UsedBytes);
-            if (used <= limit) return (0, 0);
+            var belegt = caches.Sum(c => c.UsedBytes);
+            if (belegt <= limit) return (0, 0);
 
-            var candidates = caches
+            var kandidaten = caches
                 .SelectMany(c => c.EvictionCandidates().Select(e => (Cache: c, e.Path, e.Bytes, e.LastAccess)))
                 .OrderBy(e => e.LastAccess)
                 .ToList();
 
-            var evicted = 0;
-            long freed = 0;
+            var anzahl = 0;
+            long frei = 0;
 
-            foreach (var candidate in candidates)
+            foreach (var kandidat in kandidaten)
             {
-                if (used - freed <= limit) break;
-                if (!candidate.Cache.Evict(candidate.Path)) continue;
-                freed += candidate.Bytes;
-                evicted++;
+                if (belegt - frei <= limit) break;
+                if (!kandidat.Cache.Evict(kandidat.Path)) continue;
+
+                frei += kandidat.Bytes;
+                anzahl++;
             }
 
-            if (evicted > 0)
+            if (anzahl > 0)
             {
                 foreach (var cache in caches) cache.Persist();
-                Log?.Invoke($"Cache: {evicted} Dateien {reason}, {freed / (1024.0 * 1024.0):0.0} MB frei " +
-                            $"({(used - freed) / (1024.0 * 1024.0):0.0} MB belegt).");
+                Log?.Invoke($"{root} {anzahl} Dateien {reason}, {frei / (1024.0 * 1024.0):0.0} MB frei " +
+                            $"({(belegt - frei) / (1024.0 * 1024.0):0.0} MB belegt).");
             }
             else
             {
-                Log?.Invoke($"Cache: nichts {reason} ({used / (1024.0 * 1024.0):0.0} MB belegt) -- " +
-                            "alles angeheftet oder in Benutzung.");
+                Log?.Invoke($"{root} nichts {reason} ({belegt / (1024.0 * 1024.0):0.0} MB belegt) -- " +
+                            "angeheftet, in Benutzung, oder die Platzhalter-Schwelle ist nicht erreicht.");
             }
 
-            return (evicted, freed);
+            return (anzahl, frei);
         }
         finally
         {

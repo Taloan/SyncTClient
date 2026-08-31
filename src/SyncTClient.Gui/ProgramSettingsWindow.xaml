@@ -1,4 +1,4 @@
-<Window x:Class="SyncTClient.Gui.ProgramSettingsWindow"
+﻿<Window x:Class="SyncTClient.Gui.ProgramSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{DynamicResource S.Settings.Title}" Height="640" Width="680"
@@ -10,6 +10,14 @@
       <Setter Property="FontWeight" Value="SemiBold" />
       <Setter Property="Foreground" Value="{DynamicResource Gedaempft}" />
       <Setter Property="Margin" Value="0,14,0,2" />
+    </Style>
+    <!-- Zwischenueberschrift innerhalb einer Gruppe. Kleiner als die
+         Gruppe selbst, damit die Gliederung zwei Ebenen tragen kann. -->
+    <Style x:Key="Kopfzeile" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource Sekundaer}" />
+      <Setter Property="Margin" Value="0,0,0,2" />
     </Style>
     <Style x:Key="Hinweis" TargetType="TextBlock">
       <Setter Property="FontSize" Value="11" />
@@ -43,36 +51,58 @@
       </StackPanel>
     </StackPanel>
 
-    <TextBlock Text="{DynamicResource S.Main.Cache}" Style="{StaticResource Gruppe}" />
+    <TextBlock Text="{DynamicResource S.Settings.StorageGroup}" Style="{StaticResource Gruppe}" />
 
-    <Label Content="{DynamicResource S.Settings.CacheDir}" />
-    <DockPanel>
-      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Browse}" Padding="10,3"
-              Margin="6,0,0,0" Click="OnBrowseShares" />
-      <TextBox x:Name="SharesRootBox" VerticalContentAlignment="Center" TextChanged="OnSharesRootChanged" />
-    </DockPanel>
-    <TextBlock Style="{StaticResource Hinweis}"
-               Text="{DynamicResource S.Settings.CacheDirHint}" />
+    <!-- ================= Sicherheitsvorgabe ================= -->
+    <TextBlock Text="{DynamicResource S.Settings.SafetyGroup}" Style="{StaticResource Kopfzeile}" Margin="0,4,0,0" />
 
-    <TextBlock x:Name="FreeSpaceText" Style="{StaticResource Hinweis}" Margin="0,6,0,0" />
-
-    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-      <StackPanel Width="200">
-        <Label Content="{DynamicResource S.Settings.Budget}" />
-        <TextBox x:Name="CacheBudgetBox" />
-      </StackPanel>
-      <StackPanel Width="240" Margin="16,0,0,0">
-        <Label Content="{DynamicResource S.Settings.MinFree}" />
-        <TextBox x:Name="MinimumFreeBox" />
-      </StackPanel>
+    <StackPanel Width="200" HorizontalAlignment="Left">
+      <Label Content="{DynamicResource S.Settings.Threshold}" />
+      <TextBox x:Name="ThresholdBox" />
     </StackPanel>
-    <TextBlock Style="{StaticResource Hinweis}"
-               Text="{DynamicResource S.Settings.LimitsHint}" />
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ThresholdHint}" />
 
-    <TextBlock x:Name="UsageText" Margin="0,12,0,0" FontWeight="SemiBold" TextWrapping="Wrap" />
+    <CheckBox x:Name="ThumbsBox" Content="{DynamicResource S.Settings.Thumbs}" Margin="0,10,0,0" />
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ThumbsHint}" />
 
-    <Button x:Name="ClearButton" Content="{DynamicResource S.Settings.ClearCache}" Padding="10,3"
-            HorizontalAlignment="Left" Margin="0,10,0,0" Click="OnClearCache" />
+    <!-- ================= Grenzen ================= -->
+    <TextBlock Text="{DynamicResource S.Settings.LimitsGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.LimitsLead}" Margin="0,0,0,4" />
+
+    <StackPanel Width="240" HorizontalAlignment="Left">
+      <Label Content="{DynamicResource S.Settings.PerVolume}" />
+      <TextBox x:Name="CacheBudgetBox" />
+    </StackPanel>
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.PerVolumeHint}" />
+
+    <StackPanel Width="240" HorizontalAlignment="Left" Margin="0,10,0,0">
+      <Label Content="{DynamicResource S.Settings.KeepFree}" />
+      <TextBox x:Name="MinimumFreeBox" />
+    </StackPanel>
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.KeepFreeHint}" />
+
+    <!-- ================= Sofort ================= -->
+    <TextBlock Text="{DynamicResource S.Settings.NowGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.NowLead}" Margin="0,0,0,6" />
+
+    <!-- Eine Zeile je Datentraeger. Wie viele es sind, entscheidet sich erst
+         zur Laufzeit: Freigaben duerfen auf verschiedenen Laufwerken liegen. -->
+    <ItemsControl x:Name="VolumeList">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate>
+          <StackPanel Margin="0,0,0,10">
+            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+            <Button Content="{Binding ButtonText}" Padding="10,3" HorizontalAlignment="Left"
+                    Margin="0,4,0,0" IsEnabled="{Binding CanRelease}"
+                    Tag="{Binding Root}" Click="OnReleaseVolume" />
+          </StackPanel>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <TextBlock x:Name="ThumbUsageText" Margin="0,6,0,0" TextWrapping="Wrap" />
+    <Button x:Name="ClearButton" Content="{DynamicResource S.Settings.ClearThumbs}" Padding="10,3"
+            HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnClearThumbnails" />
 
     <TextBlock Text="{DynamicResource S.Settings.DataGroup}" Style="{StaticResource Gruppe}" />
 

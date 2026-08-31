@@ -86,6 +86,9 @@ public sealed class HydrationCache
 
     public int FileCount => _entries.Count;
 
+    /// <summary>Wo diese Freigabe liegt. Das Budget gruppiert danach.</summary>
+    public string RootPath => _rootPath;
+
     private sealed record Entry(long Bytes, DateTimeOffset LastAccess);
 
     // ------------------------------------------------------------ Buchfuehrung

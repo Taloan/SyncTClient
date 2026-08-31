@@ -158,6 +158,8 @@ public partial class MainWindow : Window
         {
             HomeDirectory = HomeDirectory,
             DeviceName = _config.DeviceName,
+            MinimumCopies = _config.MinimumCopies,
+            GenerateThumbnails = _config.GenerateThumbnails,
             SharesRoot = _config.SharesRoot,
             CacheMaxBytes = _config.CacheMaxBytes,
             MinimumFreeBytes = _config.MinimumFreeBytes,
@@ -820,6 +822,27 @@ public partial class MainWindow : Window
     /// Vorschaubilder liegen im selben Verzeichnis und entstehen bei Bedarf
     /// neu.
     /// </remarks>
+    /// <summary>Gibt auf einem Datentraeger frei, was freigegeben werden darf.</summary>
+    private async Task<string> ReleaseVolumeAsync(string root)
+    {
+        var (files, bytes) = await _runtime.Cache.ClearAsync(root);
+        Refreshed();
+
+        return files == 0
+            ? App.S("M.NothingLocal")
+            : App.S("M.ReleasedVolume", root, Format.Count(files), Format.Bytes(bytes));
+    }
+
+    private Task<string> ClearThumbnailsAsync()
+    {
+        var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Clear();
+        Refreshed();
+
+        return Task.FromResult(thumbs.Count == 0
+            ? App.S("M.NothingThumbs")
+            : App.S("M.ClearedThumbs", Format.Count(thumbs.Count), Format.Bytes(thumbs.Bytes)));
+    }
+
     private async Task<string> ClearAllAsync()
     {
         var (files, bytes) = await _runtime.Cache.ClearAsync();
@@ -1352,7 +1375,11 @@ public partial class MainWindow : Window
     private void OnShowProgramSettings(object sender, RoutedEventArgs e)
     {
         var dialog = new ProgramSettingsWindow(
-            _config, Path.GetDirectoryName(_configPath)!, CacheUsage, ClearAllAsync)
+            _config, Path.GetDirectoryName(_configPath)!,
+            () => _runtime.Cache.Volumes,
+            ReleaseVolumeAsync,
+            () => new ThumbnailStore(_config.ThumbnailDirectory).Usage(),
+            ClearThumbnailsAsync)
         {
             Owner = this
         };
