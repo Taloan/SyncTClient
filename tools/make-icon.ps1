@@ -113,7 +113,10 @@ function Remove-Hintergrund {
             $o = $y * $roh.Stride + $x * 4
 
             # BGRA. Nur helle Punkte gelten als Hintergrund.
-            if ($punkte[$o] -lt 232 -or $punkte[$o+1] -lt 232 -or $punkte[$o+2] -lt 232) { continue }
+            # Der Karo-Hintergrund des Kombi-Bogens liegt bei 241 und
+            # darueber, das Silber am Plakettenrand darunter. Die Schwelle
+            # trennt beides.
+            if ($punkte[$o] -lt 238 -or $punkte[$o+1] -lt 238 -or $punkte[$o+2] -lt 238) { continue }
 
             $punkte[$o+3] = 0
 
@@ -130,6 +133,71 @@ function Remove-Hintergrund {
     }
 
     return $ziel
+}
+
+function Split-Bogen {
+    <#
+      Zerlegt einen Bogen mit mehreren Symbolen in einzelne Bilder.
+
+      Gesucht wird nicht nach einem festen Raster, sondern nach Luecken:
+      erst Zeilen ohne jeden Inhalt, dann innerhalb jeder Zeile Spalten ohne
+      Inhalt. So ist es gleich, ob drei oder zwei Symbole nebeneinander
+      stehen und wie breit die Abstaende sind.
+
+      Zurueck kommen die Ausschnitte in Lesereihenfolge: erst die obere
+      Zeile von links nach rechts, dann die untere.
+    #>
+    param([System.Drawing.Bitmap] $Bild)
+
+    $breit = $Bild.Width; $hoch = $Bild.Height
+
+    function Baender($istVoll, $anzahl) {
+        # Baender unter einem Zwanzigstel der Kante werden verworfen. Das
+        # Freistellen laesst einzelne Punkte des Hintergrunds stehen, und die
+        # zaehlten sonst als eigene Symbole -- beim ersten Versuch kamen so
+        # 89 statt fuenf heraus.
+        $mindestens = [int]($anzahl / 20)
+
+        $liste = @(); $start = -1
+        for ($i = 0; $i -lt $anzahl; $i++) {
+            if ($istVoll[$i] -and $start -lt 0) { $start = $i }
+            elseif (-not $istVoll[$i] -and $start -ge 0) {
+                if ($i - $start -ge $mindestens) { $liste += ,@($start, ($i - 1)) }
+                $start = -1
+            }
+        }
+        if ($start -ge 0 -and $anzahl - $start -ge $mindestens) {
+            $liste += ,@($start, ($anzahl - 1))
+        }
+        return ,$liste
+    }
+
+    [bool[]] $zeileVoll = New-Object bool[] $hoch
+    for ($y = 0; $y -lt $hoch; $y++) {
+        for ($x = 0; $x -lt $breit; $x += 3) {
+            if ($Bild.GetPixel($x, $y).A -gt 96) { $zeileVoll[$y] = $true; break }
+        }
+    }
+
+    $ausschnitte = @()
+    foreach ($zeile in (Baender $zeileVoll $hoch)) {
+        $oben = $zeile[0]; $unten = $zeile[1]
+
+        [bool[]] $spalteVoll = New-Object bool[] $breit
+        for ($x = 0; $x -lt $breit; $x++) {
+            for ($y = $oben; $y -le $unten; $y += 3) {
+                if ($Bild.GetPixel($x, $y).A -gt 96) { $spalteVoll[$x] = $true; break }
+            }
+        }
+
+        foreach ($spalte in (Baender $spalteVoll $breit)) {
+            $ausschnitte += ,[PSCustomObject]@{
+                Links = $spalte[0]; Rechts = $spalte[1]; Oben = $oben; Unten = $unten
+            }
+        }
+    }
+
+    return ,$ausschnitte
 }
 
 function New-DibEintrag {
@@ -179,12 +247,10 @@ function New-DibEintrag {
 function Write-Symboldatei {
     <# Schneidet die Vorlage auf den Rahmen zu und schreibt die .ico-Datei. #>
     param(
-        [string] $Vorlage,
+        [System.Drawing.Bitmap] $Quelle,
         [string] $Ziel,
         $Rahmen
     )
-
-    $quelle = Open-Vorlage $Vorlage
 
     $breite = $Rahmen.Rechts - $Rahmen.Links + 1
     $hoehe  = $Rahmen.Unten - $Rahmen.Oben + 1
@@ -198,11 +264,10 @@ function Write-Symboldatei {
     $g.InterpolationMode = 'HighQualityBicubic'
     $g.PixelOffsetMode = 'HighQuality'
     $g.DrawImage(
-        $quelle,
+        $Quelle,
         (New-Object System.Drawing.Rectangle([int](($seite - $breite) / 2), [int](($seite - $hoehe) / 2), $breite, $hoehe)),
         $Rahmen.Links, $Rahmen.Oben, $breite, $hoehe, [System.Drawing.GraphicsUnit]::Pixel)
     $g.Dispose()
-    $quelle.Dispose()
 
     $daten = @{}
     foreach ($s in $Groessen) {
@@ -260,9 +325,8 @@ $stamm = [System.IO.Path]::GetFullPath($Verzeichnis)
 
 Write-Output 'Programmsymbol:'
 $grund = Open-Vorlage "$stamm\stc2.png"
-$eigen = Get-Rahmen $grund
+Write-Symboldatei $grund "$stamm\SyncTClient.ico" (Get-Rahmen $grund)
 $grund.Dispose()
-Write-Symboldatei "$stamm\stc2.png" "$stamm\SyncTClient.ico" $eigen
 
 # --- Zustandssymbole, alle im selben Ausschnitt -----------------------------
 
@@ -273,13 +337,38 @@ Write-Output 'Zustaende:'
 # Bildpunkte liegen darin also nicht an derselben Stelle. Die Seitenverhael-
 # tnisse der Motive liegen nah beieinander (1,02 bis 1,07), das Symbol
 # springt beim Zustandswechsel daher nicht sichtbar.
-foreach ($name in $zustaende.Keys) {
-    $pfad = "$stamm\$($zustaende[$name])"
-    $bild = Open-Vorlage $pfad
-    $r = Get-Rahmen $bild
-    $bild.Dispose()
+$bogen = "$stamm\stc2-kombi.png"
 
-    Write-Symboldatei $pfad "$stamm\$name.ico" $r
+if (Test-Path $bogen) {
+    # Ein Bogen mit allen Zustaenden. Er hat den Vorzug vor den Einzelbildern:
+    # die Symbole darauf sind gemeinsam gezeichnet, sitzen also gleich gross
+    # und an derselben Stelle -- beim Zustandswechsel springt nichts.
+    $blatt = Open-Vorlage $bogen
+    $teile = Split-Bogen $blatt
+
+    # Lesereihenfolge des Bogens: oben Arbeit, Pause, Erledigt; unten Fehler
+    # und Unbekannt.
+    $reihenfolge = @('Status-Work', 'Status-Pause', 'Status-Ok', 'Status-Error', 'Status-Unknown')
+
+    if ($teile.Count -ne $reihenfolge.Count) {
+        throw "Der Bogen enthaelt $($teile.Count) Symbole, erwartet werden $($reihenfolge.Count)."
+    }
+
+    Write-Output ("  aus {0}, {1} Symbole" -f (Split-Path $bogen -Leaf), $teile.Count)
+
+    for ($i = 0; $i -lt $teile.Count; $i++) {
+        Write-Symboldatei $blatt "$stamm\$($reihenfolge[$i]).ico" $teile[$i]
+    }
+
+    $blatt.Dispose()
+}
+else {
+    # Einzelbilder. Jede Vorlage bekommt ihren eigenen Ausschnitt.
+    foreach ($name in $zustaende.Keys) {
+        $bild = Open-Vorlage "$stamm\$($zustaende[$name])"
+        Write-Symboldatei $bild "$stamm\$name.ico" (Get-Rahmen $bild)
+        $bild.Dispose()
+    }
 }
 
 # --- Nachsehen, ob sich alles lesen laesst ---------------------------------
