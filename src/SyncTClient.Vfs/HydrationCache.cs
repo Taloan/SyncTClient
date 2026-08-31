@@ -41,19 +41,26 @@ public sealed class HydrationCache
     private readonly string _statePath;
     private readonly Action<string>? _log;
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
-    private readonly SemaphoreSlim _evictionLock = new(1, 1);
+    private readonly CacheBudget? _budget;
 
-    public HydrationCache(string rootPath, long maxBytes, string statePath, Action<string>? log = null)
+    public HydrationCache(string rootPath, CacheBudget? budget, string statePath, Action<string>? log = null)
     {
         _rootPath = Path.GetFullPath(rootPath);
         _statePath = statePath;
         _log = log;
-        MaxBytes = maxBytes;
+        _budget = budget;
         Load();
+
+        // Das Budget gilt fuer alle Freigaben zusammen; ohne Anmeldung zaehlt
+        // diese hier nicht mit.
+        budget?.Register(this);
     }
 
     /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
-    public long MaxBytes { get; }
+    public long MaxBytes => _budget?.MaxBytes ?? 0;
+
+    /// <summary>Meldet sich vom Budget ab -- die Freigabe laeuft nicht mehr.</summary>
+    public void LeaveBudget() => _budget?.Forget(this);
 
     /// <summary>
     /// Zweite Meinung, bevor eine Datei verdraengt wird.
@@ -120,56 +127,30 @@ public sealed class HydrationCache
     // ------------------------------------------------------------ Verdraengung
 
     /// <summary>
-    /// Dehydriert, bis das Budget wieder eingehalten wird -- aelteste Zugriffe
-    /// zuerst, angeheftete Dateien bleiben.
+    /// Sorgt dafuer, dass das gemeinsame Budget wieder eingehalten wird. Wer
+    /// weichen muss, entscheidet das Budget -- es allein sieht alle Freigaben.
     /// </summary>
-    public async Task EnforceBudgetAsync()
+    public Task EnforceBudgetAsync() => _budget?.EnforceAsync() ?? Task.CompletedTask;
+
+    /// <summary>Was hier verdraengt werden duerfte.</summary>
+    internal IEnumerable<(string Path, long Bytes, DateTimeOffset LastAccess)> EvictionCandidates()
+        => _entries
+            .Where(e => !IsPinned(e.Key))
+            .Where(e => MayEvict?.Invoke(e.Key) ?? true)
+            .Select(e => (e.Key, e.Value.Bytes, e.Value.LastAccess));
+
+    /// <summary>Gibt die Bytes einer einzelnen Datei frei.</summary>
+    internal bool Evict(string relativePath)
     {
-        if (MaxBytes <= 0) return;
-        if (UsedBytes <= MaxBytes) return;
+        if (!_entries.ContainsKey(relativePath)) return false;
+        if (!Dehydrate(relativePath, "verdraengt")) return false;
 
-        await _evictionLock.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            var used = UsedBytes;
-            if (used <= MaxBytes) return;
-
-            var candidates = _entries
-                .Where(e => !IsPinned(e.Key))
-                .Where(e => MayEvict?.Invoke(e.Key) ?? true)
-                .OrderBy(e => e.Value.LastAccess)
-                .ToList();
-
-            var evicted = 0;
-            long freed = 0;
-
-            foreach (var (path, entry) in candidates)
-            {
-                if (used - freed <= MaxBytes) break;
-                if (!Dehydrate(path, "verdraengt")) continue;
-                _entries.TryRemove(path, out _);
-                freed += entry.Bytes;
-                evicted++;
-            }
-
-            if (evicted > 0)
-            {
-                _log?.Invoke($"Cache: {evicted} Dateien verdraengt, {freed / (1024.0 * 1024.0):0.0} MB frei " +
-                             $"({(used - freed) / (1024.0 * 1024.0):0.0} von {MaxBytes / (1024.0 * 1024.0):0.0} MB belegt).");
-            }
-            else if (used > MaxBytes)
-            {
-                _log?.Invoke($"Cache: ueber Budget ({used / (1024.0 * 1024.0):0.0} MB), " +
-                             "aber nichts verdraengbar -- alles angeheftet oder in Benutzung.");
-            }
-
-            Save();
-        }
-        finally
-        {
-            _evictionLock.Release();
-        }
+        _entries.TryRemove(relativePath, out _);
+        return true;
     }
+
+    /// <summary>Schreibt die Buchfuehrung fort -- nach einer Verdraengungsrunde.</summary>
+    internal void Persist() => Save();
 
     /// <summary>
     /// Gleicht die Buchfuehrung mit der Platte ab. Noetig beim Start, weil

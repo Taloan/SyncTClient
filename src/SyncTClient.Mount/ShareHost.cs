@@ -257,12 +257,43 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     public async Task StartAsync(BepConnection connection, CancellationToken ct)
     {
+        await PrepareAsync(connection, ct);
+        await CommitAsync(ct);
+    }
+
+    /// <summary>
+    /// Holt den Index der Gegenstelle, ohne im Explorer etwas anzulegen.
+    /// </summary>
+    /// <remarks>
+    /// Der erste von zwei Schritten. Wer einen angebotenen Ordner uebernimmt,
+    /// soll vorher sehen, was darin ist -- und das steht erst mit dem Index
+    /// fest. Kostet nichts zusaetzlich: der Index kommt ohnehin, sobald wir
+    /// den Ordner ankuendigen.
+    /// </remarks>
+    public async Task PrepareAsync(BepConnection connection, CancellationToken ct)
+    {
         _connection = connection;
         State = ShareState.Wartet;
 
         try
         {
             await WaitForIndexAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            Fail(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Legt die Platzhalter an. Ab hier ist der Ordner im Explorer -- vorher
+    /// war nichts geschehen, was zurueckzunehmen waere.
+    /// </summary>
+    public async Task CommitAsync(CancellationToken ct)
+    {
+        try
+        {
             await ProjectAsync();
             State = ShareState.Bereit;
 
@@ -271,11 +302,16 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         }
         catch (Exception ex)
         {
-            State = ShareState.Fehler;
-            SetPhase(SyncPhase.Ruht);
-            _log($"[{FolderId}] {ex.Message}");
+            Fail(ex);
             throw;
         }
+    }
+
+    private void Fail(Exception exception)
+    {
+        State = ShareState.Fehler;
+        SetPhase(SyncPhase.Ruht);
+        _log($"[{FolderId}] {exception.Message}");
     }
 
     private async Task WaitForIndexAsync(CancellationToken ct)
@@ -304,6 +340,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         if (State == ShareState.Gestoppt) return;
 
         _cache?.Save();
+        _cache?.LeaveBudget();
         _mount?.Dispose();
         _mount = null;
         _connection = null;
@@ -344,7 +381,11 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
-        var budget = _config.Mode == ShareMode.AlwaysLocal ? 0 : _config.CacheMaxBytes;
+        // "Vollstaendig lokal" nimmt am Budget nicht teil -- dort soll nichts
+        // weichen, sonst waere die Zusage keine.
+        var budget = _config.Mode == ShareMode.AlwaysLocal ? null : _app.Cache;
+        if (budget is not null) budget.Log ??= _log;
+
         _cache = new HydrationCache(_config.LocalPath, budget, statePath, _log)
         {
             // Der Cache kennt nur Groessen und Zugriffszeiten; ob eine Datei
@@ -352,7 +393,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             MayEvict = MayEvict
         };
 
-        _thumbnails = new ThumbnailStore(Path.Combine(_app.HomeDirectory, "thumbs"));
+        _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
+        _thumbnails.Prepare();
 
         // Der Eintrag muss stehen, bevor die Shell den Sync-Root zur Kenntnis
         // nimmt -- sie liest seine Eigenschaften beim Anmelden. Deshalb danach

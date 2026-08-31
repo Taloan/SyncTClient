@@ -5,6 +5,10 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWPF>true</UseWPF>
+
+    <!-- Nur wegen NotifyIcon: ein Symbol im Infobereich hat WPF nicht. -->
+    <UseWindowsForms>true</UseWindowsForms>
+
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -12,9 +16,25 @@
     <AssemblyName>synctgui</AssemblyName>
   </PropertyGroup>
 
+  <!--
+    Windows Forms braechte sonst System.Drawing und System.Windows.Forms als
+    globale Usings mit. Zusammen mit System.Windows waeren Application,
+    MessageBox, Clipboard, Label und TextBox in jeder Datei mehrdeutig, auch in
+    denen, die von NotifyIcon nichts wissen wollen. Wer es braucht, sagt es
+    ausdruecklich per Alias.
+  -->
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\SyncTClient.Bep\SyncTClient.Bep.csproj" />
     <ProjectReference Include="..\SyncTClient.Mount\SyncTClient.Mount.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
 </Project>

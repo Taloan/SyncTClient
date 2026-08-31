@@ -25,10 +25,8 @@ public partial class ShareSettingsWindow : Window
         _loading = true;
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
-        CacheBudgetBox.Text = (share.CacheMaxBytes / (1024 * 1024)).ToString();
         MinimumCopiesBox.Text = share.MinimumCopies.ToString();
         ThumbsBox.IsChecked = share.GenerateThumbnails;
-        AutoStartBox.IsChecked = share.AutoStart;
         UpdateCacheEnabled();
         _loading = false;
 
@@ -40,7 +38,7 @@ public partial class ShareSettingsWindow : Window
         var databasePath = Path.Combine(_homeDirectory, $"index-{_share.FolderId}.db");
         if (!File.Exists(databasePath))
         {
-            TreeStatus.Text = "Noch kein Index — den Ordner einmal starten.";
+            TreeStatus.Text = App.S("S2.NoIndex");
             return;
         }
 
@@ -55,7 +53,7 @@ public partial class ShareSettingsWindow : Window
             _tree.RecomputeUpwards();
 
             FolderTree.ItemsSource = new[] { _tree };
-            TreeStatus.Text = $"{_tree.FileCount} Dateien, {_tree.TotalBytes / (1024.0 * 1024.0):0.#} MB insgesamt";
+            TreeStatus.Text = App.S("S2.Summary", _tree.FileCount, Format.Bytes(_tree.TotalBytes));
         }
         catch (Exception ex)
         {
@@ -83,16 +81,14 @@ public partial class ShareSettingsWindow : Window
 
     private void UpdateCacheEnabled()
     {
-        // Bei "vollstaendig lokal" gibt es nichts zu verdraengen.
-        var onDemand = ModeBox.SelectedIndex == 0;
-        CachePanel.IsEnabled = onDemand;
-
         // Bei "vollstaendig lokal" wird nie verdraengt -- dann gibt es auch
         // nichts, wofuer eine Mindestzahl an Kopien gelten koennte.
+        var onDemand = ModeBox.SelectedIndex == 0;
         CopiesPanel.IsEnabled = onDemand;
+
         CacheHint.Text = onDemand
-            ? "Ist das Budget überschritten, wird freigegeben, was am längsten nicht geöffnet wurde. Angeheftete Dateien bleiben."
-            : "In diesem Modus wird alles lokal vorgehalten; ein Budget gilt nicht.";
+            ? App.S("S2.CacheOnDemand")
+            : App.S("S2.CacheAlways");
     }
 
     private void OnSelectAll(object sender, RoutedEventArgs e)
@@ -107,24 +103,16 @@ public partial class ShareSettingsWindow : Window
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        if (!long.TryParse(CacheBudgetBox.Text.Trim(), out var megabytes) || megabytes < 0)
-        {
-            SaveHint.Text = "Das Cache-Budget muss eine Zahl in MB sein (0 = unbegrenzt).";
-            return;
-        }
-
         if (!int.TryParse(MinimumCopiesBox.Text.Trim(), out var copies) || copies < 0)
         {
-            SaveHint.Text = "Die Anzahl Kopien muss eine Zahl ab 0 sein.";
+            SaveHint.Text = App.S("S2.CopiesInvalid");
             return;
         }
 
         _share.MinimumCopies = copies;
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
-        _share.CacheMaxBytes = megabytes * 1024 * 1024;
         _share.GenerateThumbnails = ThumbsBox.IsChecked == true;
-        _share.AutoStart = AutoStartBox.IsChecked == true;
 
         if (_tree is not null)
         {

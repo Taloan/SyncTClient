@@ -19,11 +19,29 @@ namespace SyncTClient.Gui;
 /// </remarks>
 public sealed class ThroughputChart : FrameworkElement
 {
-    private static readonly Brush EmpfangenFuellung = Neu(Color.FromArgb(60, 0x1E, 0x88, 0xE5));
-    private static readonly Pen EmpfangenLinie = NeuStift(Color.FromRgb(0x1E, 0x88, 0xE5), 1.6);
-    private static readonly Pen GesendetLinie = NeuStift(Color.FromRgb(0x43, 0xA0, 0x47), 1.4);
-    private static readonly Pen Raster = NeuStift(Color.FromRgb(0xE0, 0xE0, 0xE0), 1);
-    private static readonly Brush Schrift = Neu(Color.FromRgb(0x88, 0x88, 0x88));
+    private static readonly Brush EmpfangenErsatz = Neu(Color.FromRgb(0x1E, 0x88, 0xE5));
+    private static readonly Brush GesendetErsatz = Neu(Color.FromRgb(0x43, 0xA0, 0x47));
+    private static readonly Brush RasterErsatz = Neu(Color.FromRgb(0xE0, 0xE0, 0xE0));
+    private static readonly Brush SchriftErsatz = Neu(Color.FromRgb(0x88, 0x88, 0x88));
+
+    // Beim Zeichnen aus dem Farbschema geholt: ein Raster in Hellgrau waere
+    // auf dunklem Grund ein Gitter aus Neon.
+    private Brush EmpfangenFuellung => Transparent(Farbe("Ein", EmpfangenErsatz), 60);
+    private Pen EmpfangenLinie => NeuStift(Farbe("Ein", EmpfangenErsatz), 1.6);
+    private Pen GesendetLinie => NeuStift(Farbe("Aus", GesendetErsatz), 1.4);
+    private Pen Raster => NeuStift(Farbe("RahmenFein", RasterErsatz), 1);
+    private Brush Schrift => Farbe("Gedaempft", SchriftErsatz);
+
+    private Brush Farbe(string key, Brush ersatz) => TryFindResource(key) as Brush ?? ersatz;
+
+    /// <summary>Dieselbe Farbe, nur durchscheinend -- fuer die Flaeche unter der Kurve.</summary>
+    private static Brush Transparent(Brush brush, byte alpha)
+    {
+        if (brush is not SolidColorBrush solid) return brush;
+
+        var color = solid.Color;
+        return Neu(Color.FromArgb(alpha, color.R, color.G, color.B));
+    }
 
     private ThroughputPoint[] _points = [];
 
@@ -112,9 +130,9 @@ public sealed class ThroughputChart : FrameworkElement
         return brush;
     }
 
-    private static Pen NeuStift(Color color, double thickness)
+    private static Pen NeuStift(Brush brush, double thickness)
     {
-        var pen = new Pen(Neu(color), thickness);
+        var pen = new Pen(brush, thickness);
         pen.Freeze();
         return pen;
     }

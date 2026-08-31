@@ -1,0 +1,247 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:s="clr-namespace:System;assembly=System.Runtime">
+
+  <s:String x:Key="S.Cancel">Abbrechen</s:String>
+  <s:String x:Key="S.Close">Schließen</s:String>
+  <s:String x:Key="S.Save">Speichern</s:String>
+  <s:String x:Key="S.Add">Hinzufügen</s:String>
+  <s:String x:Key="S.Edit">Bearbeiten</s:String>
+  <s:String x:Key="S.Remove">Entfernen</s:String>
+  <s:String x:Key="S.Browse">Durchsuchen …</s:String>
+  <s:String x:Key="S.All">Alles</s:String>
+  <s:String x:Key="S.None">Nichts</s:String>
+  <s:String x:Key="S.Main.Device">Dieses Gerät</s:String>
+  <s:String x:Key="S.Main.Peers">Gegenstellen …</s:String>
+  <s:String x:Key="S.Main.Settings">Einstellungen …</s:String>
+  <s:String x:Key="S.Col.Name">Name</s:String>
+  <s:String x:Key="S.Col.Status">Status</s:String>
+  <s:String x:Key="S.Col.Nodes">Knoten online</s:String>
+  <s:String x:Key="S.Col.Progress">Fortschritt</s:String>
+  <s:String x:Key="S.Col.Copies">Vollständige Kopien</s:String>
+  <s:String x:Key="S.Col.Received">Empfangen</s:String>
+  <s:String x:Key="S.Col.Size">Größe</s:String>
+  <s:String x:Key="S.Col.LocalFiles">Lokale Dateien</s:String>
+  <s:String x:Key="S.Col.LocalSize">Lokale Größe</s:String>
+  <s:String x:Key="S.Col.Files">Dateien</s:String>
+  <s:String x:Key="S.Col.Thumbs">Vorschaubilder</s:String>
+  <s:String x:Key="S.Col.Budget">Cache-Budget</s:String>
+  <s:String x:Key="S.Col.Mode">Modus</s:String>
+  <s:String x:Key="S.Col.LastTransfer">Zuletzt übertragen</s:String>
+  <s:String x:Key="S.Col.Peer">Gegenstelle</s:String>
+  <s:String x:Key="S.Col.FolderId">Ordner-ID</s:String>
+  <s:String x:Key="S.Col.Folder">Ordner</s:String>
+  <s:String x:Key="S.Main.MenuHint">Rechtsklick auf einen Share zeigt, was damit geht.</s:String>
+  <s:String x:Key="S.Menu.Connect">Share verbinden</s:String>
+  <s:String x:Key="S.Menu.Pause">Anhalten</s:String>
+  <s:String x:Key="S.Menu.Resume">Fortsetzen</s:String>
+  <s:String x:Key="S.Menu.Open">Ordner öffnen</s:String>
+  <s:String x:Key="S.Menu.Settings">Ordner-Einstellungen</s:String>
+  <s:String x:Key="S.Menu.Unbind">Verbindung lösen</s:String>
+  <s:String x:Key="S.Peers.Disconnect">Trennen</s:String>
+  <s:String x:Key="S.Peer.TitleEdit">Gegenstelle bearbeiten</s:String>
+  <s:String x:Key="S.Peer.Apply">Übernehmen</s:String>
+  <s:String x:Key="S.Main.TransfersAndLog">Übertragungen und Protokoll</s:String>
+  <s:String x:Key="S.Main.Transfers">Übertragungen</s:String>
+  <s:String x:Key="S.Main.Log">Protokoll</s:String>
+  <s:String x:Key="S.Main.Idle">nichts unterwegs</s:String>
+  <s:String x:Key="S.Main.Stats">Statistik</s:String>
+  <s:String x:Key="S.Main.Network">NETZWERK</s:String>
+  <s:String x:Key="S.Main.Rate">Rate</s:String>
+  <s:String x:Key="S.Main.Session">SITZUNG</s:String>
+  <s:String x:Key="S.Main.RecvSince">Empfangen seit Programmstart</s:String>
+  <s:String x:Key="S.Main.SentSince">Gesendet seit Programmstart</s:String>
+  <s:String x:Key="S.Main.Peak">Höchste Rate</s:String>
+  <s:String x:Key="S.Main.Cache">CACHE</s:String>
+  <s:String x:Key="S.Main.Preview">VORSCHAU</s:String>
+  <s:String x:Key="S.Main.Span5">5 Minuten</s:String>
+  <s:String x:Key="S.Main.Span30">30 Minuten</s:String>
+  <s:String x:Key="S.Main.Span180">3 Stunden</s:String>
+  <s:String x:Key="S.Main.NodesTip">Wer trägt diesen Ordner?</s:String>
+  <s:String x:Key="S.Device.ScanHint">Auf dem Mobilgerät in Syncthing: Gerät hinzufügen, dann diesen Code scannen.</s:String>
+  <s:String x:Key="S.Device.OwnIdHint">Diese Kennung auf der Gegenstelle als Gerät eintragen und die gewünschten Ordner damit teilen. Danach erscheinen sie in der Übersicht als angeboten.</s:String>
+  <s:String x:Key="S.Device.OwnId">Eigene Device-ID</s:String>
+  <s:String x:Key="S.Device.Copy">In die Zwischenablage</s:String>
+  <s:String x:Key="S.Device.ConfigFile">Konfigurationsdatei</s:String>
+  <s:String x:Key="S.Device.StartGroup">Start und Fenster</s:String>
+  <s:String x:Key="S.Device.Autostart">Mit Windows starten</s:String>
+  <s:String x:Key="S.Device.StartMinimized">Minimiert starten</s:String>
+  <s:String x:Key="S.Device.CloseToTray">Beim Schließen in den Symbolbereich</s:String>
+  <s:String x:Key="S.Device.StartHint">Diese drei gelten sofort. Steht der Haken beim Symbolbereich, versteckt das X nur das Fenster — beendet wird über das Kontextmenü des Symbols, ein Doppelklick holt das Fenster zurück. Zusammen mit „minimiert starten“ geht beim Start gar kein Fenster auf. Ob Windows das Programm startet, steht in der Registry und nicht in der Konfigurationsdatei.</s:String>
+  <s:String x:Key="S.Tray.Open">Öffnen</s:String>
+  <s:String x:Key="S.Tray.Quit">Beenden</s:String>
+  <s:String x:Key="S.Tray.Tip">SyncTClient — läuft im Hintergrund</s:String>
+  <s:String x:Key="S.Peer.TitleAdd">Gegenstelle hinzufügen</s:String>
+  <s:String x:Key="S.Peer.Name">Name (frei wählbar)</s:String>
+  <s:String x:Key="S.Peer.AddressHint">Host und Port, etwa 192.168.1.42:22000. Ohne Port wird 22000 angenommen. Leer lassen heißt: bei jedem Verbinden die Erkennung fragen, wo das Gerät gerade ist.</s:String>
+  <s:String x:Key="S.Peer.DeviceId">Device-ID der Gegenstelle</s:String>
+  <s:String x:Key="S.Peer.IdHint">In der Syncthing-Oberfläche der Gegenstelle unter „Dieses Gerät → Kennung“.</s:String>
+  <s:String x:Key="S.Peer.AutoConnect">Beim Start automatisch verbinden</s:String>
+  <s:String x:Key="S.Peer.Discovery">Adresse beim Erkennungsserver suchen</s:String>
+  <s:String x:Key="S.Peer.Relay">Über einen Relay verbinden, wenn kein direkter Weg besteht</s:String>
+  <s:String x:Key="S.Peer.RelayHint">Beides braucht eine Gegenstelle, die keinen Port nach außen offen hat. Der Relay trägt fremde Bandbreite und ist langsamer als jeder direkte Weg — er wird nur genommen, wenn kein direkter zustande kommt.</s:String>
+  <s:String x:Key="S.Peer.Address">Adresse</s:String>
+  <s:String x:Key="S.Peers.Hint">Syncthing verlangt, dass sich beide Seiten kennen. Eine Gegenstelle muss diesem Gerät die Ordner ausdrücklich freigeben — erst dann erscheinen sie in der Übersicht und lassen sich übernehmen.</s:String>
+  <s:String x:Key="S.Peers.Connect">Verbinden</s:String>
+  <s:String x:Key="S.Peers.Title">Gegenstellen</s:String>
+  <s:String x:Key="S.Peers.State">Zustand</s:String>
+  <s:String x:Key="S.Peers.Address">Adresse und Fassung</s:String>
+  <s:String x:Key="S.Nodes.Activity">Aktivität</s:String>
+  <s:String x:Key="S.Nodes.Node">Knoten</s:String>
+  <s:String x:Key="S.Nodes.Open">Offen</s:String>
+  <s:String x:Key="S.Share.LocalPath">Lokaler Pfad</s:String>
+  <s:String x:Key="S.Mode.OnDemand">Bei Bedarf herunterladen (Platzhalter)</s:String>
+  <s:String x:Key="S.Mode.Always">Vollständig lokal bereithalten</s:String>
+  <s:String x:Key="S.Share.MinCopies">Erst freigeben ab … Kopien</s:String>
+  <s:String x:Key="S.Share.Thumbs">Vorschaubilder bei Bedarf erzeugen</s:String>
+  <s:String x:Key="S.Share.CopiesHint">Verdrängen heißt Bytes wegwerfen. Eine Datei wird erst freigegeben, wenn so viele andere Knoten sie vollständig führen. Gegen einen Server ist 1 richtig; wer mehrere Knoten hat, kann 2 verlangen. 0 schaltet die Prüfung ab.</s:String>
+  <s:String x:Key="S.Share.TreeQuestion">Was soll überhaupt erscheinen?</s:String>
+  <s:String x:Key="S.Share.SaveHint">Änderungen greifen, wenn die Freigabe neu gestartet wird.</s:String>
+  <s:String x:Key="S.Accept.Title">Share verbinden</s:String>
+  <s:String x:Key="S.Accept.LocalFolder">Lokaler Ordner</s:String>
+  <s:String x:Key="S.Accept.PathHint">Hier erscheint der Ordner im Explorer. Das Verzeichnis wird angelegt, wenn es noch nicht besteht.</s:String>
+  <s:String x:Key="S.Accept.ModeQuestion">Wie soll der Ordner vorgehalten werden?</s:String>
+  <s:String x:Key="S.Accept.TreeQuestion">Was soll übernommen werden?</s:String>
+  <s:String x:Key="S.Accept.Hint">Nicht ausgewählte Zweige erscheinen gar nicht erst — sie kosten weder Platz noch Index.</s:String>
+  <s:String x:Key="S.Settings.Title">Einstellungen</s:String>
+  <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
+  <s:String x:Key="S.Settings.CacheDir">Cache-Verzeichnis</s:String>
+  <s:String x:Key="S.Settings.CacheDirHint">Hier liegen die zwischengespeicherten Dateien — und zwar als die Freigaben selbst: Windows füllt die Platzhalter an Ort und Stelle, und „verdrängen“ heißt, sie wieder zu leeren. Nicht alles darin ist Cache: angeheftete Dateien und Ordner im Modus „vollständig lokal“ bleiben liegen. Neue Freigaben landen hier; bereits übernommene bleiben, wo sie sind (Ordner-Einstellungen).</s:String>
+  <s:String x:Key="S.Settings.Budget">Cache-Budget (GB)</s:String>
+  <s:String x:Key="S.Settings.MinFree">Mindestens frei lassen (GB)</s:String>
+  <s:String x:Key="S.Settings.LimitsHint">Zwei Grenzen; es gilt, welche zuerst greift. Wird eine überschritten, wird freigegeben, was am längsten nicht geöffnet wurde — quer über alle Ordner. Angeheftete Dateien und Ordner im Modus „vollständig lokal“ bleiben liegen. Beim freien Platz heißt 0: keine Rücksicht.</s:String>
+  <s:String x:Key="S.Settings.ClearCache">Cache jetzt leeren …</s:String>
+  <s:String x:Key="S.Settings.DataGroup">DATEN</s:String>
+  <s:String x:Key="S.Settings.DataDir">Datenverzeichnis</s:String>
+  <s:String x:Key="S.Settings.DataDirHint">Gerätezertifikat und Index — die Vorschaubilder liegen im Cache-Verzeichnis. Ein Wechsel gilt ab dem nächsten Start; vorhandene Daten wandern nicht mit, und ohne Zertifikat am neuen Ort entsteht eine neue Device-ID.</s:String>
+  <s:String x:Key="S.Settings.NetGroup">VERBINDUNGEN</s:String>
+  <s:String x:Key="S.Settings.Listen">Anrufe anderer Geräte annehmen</s:String>
+  <s:String x:Key="S.Settings.ListenHint">Ohne dies ruft SyncTClient nur selbst an. Eine Gegenstelle, die dieses Gerät gerade eingetragen hat, käme dann nie durch — und die Frage „möchte sich verbinden“ gäbe es nicht. Wer anruft und unbekannt ist, wird vorgestellt, bevor irgendetwas passiert.</s:String>
+  <s:String x:Key="S.Settings.ListenPort">Port für eingehende Verbindungen</s:String>
+  <s:String x:Key="S.Settings.Parallelism">Parallele Block-Anfragen</s:String>
+  <s:String x:Key="S.Settings.LocalDiscovery">Im eigenen Netz rufen und zuhören</s:String>
+  <s:String x:Key="S.Settings.LocalDiscoveryHint">Alle 30 Sekunden ein Ruf ins lokale Netz (UDP 21027) und ein Ohr für die Rufe der anderen. Ohne das bleibt dieses Gerät unsichtbar: eine Gegenstelle, bei der als Adresse „dynamic“ steht, findet es nicht und ruft nie an.</s:String>
+  <s:String x:Key="S.Settings.Announce">Dem Erkennungsserver melden, wo dieses Gerät erreichbar ist</s:String>
+  <s:String x:Key="S.Settings.AnnounceHint">Dasselbe für außerhalb des eigenen Netzes, beglaubigt mit dem Gerätezertifikat. Der Server erfährt dabei die öffentliche IP-Adresse dieses Anschlusses.</s:String>
+  <s:String x:Key="S.Settings.Lookup">Gegenstellen ohne feste Adresse beim Erkennungsserver suchen</s:String>
+  <s:String x:Key="S.Settings.LookupHint">Nötig für eine Gegenstelle, die keinen Port nach außen offen hat: sie hat keine feste Adresse und meldet dem Server stattdessen, worüber sie zu erreichen ist. Der Server erfährt dabei, nach welchem Gerät gefragt wird — und nebenbei deine IP-Adresse.</s:String>
+  <s:String x:Key="S.Settings.Servers">Erkennungsserver (einer je Zeile)</s:String>
+  <s:String x:Key="S.Settings.ServersHint">Die Rollen stehen in der Adresse: „nolookup“ nimmt nur Anmeldungen entgegen, „noannounce“ beantwortet nur Fragen. Für Anmeldungen gibt es je einen Server für IPv4 und IPv6 — welche Adresse ein Server sieht, hängt daran, worüber er angesprochen wird.</s:String>
+  <s:String x:Key="S.Settings.Relays">Relays verwenden, wenn kein direkter Weg besteht</s:String>
+  <s:String x:Key="S.Settings.RelaysHint">Hauptschalter. Je Gegenstelle lässt sich das zusätzlich abschalten — Gegenstellen → Bearbeiten. Ein Relay leitet die Verbindung über einen fremden Rechner; verschlüsselt bleibt sie, langsam wird sie.</s:String>
+
+  <s:String x:Key="S.Settings.LookGroup">DARSTELLUNG</s:String>
+  <s:String x:Key="S.Settings.Language">Sprache</s:String>
+  <s:String x:Key="S.Settings.Theme">Farbschema</s:String>
+  <s:String x:Key="S.Settings.System">wie das System</s:String>
+  <s:String x:Key="S.Settings.Light">Hell</s:String>
+  <s:String x:Key="S.Settings.Dark">Dunkel</s:String>
+  <s:String x:Key="S.Accept.NotEmptyTitle">Der Ordner ist nicht leer</s:String>
+  <s:String x:Key="S.Accept.NotEmpty">In diesem Ordner liegt bereits etwas.
+
+Was darin liegt, bleibt liegen und wird zum Inhalt dieses Shares. Zur Gegenstelle übertragen wird es vorerst nicht — der Schreibweg fehlt noch.
+
+Trotzdem diesen Ordner verwenden?</s:String>
+
+  <s:String x:Key="M.ConfigUnreadable">Konfiguration nicht lesbar: {0}</s:String>
+  <s:String x:Key="M.NoPeer">Noch keine Gegenstelle. Device-ID unter „Dieses Gerät“ auf der Gegenstelle eintragen, dann hier „Gegenstellen …“.</s:String>
+  <s:String x:Key="M.Configured">{0} Gegenstelle(n), {1} Ordner konfiguriert.</s:String>
+  <s:String x:Key="M.FreeUnknown">freier Platz unbekannt</s:String>
+  <s:String x:Key="M.FreeShould">{0}
+frei bleiben sollen {1}</s:String>
+  <s:String x:Key="M.Free">{0} frei</s:String>
+  <s:String x:Key="M.CacheOf">{0} von {1}</s:String>
+  <s:String x:Key="M.CacheNoBudget">{0} (kein Budget)</s:String>
+  <s:String x:Key="M.Previews">{0} Vorschaubilder ({1})</s:String>
+  <s:String x:Key="M.UsedUnknown">Belegt: unbekannt — es läuft gerade keine Freigabe. Dazu {0}.</s:String>
+  <s:String x:Key="M.Used">Belegt: {0} in {1} Dateien, dazu {2}.</s:String>
+  <s:String x:Key="M.NothingLocal">Nichts zu leeren — es liegt nichts Freigebbares lokal.</s:String>
+  <s:String x:Key="M.NothingRunning">Nichts zu leeren — es läuft gerade keine Freigabe.</s:String>
+  <s:String x:Key="M.Cleared">{0} Dateien freigegeben ({1}), {2} Vorschaubilder verworfen ({3}).</s:String>
+  <s:String x:Key="M.WantsToConnect">„{0}“ möchte sich verbinden.</s:String>
+  <s:String x:Key="M.WantsToConnectBody">„{0}“ möchte sich verbinden.
+
+Adresse:      {1}
+Device-ID:  {2}
+
+Als Gegenstelle hinzufügen?</s:String>
+  <s:String x:Key="M.UnknownPeer">Unbekannte Gegenstelle</s:String>
+  <s:String x:Key="M.Rejected">„{0}“ abgewiesen.</s:String>
+  <s:String x:Key="M.PeerAdded">Gegenstelle {0} hinzugefügt.</s:String>
+  <s:String x:Key="M.PeerChanged">Gegenstelle {0} geändert — wirksam beim nächsten Verbinden.</s:String>
+  <s:String x:Key="M.RemovePeer">Gegenstelle „{0}“ entfernen?</s:String>
+  <s:String x:Key="M.RemovePeerShares">Gegenstelle „{0}“ mit {1} Ordner(n) entfernen?
+
+Die Verbindungen werden gelöst. Bereits heruntergeladene Dateien bleiben liegen.</s:String>
+  <s:String x:Key="M.Remove">Entfernen</s:String>
+  <s:String x:Key="M.Asking">Frage {0} bei der Gegenstelle ab ...</s:String>
+  <s:String x:Key="M.ContentUnavailable">Der Inhalt von {0} ist nicht zu bekommen: {1}</s:String>
+  <s:String x:Key="M.NotConnected">{0} nicht verbunden.</s:String>
+  <s:String x:Key="M.Connecting">Verbinde {0} mit {1} ...</s:String>
+  <s:String x:Key="M.Connected">{0} verbunden.</s:String>
+  <s:String x:Key="M.ConnectFailed">Verbinden fehlgeschlagen: {0}</s:String>
+  <s:String x:Key="M.UnbindBody">Verbindung zu „{0}“ lösen?
+
+Die Platzhalter unter {1} werden abgemeldet, Index und Vorschaubilder verworfen.
+Bereits heruntergeladene Dateien bleiben liegen.</s:String>
+  <s:String x:Key="M.NoShareSelected">Kein verbundener Ordner ausgewählt.</s:String>
+  <s:String x:Key="M.SavedScope">Gespeichert — {0} ausgewählt. Wirksam nach dem nächsten Verbinden.</s:String>
+  <s:String x:Key="M.ScopeAll">alles</s:String>
+  <s:String x:Key="M.ScopeBranches">{0} Zweig(e)</s:String>
+  <s:String x:Key="M.NoPath">{0} gibt es (noch) nicht.</s:String>
+  <s:String x:Key="M.OpenFailed">Öffnen fehlgeschlagen: {0}</s:String>
+  <s:String x:Key="M.SavedHome">Gespeichert — das Datenverzeichnis gilt ab dem nächsten Start.</s:String>
+  <s:String x:Key="M.Saved">Gespeichert.</s:String>
+  <s:String x:Key="M.SaveFailed">Speichern fehlgeschlagen: {0}</s:String>
+  <s:String x:Key="D.Copied">Device-ID in die Zwischenablage kopiert.</s:String>
+  <s:String x:Key="D.QrFailed">QR-Code nicht darstellbar: {0}</s:String>
+  <s:String x:Key="D.AutostartFailed">Der Autostart-Eintrag lässt sich nicht ändern: {0}</s:String>
+  <s:String x:Key="A.NoIndex">Kein Index — es lässt sich nur alles oder nichts übernehmen.</s:String>
+  <s:String x:Key="A.HintOnDemand">Es entstehen zunächst nur Platzhalter; Inhalte kommen beim ersten Öffnen und unterliegen dem programmweiten Cache-Budget.</s:String>
+  <s:String x:Key="A.HintAlways">Alles wird sofort heruntergeladen und dauerhaft vorgehalten; das Cache-Budget lässt diesen Ordner in Ruhe.</s:String>
+  <s:String x:Key="A.NoFolder">Ohne lokalen Ordner geht es nicht.</s:String>
+  <s:String x:Key="A.PathNotFull">Der lokale Ordner braucht einen vollständigen Pfad.</s:String>
+  <s:String x:Key="A.TreeSummary">{0} Dateien, {1} insgesamt</s:String>
+  <s:String x:Key="P.IdIncomplete">Die Device-ID ist unvollständig.</s:String>
+  <s:String x:Key="G.ClearBody">Alle zwischengespeicherten Dateien werden wieder zu Platzhaltern, die Vorschaubilder werden verworfen.
+
+Angeheftete Dateien und Ordner im Modus „vollständig lokal“ bleiben liegen. Verloren geht nichts — was wieder gebraucht wird, kommt zurück und kostet dann erneut Bandbreite.</s:String>
+  <s:String x:Key="G.ClearTitle">Cache leeren</s:String>
+  <s:String x:Key="G.Clearing">Leere ...</s:String>
+  <s:String x:Key="G.ClearFailed">Leeren fehlgeschlagen: {0}</s:String>
+  <s:String x:Key="G.BudgetInvalid">Das Cache-Budget muss eine ganze Zahl in GB sein, mindestens 1.</s:String>
+  <s:String x:Key="G.FreeInvalid">Der freizuhaltende Platz muss eine ganze Zahl in GB sein (0 = keine Rücksicht).</s:String>
+  <s:String x:Key="G.ParallelInvalid">Parallele Block-Anfragen: eine Zahl ab 1.</s:String>
+  <s:String x:Key="G.PortInvalid">Der Port muss zwischen 1 und 65535 liegen.</s:String>
+  <s:String x:Key="G.HomeMissing">Ohne Datenverzeichnis geht es nicht.</s:String>
+  <s:String x:Key="G.FreeOn">Frei auf {0}: {1}</s:String>
+  <s:String x:Key="G.FreeUnknown">Freier Platz dieses Laufwerks: nicht feststellbar.</s:String>
+  <s:String x:Key="N.NotConnected">Angeboten, aber nicht verbunden.</s:String>
+  <s:String x:Key="N.Running">läuft …</s:String>
+  <s:String x:Key="S2.NoIndex">Noch kein Index — den Ordner einmal starten.</s:String>
+  <s:String x:Key="S2.CacheOnDemand">Das Cache-Budget gilt programmweit und steht unter „Einstellungen …“. Ist es überschritten, wird freigegeben, was am längsten nicht geöffnet wurde — quer über alle Ordner. Angeheftete Dateien bleiben.</s:String>
+  <s:String x:Key="S2.CacheAlways">In diesem Modus wird alles lokal vorgehalten; das programmweite Budget lässt diesen Ordner in Ruhe.</s:String>
+  <s:String x:Key="S2.CopiesInvalid">Die Anzahl Kopien muss eine Zahl ab 0 sein.</s:String>
+  <s:String x:Key="S2.Summary">{0} Dateien, {1} insgesamt</s:String>
+  <s:String x:Key="R.Ready">bereit</s:String>
+  <s:String x:Key="R.Paused">angehalten</s:String>
+  <s:String x:Key="R.Error">Fehler</s:String>
+  <s:String x:Key="R.Stopped">gestoppt</s:String>
+  <s:String x:Key="R.NotConnected">nicht verbunden</s:String>
+  <s:String x:Key="R.PhaseIndex">Index wird gelesen</s:String>
+  <s:String x:Key="R.PhasePlaceholders">Platzhalter werden angelegt</s:String>
+  <s:String x:Key="R.PhaseCache">Cache wird abgeglichen</s:String>
+  <s:String x:Key="R.PhaseContent">Inhalte werden geholt</s:String>
+  <s:String x:Key="R.PhaseWaiting">wartet</s:String>
+  <s:String x:Key="R.NotConnectedHint">Noch nicht verbunden.</s:String>
+  <s:String x:Key="R.CopiesNone">Kein erreichbarer Knoten führt diesen Ordner — Platzhalter lassen sich gerade nicht öffnen. Ob verdrängt werden darf, entscheidet weiterhin die zuletzt empfangene Ankündigung, nicht die Erreichbarkeit.</s:String>
+  <s:String x:Key="R.CopiesSome">{0} erreichbarer Knoten führt den Inhalt. Über nicht verbundene Knoten wissen wir nichts — die Zahl ist eine Untergrenze.</s:String>
+  <s:String x:Key="R.ModeAlways">vollständig lokal</s:String>
+  <s:String x:Key="R.ModeOnDemand">bei Bedarf</s:String>
+  <s:String x:Key="I.Connecting">verbindet ...</s:String>
+  <s:String x:Key="I.Connected">verbunden</s:String>
+  <s:String x:Key="I.Error">Fehler</s:String>
+  <s:String x:Key="I.ErrorWith">Fehler: {0}</s:String>
+  <s:String x:Key="I.Disconnected">getrennt</s:String>
+
+</ResourceDictionary>
