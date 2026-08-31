@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.IO;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -18,9 +19,70 @@ public partial class App : Application
     private static ResourceDictionary? _theme;
     private static ResourceDictionary? _strings;
 
+    /// <summary>Wohin ein Absturz geschrieben wird.</summary>
+    private static string FehlerDatei => Path.Combine(
+        Path.GetDirectoryName(SyncTClient.Mount.AppConfig.DefaultConfigPath()) ?? ".",
+        "fehler.log");
+
+    private static bool _fehlerGemeldet;
+
+    /// <summary>
+    /// Schreibt auf, was das Programm sonst wortlos beenden wuerde.
+    /// </summary>
+    /// <remarks>
+    /// Bisher stand ein Absturz nur in der Ereignisanzeige von Windows. Dort
+    /// steht er vollstaendig, aber niemand sucht ihn dort, und wer ihn sucht,
+    /// findet ihn zwischen tausend fremden Eintraegen.
+    ///
+    /// Die Datei liegt neben der Konfiguration. Angehaengt wird, nicht
+    /// ueberschrieben: der zweite Absturz ist oft der aufschlussreichere, und
+    /// der erste soll dabei nicht verschwinden.
+    /// </remarks>
+    private static void Notieren(Exception exception, string herkunft)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FehlerDatei)!);
+            File.AppendAllText(FehlerDatei,
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [{herkunft}]{Environment.NewLine}" +
+                exception + Environment.NewLine + Environment.NewLine);
+        }
+        catch (Exception)
+        {
+            // Wenn nicht einmal das Aufschreiben geht, ist nichts mehr zu
+            // retten. Ein Fehler beim Melden eines Fehlers hilft niemandem.
+        }
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Ein Fehler in einem Rueckruf der Oberflaeche beendete bisher das
+        // ganze Programm -- ein Klick auf einen Verweis in der Tabelle
+        // genuegte. Aufgeschrieben und weitergemacht ist besser: der Abgleich
+        // laeuft in anderen Faeden und ist von einem verungluecken Klick
+        // nicht betroffen.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Notieren(args.Exception, "Oberflaeche");
+            args.Handled = true;
+
+            if (_fehlerGemeldet) return;
+            _fehlerGemeldet = true;
+
+            MessageBox.Show(
+                args.Exception.Message + Environment.NewLine + Environment.NewLine +
+                "Aufgeschrieben in:" + Environment.NewLine + FehlerDatei,
+                "SyncTClient", MessageBoxButton.OK, MessageBoxImage.Warning);
+        };
+
+        // Diese beiden lassen sich nicht abfangen, nur aufschreiben.
+        AppDomain.CurrentDomain.UnhandledException +=
+            (_, args) => Notieren(args.ExceptionObject as Exception ?? new Exception("unbekannt"), "Hintergrund");
+
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException +=
+            (_, args) => Notieren(args.Exception, "Aufgabe");
 
         // Vor dem ersten Fenster anwenden. Sonst erscheint es kurz hell,
         // bevor die Einstellung gelesen ist.
