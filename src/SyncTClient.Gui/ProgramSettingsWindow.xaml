@@ -53,62 +53,68 @@
 
     <TextBlock Text="{DynamicResource S.Settings.StorageGroup}" Style="{StaticResource Gruppe}" />
 
-    <!-- ================= Sicherheitsvorgabe ================= -->
-    <TextBlock Text="{DynamicResource S.Settings.SafetyGroup}" Style="{StaticResource Kopfzeile}" Margin="0,4,0,0" />
-
-    <StackPanel Width="200" HorizontalAlignment="Left">
+    <StackPanel Width="200" HorizontalAlignment="Left" Margin="0,4,0,0">
       <Label Content="{DynamicResource S.Settings.Threshold}" />
       <TextBox x:Name="ThresholdBox" />
     </StackPanel>
     <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ThresholdHint}" />
 
-    <!-- ================= Limits ================= -->
-    <TextBlock Text="{DynamicResource S.Settings.LimitsGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
-    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.LimitsLead}" Margin="0,0,0,4" />
+    <!-- ================= Je Datentraeger ================= -->
+    <TextBlock Text="{DynamicResource S.Settings.VolumeGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
 
-    <StackPanel Width="240" HorizontalAlignment="Left">
-      <Label Content="{DynamicResource S.Settings.PerVolume}" />
-      <TextBox x:Name="CacheBudgetBox" />
-    </StackPanel>
-    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.PerVolumeHint}" />
-
-    <StackPanel Width="240" HorizontalAlignment="Left" Margin="0,10,0,0">
-      <Label Content="{DynamicResource S.Settings.KeepFree}" />
-      <TextBox x:Name="MinimumFreeBox" />
-    </StackPanel>
-    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.KeepFreeHint}" />
-
-    <!-- ================= Sofort ================= -->
-    <TextBlock Text="{DynamicResource S.Settings.NowGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
-    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.NowLead}" Margin="0,0,0,6" />
-
-    <!-- Wie viele Zeilen es sind, entscheidet sich erst zur Laufzeit:
-         Freigaben duerfen auf verschiedenen Laufwerken liegen. Die beiden
-         Grenzen stehen in der Zeile, weil sie je Datentraeger gelten; die
-         Felder oben sind die Vorgabe fuer Laufwerke ohne eigenen Eintrag. -->
+    <!-- Wie viele Abschnitte es sind, entscheidet sich erst zur Laufzeit:
+         Freigaben duerfen auf verschiedenen Laufwerken liegen. Jedes bekommt
+         einen eigenen Rahmen, denn die Zahlen darin gelten nur dort. Ohne
+         Trennung liest sich das wie eine einzige lange Liste. -->
     <ItemsControl x:Name="VolumeList">
       <ItemsControl.ItemTemplate>
         <DataTemplate>
-          <StackPanel Margin="0,0,0,14">
-            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" CornerRadius="3"
+                  Padding="10,8" Margin="0,0,0,10">
+            <StackPanel>
+              <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
 
-            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-              <TextBlock Text="{DynamicResource S.Settings.PerVolume}" VerticalAlignment="Center" />
-              <TextBox Text="{Binding MaxGb, UpdateSourceTrigger=PropertyChanged}"
-                       Width="60" Margin="6,0,0,0" />
-              <TextBlock Text="{DynamicResource S.Settings.KeepFreeShort}" VerticalAlignment="Center"
-                         Margin="18,0,0,0" />
-              <TextBox Text="{Binding MinFreeGb, UpdateSourceTrigger=PropertyChanged}"
-                       Width="60" Margin="6,0,0,0" />
+              <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource S.Settings.UseLimit}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBox Grid.Row="0" Grid.Column="1" Width="70"
+                         Text="{Binding MaxGb, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="0" Grid.Column="2" Style="{StaticResource Hinweis}"
+                           Text="{DynamicResource S.Settings.UseLimitNote}"
+                           VerticalAlignment="Center" Margin="8,0,0,0" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource S.Settings.KeepLimit}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,6,6,0" />
+                <TextBox Grid.Row="1" Grid.Column="1" Width="70" Margin="0,6,0,0"
+                         Text="{Binding MinFreeGb, UpdateSourceTrigger=PropertyChanged}" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Hinweis}"
+                           Text="{DynamicResource S.Settings.KeepLimitNote}"
+                           VerticalAlignment="Center" Margin="8,6,0,0" />
+              </Grid>
+
+              <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.LimitsLead}" />
+
+              <TextBlock Text="{Binding EvictText}" TextWrapping="Wrap" Margin="0,10,0,0" />
+              <Button Content="{Binding ButtonText}" Padding="10,3" HorizontalAlignment="Left"
+                      Margin="0,4,0,0" IsEnabled="{Binding CanRelease}"
+                      Tag="{Binding Root}" Click="OnReleaseVolume" />
             </StackPanel>
-
-            <Button Content="{Binding ButtonText}" Padding="10,3" HorizontalAlignment="Left"
-                    Margin="0,6,0,0" IsEnabled="{Binding CanRelease}"
-                    Tag="{Binding Root}" Click="OnReleaseVolume" />
-          </StackPanel>
+          </Border>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
+
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.VolumeDefaults}" Margin="0,0,0,0" />
 
     <!-- Erzeugen, Bestand und Loeschen stehen beieinander. Das Kaestchen
          allein sagt nichts darueber, was bereits liegt, und ein Knopf am

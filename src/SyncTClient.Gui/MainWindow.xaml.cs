@@ -1223,6 +1223,12 @@ public partial class MainWindow : Window
         }
 
         _config.Shares.Add(draft);
+
+        // Der erste Share auf einem Laufwerk legt dessen Werte fest. Zehn
+        // Prozent des Datentraegers werden dabei einmal ausgerechnet und
+        // stehen danach als Zahl in der Datei.
+        // _runtime teilt sich die Liste mit _config, ein Aufruf genuegt.
+        _config.EnsureLimits(draft.LocalPath);
         Persist();
 
         Status(App.S("M.Connecting", row.Name, draft.LocalPath));
