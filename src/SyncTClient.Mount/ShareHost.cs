@@ -238,7 +238,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public int HoldersOf(string relativePath)
     {
         if (_index is null) return 0;
-        return _index.TryGet(relativePath, out var file) && HasContent(file) ? 1 : 0;
+
+        // Auch hier die Sperre. Der Aufruf kommt aus der Verdraengung, und die
+        // laeuft in einem anderen Faden als der Hintergrundlauf.
+        lock (_indexGate)
+            return _index.TryGet(relativePath, out var file) && HasContent(file) ? 1 : 0;
     }
 
     /// <summary>
