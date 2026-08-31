@@ -187,6 +187,51 @@ public sealed class HydrationCache
     /// zwischen zwei Laeufen Dateien geoeffnet oder freigegeben worden sein
     /// koennen.
     /// </summary>
+    /// <summary>
+    /// Merkt sich, dass diese Datei ihren Inhalt lokal haelt.
+    /// </summary>
+    /// <remarks>
+    /// Fuer Dateien, die niemand geholt hat, weil sie jemand hineinkopiert
+    /// hat. Der Durchgang ueber den Ordner faende sie auch, aber erst beim
+    /// naechsten Mal; hier steht die Zahl innerhalb weniger Sekunden.
+    /// </remarks>
+    public void NoteContent(string relativePath, long bytes)
+    {
+        _entries.AddOrUpdate(
+            relativePath,
+            _ => new Entry(bytes, DateTimeOffset.UtcNow),
+            (_, existing) => existing with { Bytes = bytes });
+    }
+
+    /// <summary>
+    /// Uebernimmt eine fertige Bestandsaufnahme, statt selbst zu lesen.
+    /// </summary>
+    /// <remarks>
+    /// Der Durchgang ueber den Ordner laeuft ohnehin jede Minute und weiss
+    /// dabei zu jeder Datei, ob sie Inhalt haelt. Ein zweiter Lauf ueber
+    /// dasselbe Verzeichnis waere dieselbe Auskunft zum doppelten Preis.
+    ///
+    /// Ohne diese Meldung erfaehrt der Cache nur beim Start, was lokal liegt.
+    /// Eine Datei, die spaeter hineinkopiert wird, kommt in keiner Bilanz vor:
+    /// sie wurde nie geholt, also meldet sie auch niemand.
+    /// </remarks>
+    public void ReconcileWith(IReadOnlyDictionary<string, (long Bytes, DateTimeOffset LastAccess)> mitInhalt)
+    {
+        foreach (var (relative, eintrag) in mitInhalt)
+        {
+            _entries.AddOrUpdate(
+                relative,
+                _ => new Entry(eintrag.Bytes, eintrag.LastAccess),
+                (_, existing) => existing with { Bytes = eintrag.Bytes });
+        }
+
+        // Was keinen Inhalt mehr haelt, gehoert nicht in die Bilanz. Das
+        // trifft auf jeden Platzhalter zu -- auch auf den, der eben noch eine
+        // gefuellte Datei war.
+        foreach (var stale in _entries.Keys.Where(k => !mitInhalt.ContainsKey(k)).ToList())
+            _entries.TryRemove(stale, out _);
+    }
+
     public void ReconcileWithDisk()
     {
         if (!Directory.Exists(_rootPath)) return;

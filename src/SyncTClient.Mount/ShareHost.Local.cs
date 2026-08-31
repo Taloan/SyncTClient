@@ -353,6 +353,10 @@ public sealed partial class ShareHost
         // Index passt, nicht ob sein Inhalt lokal liegt.
         var vorhanden = new Dictionary<string, (long Size, long ModifiedS)>(StringComparer.Ordinal);
 
+        // Was davon wirklich Bytes haelt. Der Cache fuehrt sonst nur, was er
+        // selbst geholt hat, und wuesste von hineinkopierten Dateien nichts.
+        var mitInhalt = new Dictionary<string, (long Bytes, DateTimeOffset LastAccess)>(StringComparer.Ordinal);
+
         try
         {
             foreach (var info in new DirectoryInfo(root).EnumerateFiles("*", options))
@@ -367,6 +371,8 @@ public sealed partial class ShareHost
                 // Ein Platzhalter ist nicht vollstaendig hier. Angekuendigt
                 // wird nur, was wir ganz haben.
                 if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
+
+                mitInhalt[name] = (info.Length, new DateTimeOffset(info.LastAccessTimeUtc));
 
                 var known = LocalCopy(name);
                 if (known is not null && !known.Deleted &&
@@ -389,6 +395,13 @@ public sealed partial class ShareHost
         }
 
         LastScan = DateTime.Now;
+
+        // Erst die Bilanz nachziehen, dann messen: die Anzeige des belegten
+        // Platzes haengt daran, und der naechste Takt entscheidet auf dieser
+        // Grundlage, ob etwas freigegeben werden muss.
+        _cache?.ReconcileWith(mitInhalt);
+        CacheChanged?.Invoke();
+
         MeasureOutstanding(vorhanden);
 
         if (found == 0) return;
@@ -781,6 +794,11 @@ public sealed partial class ShareHost
             if (IsPlaceholder(path)) return Done(name);
 
             (blockSize, blocks, blocksHash) = BlockList.For(content, length);
+
+            // Hier steht fest, dass die Datei ihren Inhalt lokal haelt: der
+            // Platzhalter waere oben ausgestiegen. Der Durchgang ueber den
+            // Ordner faende es auch, aber erst in der naechsten Minute.
+            _cache?.NoteContent(name, length);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

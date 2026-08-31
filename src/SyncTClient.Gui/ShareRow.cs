@@ -194,9 +194,13 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public string ReceivedText => Share is null ? "—" : Format.Bytes(Share.BytesReceived);
     public string SentText => Share is null ? "—" : Format.Bytes(Share.BytesSent);
-    public string SizeText => Share is null ? "—" : Format.Bytes(Share.IndexBytes);
+    // Alle Zahlen ueber den Umfang stammen aus demselben Durchgang: Dateien,
+    // keine Verzeichnisse, und nur was zur Auswahl gehoert. Der rohe Index
+    // zaehlt anders, und zwei Zaehlweisen im selben Fenster laden zu einem
+    // Vergleich ein, der nicht aufgeht.
+    public string SizeText => Share is null ? "—" : Format.Bytes(Share.IndexTotalBytes);
     public string LocalSizeText => Share is null ? "—" : Format.Bytes(Share.CacheUsedBytes);
-    public string FilesText => Share is null ? "—" : Format.Count(Share.IndexCount);
+    public string FilesText => Share is null ? "—" : Format.Count(Share.IndexFiles);
     public string LocalFilesText => Share is null ? "—" : Format.Count(Share.CacheFileCount);
     public string ThumbsText => Share is null ? "—" : Format.Count(Share.ThumbnailUsage().Count);
     public string PathText => Share?.Config.LocalPath ?? "";
@@ -268,9 +272,9 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     // Alphabetisch sortiert stuende der kleinere Wert hinten.
     public long ReceivedValue => Share?.BytesReceived ?? -1;
     public long SentValue => Share?.BytesSent ?? -1;
-    public long SizeValue => Share?.IndexBytes ?? -1;
+    public long SizeValue => Share?.IndexTotalBytes ?? -1;
     public long LocalSizeValue => Share?.CacheUsedBytes ?? -1;
-    public long FilesValue => Share?.IndexCount ?? -1;
+    public long FilesValue => Share?.IndexFiles ?? -1;
     public long LocalFilesValue => Share?.CacheFileCount ?? -1;
     public long ThumbsValue => Share?.ThumbnailUsage().Count ?? -1;
     public long LimitValue => Share?.CacheMaxBytes ?? -1;

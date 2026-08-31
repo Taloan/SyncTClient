@@ -685,8 +685,8 @@ public partial class MainWindow : Window
         // davon gerade lokal liegt.
         var shares = _rows.Select(r => r.Share).OfType<ShareHost>().ToList();
         OverallText.Text = App.S("M.OverallShort",
-            Format.Count(shares.Sum(s => (long)s.IndexCount)),
-            Format.Bytes(shares.Sum(s => s.IndexBytes)));
+            Format.Count(shares.Sum(s => (long)s.IndexFiles)),
+            Format.Bytes(shares.Sum(s => s.IndexTotalBytes)));
     }
 
     private void OnRangeChanged(object sender, RoutedEventArgs e) => UpdateThroughput();
