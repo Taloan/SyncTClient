@@ -220,8 +220,13 @@ public partial class MainWindow : Window
         // in aller Regel, dass der Abgleich laeuft.
         // Angehalten heisst angehalten -- auch ueber einen Neustart hinweg.
         // Sonst waere der Zustand nach dem naechsten Start wieder aufgehoben,
-        // ohne dass jemand ihn aufgehoben haette.
-        if (_config.Paused) return;
+        // ohne dass jemand ihn aufgehoben haette. Damit das nicht wie eine
+        // Stoerung aussieht, wird es beim Start auch gesagt.
+        if (_config.Paused)
+        {
+            Status(App.S("M.PausedAll"));
+            return;
+        }
 
         foreach (var item in _peers.Where(p => p.Config.AutoConnect).ToList())
             await ConnectAsync(item);
@@ -271,6 +276,7 @@ public partial class MainWindow : Window
     {
         ApplyPause();
 
+        foreach (var row in _rows) row.AppPaused = _config.Paused;
         foreach (var peer in _peers) peer.Refresh();
         foreach (var row in _rows) row.Refresh();
         UpdateButtons();

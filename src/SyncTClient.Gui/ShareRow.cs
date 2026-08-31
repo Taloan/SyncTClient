@@ -69,7 +69,16 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     // ---------------------------------------------------------------- Zustand
 
-    public string StatusText => Share?.State switch
+    /// <summary>Ob das ganze Programm angehalten ist.</summary>
+    /// <remarks>
+    /// Angehalten steht ueber allem anderen. Ohne diese Angabe meldete die
+    /// Zeile "nicht verbunden" -- richtig, aber irrefuehrend: es klingt nach
+    /// einer Stoerung, dabei ist es eine Entscheidung, und die Ursache stand
+    /// nur am Knopf oben links.
+    /// </remarks>
+    public bool AppPaused { get; set; }
+
+    public string StatusText => AppPaused ? App.S("R.Paused") : Share?.State switch
     {
         ShareState.Bereit => Share.Phase == SyncPhase.Fertig ? App.S("R.Ready") : PhaseText,
         ShareState.Wartet => PhaseText,
