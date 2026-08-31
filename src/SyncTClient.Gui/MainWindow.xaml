@@ -59,6 +59,7 @@
 
     <Style x:Key="ZelleMitte" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     </Style>
   </Window.Resources>
@@ -100,6 +101,15 @@
            sichtbar zu hoch. Gesetzt wird es einmal fuer alle Zellen und nicht
            je Spalte, denn eine Ausrichtung, die man je Spalte wiederholen
            muss, wird irgendwo vergessen. -->
+      <!-- Die Ueberschrift steht ueber ihrer Spalte und nicht am linken Rand
+           davon. Bei einer Spalte, die 95 Punkte breit ist und eine kurze
+           Zahl traegt, laeuft die Beschriftung sonst von der Zahl weg. -->
+      <DataGrid.ColumnHeaderStyle>
+        <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+          <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+      </DataGrid.ColumnHeaderStyle>
+
       <DataGrid.CellStyle>
         <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
           <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -246,7 +256,8 @@
         <DataGridTemplateColumn Header="{DynamicResource S.Col.Status}" Width="190" SortMemberPath="StatusText" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                          HorizontalAlignment="Center">
                 <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                            Foreground="{DynamicResource Gut}" VerticalAlignment="Center" Margin="0,0,6,0">
                   <TextBlock.Style>
@@ -467,7 +478,8 @@
                                 SortMemberPath="PathText" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <TextBlock VerticalAlignment="Center" Margin="4,0" TextTrimming="CharacterEllipsis">
+              <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0"
+                         TextTrimming="CharacterEllipsis">
                 <Hyperlink Click="OnOpenPath" ToolTip="{Binding PathText}">
                   <Run Text="{Binding PathText, Mode=OneWay}" />
                 </Hyperlink>
