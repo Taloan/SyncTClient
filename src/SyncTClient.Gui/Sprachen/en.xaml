@@ -300,8 +300,8 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Tray.Resume">Resume syncing</s:String>
   <s:String x:Key="S.Main.PauseAll">Pause all</s:String>
   <s:String x:Key="S.Main.ResumeAll">Resume</s:String>
-  <s:String x:Key="M.PausedAll">Syncing is paused. Placeholders stay; contents are no longer fetched.</s:String>
-  <s:String x:Key="M.ResumedAll">Syncing has resumed.</s:String>
+  <s:String x:Key="M.PausedAll">Paused. No connection, no transfer, no change in the folders.</s:String>
+  <s:String x:Key="M.ResumedAll">Resumed. Connections are being re-established.</s:String>
   <s:String x:Key="S.Col.Sent">Sent</s:String>
   <s:String x:Key="S.Main.SessionTip">Received and sent since the program started</s:String>
   <s:String x:Key="S.Main.Overall">TOTAL</s:String>

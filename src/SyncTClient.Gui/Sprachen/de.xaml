@@ -292,8 +292,8 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Tray.Resume">Abgleich fortsetzen</s:String>
   <s:String x:Key="S.Main.PauseAll">Alles anhalten</s:String>
   <s:String x:Key="S.Main.ResumeAll">Fortsetzen</s:String>
-  <s:String x:Key="M.PausedAll">Der Abgleich ist angehalten. Platzhalter bleiben, Inhalte werden nicht mehr geholt.</s:String>
-  <s:String x:Key="M.ResumedAll">Der Abgleich läuft wieder.</s:String>
+  <s:String x:Key="M.PausedAll">Angehalten. Keine Verbindung, keine Übertragung, keine Änderung in den Ordnern.</s:String>
+  <s:String x:Key="M.ResumedAll">Fortgesetzt. Die Verbindungen werden wieder aufgebaut.</s:String>
   <s:String x:Key="S.Col.Sent">Gesendet</s:String>
   <s:String x:Key="S.Main.SessionTip">Empfangen und gesendet seit dem Programmstart</s:String>
   <s:String x:Key="S.Main.Overall">GESAMT</s:String>
