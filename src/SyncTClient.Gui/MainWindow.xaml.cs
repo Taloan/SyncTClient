@@ -91,7 +91,7 @@ public partial class MainWindow : Window
         TransferList.ItemsSource = _transfers;
         ShareGrid.ItemsSource = _rows;
 
-        _configPath = FindConfig() ?? Path.GetFullPath("synct.json");
+        _configPath = AppConfig.DefaultConfigPath();
 
         Load();
         BuildColumnMenu();
@@ -109,17 +109,6 @@ public partial class MainWindow : Window
         _meter = new ThroughputMeter(CollectWire);
         _refresh.Tick += (_, _) => Tick();
         _refresh.Start();
-    }
-
-    private static string? FindConfig()
-    {
-        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
-        for (var i = 0; i < 6 && directory is not null; i++, directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, "synct.json");
-            if (File.Exists(candidate)) return candidate;
-        }
-        return null;
     }
 
     private string HomeDirectory
@@ -149,7 +138,12 @@ public partial class MainWindow : Window
         {
             _config = firstRun ? new AppConfig() : AppConfig.Load(_configPath);
             _identity = DeviceIdentity.LoadOrCreate(HomeDirectory);
-            if (firstRun) _config.Save(_configPath);
+            if (firstRun)
+            {
+                // Beim allerersten Start gibt es das Verzeichnis noch nicht.
+                Directory.CreateDirectory(Path.GetDirectoryName(_configPath)!);
+                _config.Save(_configPath);
+            }
         }
         catch (Exception ex)
         {

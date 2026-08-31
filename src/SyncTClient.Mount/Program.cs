@@ -9,7 +9,7 @@ using FileInfoType = SyncTClient.Bep.Proto.FileInfoType;
 // Haengt Syncthing-Ordner als Platzhalter-Verzeichnisse in den Explorer.
 // Nichts wird heruntergeladen, bis jemand eine Datei tatsaechlich oeffnet.
 
-var configPath = Arg("--config") ?? "synct.json";
+var configPath = Arg("--config") ?? AppConfig.DefaultConfigPath();
 
 // --- Wartungsbefehle ---------------------------------------------------------
 
