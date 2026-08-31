@@ -74,10 +74,31 @@ public static class ThumbnailProviderRegistration
     }
 
     /// <summary>
-    /// Traegt die COM-Klasse ein und hinterlegt, wo der Vorrat liegt. Ohne
-    /// den zweiten Teil findet die Erweiterung ihre Bilder nicht.
+    /// Hinterlegt, wo der Vorrat liegt.
     /// </summary>
-    public static void RegisterClass(string libraryPath, string thumbnailDirectory)
+    /// <remarks>
+    /// Getrennt von der Klassen-Eintragung, und das ist wichtig: der
+    /// Vorschau-Erzeuger findet seinen Vorrat ueber diesen Wert, auch wenn er
+    /// im Client selbst laeuft und gar keine DLL im Spiel ist.
+    /// </remarks>
+    public static void RegisterStore(string thumbnailDirectory)
+    {
+        using var own = Registry.CurrentUser.CreateSubKey(@"Software\SyncTClient");
+        own.SetValue("ThumbnailStore", thumbnailDirectory);
+    }
+
+    /// <summary>
+    /// Traegt die COM-Klasse als DLL ein.
+    /// </summary>
+    /// <remarks>
+    /// Nur moeglich, wenn die native DLL vorliegt. In einer veroeffentlichten
+    /// Fassung ist sie es nicht -- sie ist ein eigenes NativeAOT-Projekt, das
+    /// niemand referenziert. Die Vorschauen haengen davon aber nicht ab: die
+    /// Shell erreicht den Erzeuger ueber die Klasse, die der laufende Client
+    /// anmeldet. Dieser Weg hier ist die Zugabe fuer den Fall, dass der
+    /// Client gerade nicht laeuft.
+    /// </remarks>
+    public static void RegisterClass(string libraryPath)
     {
         using (var clsid = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{ClassId}"))
         {
@@ -98,8 +119,6 @@ public static class ThumbnailProviderRegistration
             appId.SetValue("DllSurrogate", "");
         }
 
-        using var own = Registry.CurrentUser.CreateSubKey(@"Software\SyncTClient");
-        own.SetValue("ThumbnailStore", thumbnailDirectory);
     }
 
     /// <summary>
