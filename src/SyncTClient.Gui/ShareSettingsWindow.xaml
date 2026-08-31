@@ -20,6 +20,12 @@
         <TextBlock x:Name="SubTitleText" Foreground="{DynamicResource Gedaempft}"
                    FontSize="11" Margin="0,2,0,10" />
 
+        <Label Content="{DynamicResource S.Col.Name}" />
+        <TextBox x:Name="LabelBox" />
+        <TextBlock Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap"
+                   FontSize="11" Margin="0,0,0,8"
+                   Text="{DynamicResource S.Share.LabelHint}" />
+
         <Label Content="{DynamicResource S.Share.LocalPath}" />
         <TextBox x:Name="LocalPathBox" />
 

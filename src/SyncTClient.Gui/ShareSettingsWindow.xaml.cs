@@ -28,6 +28,7 @@ public partial class ShareSettingsWindow : Window
         SubTitleText.Text = App.S("S.FolderId", share.FolderId);
 
         _loading = true;
+        LabelBox.Text = share.Label;
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
         MinimumCopiesBox.Text = share.MinimumCopies.ToString();
@@ -139,6 +140,7 @@ public partial class ShareSettingsWindow : Window
         }
 
         _share.MinimumCopies = copies;
+        _share.Label = LabelBox.Text.Trim();
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.Conflict = (ConflictResolution)Math.Max(0, ConflictBox.SelectedIndex);

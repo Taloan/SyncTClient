@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -141,10 +141,15 @@ public partial class App : Application
         zeile.Triggers.Add(gewaehlt);
         Current.Resources[typeof(DataGridRow)] = zeile;
 
-        // Die Zelle darf die Farbe der Zeile nicht wieder überdecken.
+        // Die Zelle bekommt dieselbe Farbe wie die Zeile.
+        //
+        // Vorher stand hier Transparent, in der Annahme, die Zeile male den
+        // Balken. Fluent zeichnet die Zeile aber nach eigener Vorlage und
+        // beachtet ihren Hintergrund nicht -- durchsichtige Zellen liessen
+        // also gar nichts uebrig. Der Balken war unsichtbar.
         var zelle = Basis(typeof(DataGridCell));
         var zelleGewaehlt = new Trigger { Property = DataGridCell.IsSelectedProperty, Value = true };
-        zelleGewaehlt.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
+        zelleGewaehlt.Setters.Add(new Setter(Control.BackgroundProperty, flaeche));
         zelleGewaehlt.Setters.Add(new Setter(Control.BorderBrushProperty, Brushes.Transparent));
         zelleGewaehlt.Setters.Add(new Setter(Control.ForegroundProperty, schrift));
         zelle.Triggers.Add(zelleGewaehlt);

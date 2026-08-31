@@ -1,4 +1,4 @@
-<Window x:Class="SyncTClient.Gui.DeviceWindow"
+﻿<Window x:Class="SyncTClient.Gui.DeviceWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{DynamicResource S.Main.Device}" Height="560" Width="760"
@@ -17,6 +17,13 @@
     </StackPanel>
 
     <StackPanel>
+      <TextBlock Text="{DynamicResource S.Device.Name}" FontWeight="SemiBold" />
+      <TextBox x:Name="DeviceNameBox" Padding="6" Margin="0,4,0,0"
+               LostFocus="OnDeviceNameChanged" />
+      <TextBlock Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap"
+                 FontSize="11" Margin="0,0,0,16"
+                 Text="{DynamicResource S.Device.NameHint}" />
+
       <TextBlock Text="{DynamicResource S.Device.OwnId}" FontWeight="SemiBold" />
       <TextBlock Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap" Margin="0,2,0,8"
                  Text="{DynamicResource S.Device.OwnIdHint}" />
