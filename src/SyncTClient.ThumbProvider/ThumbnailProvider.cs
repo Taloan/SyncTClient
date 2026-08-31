@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using System.Security.Cryptography;
 using System.Text;
@@ -118,8 +118,16 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
 
             if (!File.Exists(cached))
             {
-                Trace.Write($"  keine Vorschau unter {cached}");
-                return NoThumbnail;
+                // Nichts im Vorrat -- vielleicht laesst sie sich beschaffen.
+                // Wenn wir im Client laufen, hat der eine Leitung dorthin;
+                // als DLL im fremden Prozess bleibt es beim Nachsehen.
+                if (Store.Produce is null || !Store.Produce(_filePath) || !File.Exists(cached))
+                {
+                    Trace.Write($"  keine Vorschau unter {cached}");
+                    return NoThumbnail;
+                }
+
+                Trace.Write("  auf Zuruf beschafft");
             }
 
             var ok = Gdi.LoadAsBitmap(cached, requestedSize, out bitmap);
@@ -170,6 +178,17 @@ internal static class Host
 /// <summary>Findet die vorbereitete Vorschau zu einem Dateipfad.</summary>
 internal static class Store
 {
+    /// <summary>
+    /// Beschafft eine fehlende Vorschau, falls jemand das kann.
+    /// </summary>
+    /// <remarks>
+    /// Bleibt leer, solange die Erweiterung als DLL in einem fremden Prozess
+    /// steckt -- dort gibt es keine Verbindung zur Gegenstelle. Laeuft sie
+    /// dagegen im Client, traegt der hier ein, wie sich ein Dateikopf holen
+    /// laesst. Damit muss nichts mehr auf Vorrat erzeugt werden.
+    /// </remarks>
+    public static Func<string, bool>? Produce;
+
     private static string? _directory;
     private static bool _looked;
 

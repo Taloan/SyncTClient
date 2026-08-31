@@ -44,7 +44,19 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     private CloudFilterMount? _mount;
     private HydrationCache? _cache;
     private ThumbnailStore? _thumbnails;
-    private Task? _thumbnailJob;
+
+    /// <summary>
+    /// Begrenzt, wie viele Dateikoepfe gleichzeitig unterwegs sind.
+    /// </summary>
+    /// <remarks>
+    /// Der Explorer fragt einen ganzen Ordner auf einmal ab. Ungebremst
+    /// waeren das hunderte gleichzeitiger Anfragen -- und der Doppelklick des
+    /// Nutzers, der wirklich eine Datei oeffnen will, stuende hinten an.
+    /// </remarks>
+    private readonly SemaphoreSlim _thumbnailGate = new(6);
+
+    private int _thumbnailsMade;
+
     private string? _syncRootId;
     private ShareState _state = ShareState.Gestoppt;
 
@@ -70,7 +82,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     public event Action<TransferInfo>? TransferStarted;
     public event Action<TransferInfo>? TransferFinished;
     public event Action? CacheChanged;
-    public event Action<int, int>? ThumbnailProgress;
+    /// <summary>Meldet, wie viele Vorschauen bisher auf Zuruf entstanden sind.</summary>
+    public event Action<int>? ThumbnailProduced;
 
     // ------------------------------------------------------------ Zahlen
 
@@ -135,9 +148,6 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             await WaitForIndexAsync(ct);
             await ProjectAsync();
             State = ShareState.Bereit;
-
-            // Vorschaubilder im Hintergrund -- der Nutzer soll nicht warten.
-            _thumbnailJob = Task.Run(() => GenerateThumbnailsAsync(ct), ct);
 
             await ApplyModeAsync(ct);
         }
@@ -255,6 +265,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             // Zusaetzlich zur Eintragung in der Registrierung: solange der
             // Client laeuft, beantwortet er Anfragen selbst.
             ThumbnailService.EnsureStarted(_log);
+
+            lock (Laufende)
+                if (!Laufende.Contains(this)) Laufende.Add(this);
         }
         catch (Exception ex)
         {
@@ -305,66 +318,129 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     // ------------------------------------------------------------ Vorschaubilder
 
+    /// <summary>Alle laufenden Freigaben -- der Vorschau-Erzeuger sucht hier seine.</summary>
+    private static readonly List<ShareHost> Laufende = [];
+
     /// <summary>
-    /// Holt fuer jedes Bild den Dateikopf und legt die darin eingebettete
-    /// Vorschau ab. Ein Kopf ist genau ein Block -- bei 510 Fotos kostet das
-    /// rund 64 MB statt der 943 MB, die die vollen Dateien haetten.
+    /// Erzeugt die Vorschau zu einem lokalen Pfad, sofern eine Freigabe
+    /// zustaendig ist. Aufrufer ist die Shell-Erweiterung.
     /// </summary>
-    private async Task GenerateThumbnailsAsync(CancellationToken ct)
+    public static bool ProduceThumbnail(string localFilePath)
     {
-        if (_thumbnails is null || !_config.GenerateThumbnails || _connection is null) return;
+        ShareHost[] shares;
+        lock (Laufende) shares = [.. Laufende];
 
-        var pending = Enumerate()
-            .Where(e => !e.IsDirectory && e.Size > 0 && ExifThumbnail.LooksLikeJpeg(e.RelativePath))
-            .Where(e => !_thumbnails.Has(LocalPathOf(e.RelativePath)))
-            .ToList();
+        foreach (var share in shares)
+            if (share.Owns(localFilePath) && share.Produce(localFilePath))
+                return true;
 
-        if (pending.Count == 0) return;
-        _log($"[{FolderId}] erzeuge Vorschaubilder fuer {pending.Count} Bilder ...");
+        return false;
+    }
 
-        int done = 0, made = 0;
+    private bool Owns(string localFilePath)
+    {
+        var root = _config.LocalPath.TrimEnd(Path.DirectorySeparatorChar);
+        return localFilePath.Length > root.Length
+               && localFilePath.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+               && localFilePath[root.Length] == Path.DirectorySeparatorChar;
+    }
 
-        // Absichtlich genuegsam: das laeuft nebenher und darf einen
-        // Doppelklick des Nutzers nicht ausbremsen.
-        await Parallel.ForEachAsync(
-            pending,
-            new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
-            async (entry, token) =>
+    /// <summary>
+    /// Beschafft die Vorschau zu genau dieser Datei und zieht die uebrigen
+    /// Bilder desselben Ordners nach.
+    /// </summary>
+    /// <remarks>
+    /// Nichts wird auf Vorrat erzeugt: 500 Bilder vorab kosten 500 Bloecke,
+    /// von denen die meisten nie jemand ansieht. Geholt wird genau, wonach
+    /// gefragt wurde.
+    ///
+    /// Ein Vorlauf auf die Geschwister desselben Ordners lag nahe, war aber
+    /// falsch: der Explorer tastet fuer die Ordnersymbole einzelne Bilder aus
+    /// Unterordnern an, und jeder dieser Griffe haette den ganzen Unterordner
+    /// nachgezogen. Gemessen wurden so 502 von 511 Bildern statt der 145,
+    /// nach denen tatsaechlich gefragt wurde.
+    /// </remarks>
+    private bool Produce(string localFilePath)
+    {
+        if (_thumbnails is null || _index is null || _connection is null) return false;
+        if (!_config.GenerateThumbnails) return false;
+        if (_thumbnails.KnownWithout(localFilePath)) return false;
+
+        return Await(FetchThumbnailAsync(RelativeOf(localFilePath), CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Wartet auf ein Ergebnis, aber nicht ewig.
+    /// </summary>
+    /// <remarks>
+    /// Der Aufruf kommt aus einer COM-Methode, die ein Ergebnis zurueckgeben
+    /// muss -- warten laesst sich nicht vermeiden. Eine Frist muss trotzdem
+    /// sein: haengt die Gegenstelle, soll der Explorer sein Ersatzsymbol
+    /// zeigen und nicht der Ordner stehenbleiben.
+    /// </remarks>
+    private bool Await(Task<bool> work)
+    {
+        try
+        {
+            return work.WaitAsync(TimeSpan.FromSeconds(20)).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Vorschau: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Holt den Dateikopf ueber BEP und legt die darin eingebettete Vorschau
+    /// ab. Ein Kopf ist genau ein Block -- der Platzhalter bleibt dehydriert.
+    /// </summary>
+    private async Task<bool> FetchThumbnailAsync(string relativePath, CancellationToken ct)
+    {
+        if (_thumbnails is null || _index is null || _connection is null) return false;
+
+        var local = LocalPathOf(relativePath);
+        if (_thumbnails.Has(local)) return true;
+        if (!_index.TryGet(relativePath, out var file) || file.Size <= 0) return false;
+
+        await _thumbnailGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            // Zwischen Warten und Zug kann ein anderer Aufruf fertig geworden sein.
+            if (_thumbnails.Has(local)) return true;
+
+            var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, file.Size);
+            var head = await FileFetcher.FetchRangeAsync(
+                _connection, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
+                .ConfigureAwait(false);
+
+            var thumbnail = ExifThumbnail.TryExtract(head);
+            if (thumbnail is null)
             {
-                try
-                {
-                    if (!_index!.TryGet(entry.RelativePath, out var file)) return;
+                _thumbnails.MarkWithout(local);
+                return false;
+            }
 
-                    var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, entry.Size);
+            _thumbnails.Save(local, thumbnail);
+            ThumbnailProduced?.Invoke(Interlocked.Increment(ref _thumbnailsMade));
+            return true;
+        }
+        finally
+        {
+            _thumbnailGate.Release();
+        }
+    }
 
-                    // Direkt ueber BEP, nicht ueber das Dateisystem: der
-                    // Platzhalter bleibt dabei dehydriert.
-                    var head = await FileFetcher.FetchRangeAsync(
-                        _connection, FolderId, file, 0, wanted, _app.Parallelism, ct: token)
-                        .ConfigureAwait(false);
-
-                    var thumbnail = ExifThumbnail.TryExtract(head);
-                    if (thumbnail is not null)
-                    {
-                        _thumbnails.Save(LocalPathOf(entry.RelativePath), thumbnail);
-                        Interlocked.Increment(ref made);
-                    }
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    _log($"  Vorschau fuer \"{entry.RelativePath}\": {ex.Message}");
-                }
-
-                var count = Interlocked.Increment(ref done);
-                if (count % 25 == 0 || count == pending.Count)
-                {
-                    ThumbnailProgress?.Invoke(count, pending.Count);
-                    _log($"[{FolderId}] Vorschaubilder: {count}/{pending.Count}");
-                }
-            });
-
-        _log($"[{FolderId}] {made} Vorschaubilder erzeugt.");
+    private string RelativeOf(string localFilePath)
+    {
+        var root = _config.LocalPath.TrimEnd(Path.DirectorySeparatorChar);
+        return localFilePath[root.Length..]
+            .TrimStart(Path.DirectorySeparatorChar)
+            .Replace(Path.DirectorySeparatorChar, '/');
     }
 
     // ------------------------------------------------------------ Cache
@@ -457,6 +533,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
         if (_syncRootId is not null)
         {
+            lock (Laufende) Laufende.Remove(this);
             ThumbnailProviderRegistration.DetachFromSyncRoot(_syncRootId);
             try { WinRtSyncRoot.Unregister(_syncRootId); } catch { /* schon weg */ }
             _syncRootId = null;
