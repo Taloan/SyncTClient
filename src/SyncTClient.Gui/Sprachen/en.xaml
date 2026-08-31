@@ -53,7 +53,7 @@
   <s:String x:Key="S.Main.RecvSince">Received</s:String>
   <s:String x:Key="S.Main.SentSince">Sent</s:String>
   <s:String x:Key="S.Main.Peak">Peak rate</s:String>
-  <s:String x:Key="S.Main.Cache">CACHE</s:String>
+  <s:String x:Key="S.Main.Cache">ON-DEMAND CACHE</s:String>
   <s:String x:Key="S.Main.Preview">THUMBNAILS</s:String>
   <s:String x:Key="S.Main.Span5">5 minutes</s:String>
   <s:String x:Key="S.Main.Span30">30 minutes</s:String>
@@ -323,9 +323,10 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Settings.LimitsLead">Whichever limit is reached first applies.</s:String>
   <s:String x:Key="S.Settings.VolumeGroup">STORAGE PER VOLUME</s:String>
   <s:String x:Key="S.Settings.UseLimit">Usage limit (GB)</s:String>
-  <s:String x:Key="S.Settings.UseLimitNote">(at most this much for “on demand” files)</s:String>
+  <s:String x:Key="S.Settings.UseLimitNote">(at most this much for on-demand files)</s:String>
   <s:String x:Key="S.Settings.KeepLimit">Keep-free limit (GB)</s:String>
   <s:String x:Key="S.Settings.KeepLimitNote">(this much space stays free on the drive)</s:String>
   <s:String x:Key="S.Settings.VolumeDefaults">New drives start with default values (2 GB / 10 % at the time of the first share).</s:String>
   <s:String x:Key="M.VolumeEvictable">{0} files ({1}) have reached the placeholder threshold</s:String>
+  <s:String x:Key="M.CacheNone">No share yet.</s:String>
 </ResourceDictionary>

@@ -130,7 +130,7 @@ public sealed class ShareConfig
     /// </summary>
     /// <remarks>
     /// Beim Verdraengen werden die lokalen Bytes geloescht. Die Datei liegt
-    /// danach nur noch auf den anderen Knoten und muss bei Bedarf von dort
+    /// danach nur noch auf den anderen Knoten und muss on-demand von dort
     /// geholt werden. Bei einer einzigen Gegenstelle, dem Normalfall gegen
     /// einen Server, ist 1 die sinnvolle Vorgabe. Wer mehrere Knoten hat und
     /// seine Dateien nicht von einem einzigen Geraet abhaengig machen will,
@@ -266,7 +266,7 @@ public sealed class AppConfig
     ///
     /// 0 wuerde "unbegrenzt" bedeuten: es wird nichts verdraengt, und jede
     /// einmal geoeffnete Datei bleibt lokal liegen. Nach einigen Monaten waere
-    /// der Bestand eine Vollkopie, und es wuerde nichts mehr bei Bedarf
+    /// der Bestand eine Vollkopie, und es wuerde nichts mehr on-demand
     /// geholt. Die Oberflaeche laesst darum nur ganze Gigabyte ab 1 zu.
     /// </remarks>
     public long CacheMaxBytes { get; set; } = 2L * 1024 * 1024 * 1024;

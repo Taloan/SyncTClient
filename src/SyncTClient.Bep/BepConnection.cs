@@ -14,7 +14,7 @@ namespace SyncTClient.Bep;
 /// <remarks>
 /// Dieser Client haelt keine Dateien vor. Er nimmt den Index entgegen, der
 /// die Blocklisten aller Dateien des Peers enthaelt, und fordert Inhalte erst
-/// bei Bedarf blockweise an. Darauf baut das Platzhalter-Verfahren auf.
+/// on-demand blockweise an. Darauf baut das Platzhalter-Verfahren auf.
 ///
 /// Angekuendigt wird nur, was ausdruecklich genannt ist. Zu einer Datei, die
 /// wir mit Blockliste angekuendigt haben, fordert die Gegenstelle Bloecke an;
@@ -203,6 +203,7 @@ public sealed class BepConnection : IAsyncDisposable
             while (!ct.IsCancellationRequested)
             {
                 var (type, payload) = await BepFraming.ReadMessageAsync(_wire, ct).ConfigureAwait(false);
+                MessageReceived?.Invoke(type, payload.Length);
 
                 switch (type)
                 {
@@ -384,12 +385,25 @@ public sealed class BepConnection : IAsyncDisposable
         }
     }
 
+    /// <summary>Was hereinkam: Art und Groesse der Nutzlast.</summary>
+    /// <remarks>
+    /// Fuer das Protokoll. Ohne diese Meldung sieht man im Diagramm Verkehr
+    /// und im Status "abgeglichen", und dazwischen keinen Zusammenhang. Was
+    /// daraus wird -- eine Zeile je Nachricht oder eine Zusammenfassung --,
+    /// entscheidet der Empfaenger; hier wird nur gemeldet.
+    /// </remarks>
+    public event Action<MessageType, int>? MessageReceived;
+
+    /// <summary>Was hinausging.</summary>
+    public event Action<MessageType, int>? MessageSent;
+
     private async Task SendAsync(MessageType type, IMessage message, CancellationToken ct)
     {
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             await BepFraming.WriteMessageAsync(_wire, type, message, ct).ConfigureAwait(false);
+            MessageSent?.Invoke(type, message.CalculateSize());
         }
         finally
         {

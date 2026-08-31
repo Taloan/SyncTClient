@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using SyncTClient.Mount;
 
 namespace SyncTClient.Gui;
@@ -40,7 +40,7 @@ public partial class SharePeersWindow : Window
     /// Was gegenüber dieser Gegenstelle noch aussteht.
     /// </summary>
     /// <remarks>
-    /// Bei „bei Bedarf“ steht nichts aus: die Platzhalter sind vollständig,
+    /// Bei „on-demand“ steht nichts aus: die Platzhalter sind vollständig,
     /// die Inhalte werden absichtlich erst beim Zugriff geholt. Nur bei
     /// „vollständig lokal“ gibt es einen Rückstand. Er ist die Differenz
     /// zwischen Index und dem, was lokal liegt.
@@ -56,7 +56,7 @@ public partial class SharePeersWindow : Window
                 : App.S("N.Running");
 
         if (share.Config.Mode != ShareMode.AlwaysLocal)
-            return "nichts – Inhalte kommen bei Bedarf";
+            return "nichts – Inhalte kommen on-demand";
 
         var fehlend = share.IndexCount - share.CacheFileCount;
         return fehlend <= 0 ? "nichts" : $"{fehlend:N0} Dateien";

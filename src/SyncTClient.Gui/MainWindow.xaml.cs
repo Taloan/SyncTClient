@@ -90,6 +90,7 @@ public partial class MainWindow : Window
 
         TransferList.ItemsSource = _transfers;
         ShareGrid.ItemsSource = _rows;
+        CacheList.ItemsSource = _cacheRows;
 
         _configPath = AppConfig.DefaultConfigPath();
 
@@ -502,61 +503,46 @@ public partial class MainWindow : Window
     /// Bei nur einem Laufwerk ist das dasselbe wie vorher, und die Zeile
     /// bleibt so knapp wie zuvor.
     /// </remarks>
+    /// <summary>Eine Zeile der Laufwerksanzeige.</summary>
+    private sealed record CacheRow(string Drive, double Percent, string Text, string Tip);
+
+    private readonly ObservableCollection<CacheRow> _cacheRows = [];
+
+    /// <summary>
+    /// Der Fuellstand je Laufwerk, gemessen am Verbrauchs Limit dieses
+    /// Laufwerks.
+    /// </summary>
+    /// <remarks>
+    /// Eine Summe ueber alle Laufwerke waere die falsche Zahl. Die Grenze gilt
+    /// je Datentraeger; die Summe kann harmlos aussehen, waehrend ein
+    /// einzelnes Laufwerk schon verdraengt.
+    /// </remarks>
     private void UpdateCache()
     {
         var volumes = _config.Cache.Volumes;
-        var used = volumes.Sum(v => v.UsedBytes);
-        var voll = volumes
-            .Where(v => v.MaxBytes > 0)
-            .OrderByDescending(v => (double)v.UsedBytes / v.MaxBytes)
-            .FirstOrDefault();
 
-        if (voll is not null)
-        {
-            CacheBar.Value = Math.Min(100, 100.0 * voll.UsedBytes / voll.MaxBytes);
-            CacheText.Text = App.S("M.CacheOf", Format.Bytes(voll.UsedBytes), Format.Bytes(voll.MaxBytes));
+        _cacheRows.Clear();
 
-            // Erst wenn es mehrere gibt, muss dabeistehen, welches gemeint
-            // ist. Bei einem einzigen waere die Angabe nur Ballast.
-            if (volumes.Count > 1)
-                CacheText.Text = voll.Root.TrimEnd(Path.DirectorySeparatorChar) + " " + CacheText.Text;
-        }
-        else
+        foreach (var volume in volumes)
         {
-            CacheBar.Value = 0;
-            CacheText.Text = App.S("M.CacheNoBudget", Format.Bytes(used));
+            var laufwerk = volume.Root.TrimEnd(Path.DirectorySeparatorChar);
+            var frei = volume.FreeBytes < 0
+                ? App.S("M.FreeUnknown")
+                : App.S("M.Free", Format.Bytes(volume.FreeBytes), laufwerk);
+
+            _cacheRows.Add(new CacheRow(
+                laufwerk,
+                volume.MaxBytes > 0 ? Math.Min(100, 100.0 * volume.UsedBytes / volume.MaxBytes) : 0,
+                volume.MaxBytes > 0
+                    ? App.S("M.CacheOf", Format.Bytes(volume.UsedBytes), Format.Bytes(volume.MaxBytes))
+                    : App.S("M.CacheNoBudget", Format.Bytes(volume.UsedBytes)),
+                frei));
         }
 
-        CacheText.ToolTip = volumes.Count > 1
-            ? string.Join(Environment.NewLine, volumes.Select(v =>
-                $"{v.Root.TrimEnd(Path.DirectorySeparatorChar)} {Format.Bytes(v.UsedBytes)}" +
-                (v.MaxBytes > 0 ? $" / {Format.Bytes(v.MaxBytes)}" : "")))
-            : null;
-
-        UpdateFreeSpace();
-    }
-
-    /// <summary>
-    /// Der freie Platz auf dem Laufwerk des Caches. Das ist die zweite Grenze
-    /// und die einzige, die sich auch von aussen aendert.
-    /// </summary>
-    private void UpdateFreeSpace()
-    {
-        var root = _config.SharesRootOrDefault;
-        var free = CacheBudget.FreeBytesOn(root);
-
-        if (free < 0)
-        {
-            FreeText.Text = App.S("M.FreeUnknown");
-            FreeText.ToolTip = root;
-            return;
-        }
-
-        // Ohne Laufwerk ist die Zahl nicht einzuordnen.
-        var drive = Path.GetPathRoot(Path.GetFullPath(root))?.TrimEnd(Path.DirectorySeparatorChar) ?? root;
-        FreeText.Text = App.S("M.Free", Format.Bytes(free), drive);
-        var soll = _config.LimitsFor(Path.GetPathRoot(Path.GetFullPath(root)) ?? root).MinimumFreeBytes;
-        FreeText.ToolTip = soll > 0 ? App.S("M.FreeShould", root, Format.Bytes(soll)) : root;
+        // Ohne Freigabe gibt es kein Laufwerk. Eine leere Liste unter einer
+        // Ueberschrift sieht aus wie ein Fehler.
+        CacheText.Text = volumes.Count == 0 ? App.S("M.CacheNone") : "";
+        CacheText.Visibility = volumes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateThumbnails()
@@ -842,7 +828,7 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// Beides zusammen, wie es der Einstellungsdialog anfordert. Die
-    /// Vorschaubilder liegen im selben Verzeichnis und entstehen bei Bedarf
+    /// Vorschaubilder liegen im selben Verzeichnis und entstehen on-demand
     /// neu.
     /// </remarks>
     /// <summary>Gibt auf einem Datentraeger frei, was freigegeben werden darf.</summary>

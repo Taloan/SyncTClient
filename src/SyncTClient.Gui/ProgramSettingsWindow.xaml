@@ -51,6 +51,13 @@
       </StackPanel>
     </StackPanel>
 
+    <TextBlock Text="{DynamicResource S.Device.StartGroup}" Style="{StaticResource Gruppe}" />
+
+    <CheckBox x:Name="AutostartBox" Margin="0,4,0,0" Content="{DynamicResource S.Device.Autostart}" />
+    <CheckBox x:Name="StartMinimizedBox" Margin="0,6,0,0" Content="{DynamicResource S.Device.StartMinimized}" />
+    <CheckBox x:Name="CloseToTrayBox" Margin="0,6,0,0" Content="{DynamicResource S.Device.CloseToTray}" />
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Device.StartHint}" />
+
     <TextBlock Text="{DynamicResource S.Settings.StorageGroup}" Style="{StaticResource Gruppe}" />
 
     <StackPanel Width="200" HorizontalAlignment="Left" Margin="0,4,0,0">

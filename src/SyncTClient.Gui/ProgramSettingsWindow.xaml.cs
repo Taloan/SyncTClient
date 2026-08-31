@@ -72,6 +72,12 @@ public partial class ProgramSettingsWindow : Window
 
         VolumeList.ItemsSource = _rows;
 
+        // Der Autostart kommt aus der Registrierung: nur dort steht, ob
+        // Windows das Programm wirklich startet.
+        AutostartBox.IsChecked = Autostart.Enabled;
+        StartMinimizedBox.IsChecked = config.StartMinimized;
+        CloseToTrayBox.IsChecked = config.CloseToTray;
+
         // In der Datei darf der Pfad relativ stehen. Angezeigt wird er
         // ausgeschrieben, sonst bleibt unklar, worauf er sich bezieht.
         _home = Path.GetFullPath(Path.Combine(configDirectory, config.HomeDirectory));
@@ -218,7 +224,7 @@ public partial class ProgramSettingsWindow : Window
     private void OnSave(object sender, RoutedEventArgs e)
     {
         // Keine 0: unbegrenzt bedeutet, dass nie etwas verdraengt wird. Aus
-        // "bei Bedarf" wuerde nach ein paar Monaten eine Vollkopie.
+        // "on-demand" wuerde nach ein paar Monaten eine Vollkopie.
 
         if (!int.TryParse(ThresholdBox.Text.Trim(), out var schwelle) || schwelle < 1)
         {
@@ -271,6 +277,26 @@ public partial class ProgramSettingsWindow : Window
             HomeChanged = true;
         }
 
+        // Der Autostart steht nicht in der Konfiguration, sondern in der
+        // Registrierung. Er wird deshalb getrennt geschrieben und danach
+        // zurueckgelesen. Zuerst, denn nur er kann fehlschlagen.
+        var autostart = AutostartBox.IsChecked == true;
+        if (autostart != Autostart.Enabled)
+        {
+            try
+            {
+                Autostart.Set(autostart);
+            }
+            catch (Exception ex)
+            {
+                Hint.Text = App.S("D.AutostartFailed", ex.Message);
+                AutostartBox.IsChecked = Autostart.Enabled;
+                return;
+            }
+        }
+
+        _config.StartMinimized = StartMinimizedBox.IsChecked == true;
+        _config.CloseToTray = CloseToTrayBox.IsChecked == true;
         _config.MinimumCopies = schwelle;
         _config.GenerateThumbnails = ThumbsBox.IsChecked == true;
         foreach (var (root, max, free) in grenzen)

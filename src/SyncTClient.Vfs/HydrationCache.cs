@@ -23,7 +23,7 @@ namespace SyncTClient.Vfs;
 /// <b>Verdraengung</b>: der Cache ist voll, es muss etwas weichen. Ohne
 /// diesen zweiten Mechanismus waechst der Cache unbegrenzt. Fotos aendern
 /// sich nie, ein einmal geoeffnetes Bild von 2019 wuerde also nie entfernt,
-/// und "bei Bedarf herunterladen" ergaebe nach einigen Monaten eine
+/// und "on-demand herunterladen" ergaebe nach einigen Monaten eine
 /// Vollkopie.
 ///
 /// Angeheftete Dateien, im Explorer "Immer auf diesem Geraet behalten", sind
