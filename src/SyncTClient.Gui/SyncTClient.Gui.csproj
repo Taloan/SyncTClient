@@ -48,6 +48,13 @@
 
     Der Fehler faellt sonst erst beim Ausprobieren des fertigen Pakets auf.
   -->
+  <ItemGroup>
+    <!-- Zusaetzlich zum ApplicationIcon: nur aus einer eingebetteten
+         Ressource laesst sich die passende Groesse auswaehlen. Das Zeichen im
+         Infobereich braucht 16 oder 32 Punkte, je nach Bildschirm. -->
+    <Resource Include="SyncTClient.ico" />
+  </ItemGroup>
+
   <Target Name="NurX64" BeforeTargets="Build"
           Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64'">
     <Error Text="RuntimeIdentifier ist &quot;$(RuntimeIdentifier)&quot;. SyncTClient laeuft nur als win-x64 -- siehe die Anmerkung in dieser Projektdatei." />

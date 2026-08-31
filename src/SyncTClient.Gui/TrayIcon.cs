@@ -110,6 +110,9 @@ public sealed class TrayIcon : IDisposable
     private readonly Forms.NotifyIcon _icon;
     private readonly Forms.ToolStripMenuItem _open = new();
     private readonly Forms.ToolStripMenuItem _quit = new();
+    private readonly TrayBadge _plaketten = new();
+
+    private TrayStatus _status = TrayStatus.Getrennt;
 
     /// <param name="window">Das Fenster, das gezeigt und geholt wird.</param>
     /// <param name="exit">Was "Beenden" ausloest. Diese Klasse beendet selbst nichts.</param>
@@ -127,7 +130,7 @@ public sealed class TrayIcon : IDisposable
 
         _icon = new Forms.NotifyIcon
         {
-            Icon = Symbol(),
+            Icon = Zeichen(TrayStatus.Getrennt),
             ContextMenuStrip = menu,
             Visible = true
         };
@@ -164,29 +167,52 @@ public sealed class TrayIcon : IDisposable
     {
         _open.Text = App.S("S.Tray.Open");
         _quit.Text = App.S("S.Tray.Quit");
-        _icon.Text = App.S("S.Tray.Tip");
+        _icon.Text = Beschriftung(_status);
     }
 
     /// <summary>
-    /// Ein Symbol ohne eigene Symboldatei: Windows liefert das Symbol der
-    /// eigenen Programmdatei. Fehlt es, wird das allgemeine
-    /// Anwendungssymbol verwendet.
+    /// Meldet einen neuen Zustand.
     /// </summary>
-    private static Icon Symbol()
+    /// <remarks>
+    /// Wird im Sekundentakt gerufen. Ein unveraenderter Zustand wird deshalb
+    /// abgewiesen, bevor irgendetwas gezeichnet oder gesetzt wird.
+    /// </remarks>
+    public void Show(TrayStatus status)
+    {
+        if (status == _status) return;
+
+        _status = status;
+        _icon.Icon = Zeichen(status);
+        _icon.Text = Beschriftung(status);
+    }
+
+    /// <summary>
+    /// Das Zeichen in der Groesse, die dieser Bildschirm fuer kleine Symbole
+    /// vorsieht -- 16 Punkte bei einfacher, 32 bei doppelter Skalierung.
+    /// </summary>
+    private Icon Zeichen(TrayStatus status)
     {
         try
         {
-            if (Environment.ProcessPath is { Length: > 0 } path)
-                return Icon.ExtractAssociatedIcon(path) ?? SystemIcons.Application;
+            var kante = Math.Max(16, Forms.SystemInformation.SmallIconSize.Width);
+            return _plaketten.For(status, kante);
         }
         catch (Exception)
         {
             // Ein Ersatzsymbol ist noetig. Ohne Symbol liesse sich ein
             // verstecktes Fenster nicht mehr zurueckholen.
+            return SystemIcons.Application;
         }
-
-        return SystemIcons.Application;
     }
+
+    private static string Beschriftung(TrayStatus status) => status switch
+    {
+        TrayStatus.Synchronisiert => App.S("S.Tray.Syncing"),
+        TrayStatus.Erledigt => App.S("S.Tray.Done"),
+        TrayStatus.Pausiert => App.S("S.Tray.Paused"),
+        TrayStatus.Fehler => App.S("S.Tray.Failed"),
+        _ => App.S("S.Tray.Offline")
+    };
 
     public void Dispose()
     {
@@ -194,5 +220,6 @@ public sealed class TrayIcon : IDisposable
         // Mauszeiger darueberfaehrt.
         _icon.Visible = false;
         _icon.Dispose();
+        _plaketten.Dispose();
     }
 }
