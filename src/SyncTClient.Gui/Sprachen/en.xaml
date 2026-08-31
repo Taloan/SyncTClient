@@ -331,4 +331,16 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="M.CacheNone">No share yet.</s:String>
   <s:String x:Key="R.PhaseSyncing">syncing</s:String>
   <s:String x:Key="R.Synced">in sync</s:String>
+  <s:String x:Key="S.Detail.Global">Global state</s:String>
+  <s:String x:Key="S.Detail.Local">Local state</s:String>
+  <s:String x:Key="S.Detail.Outstanding">Out of sync</s:String>
+  <s:String x:Key="S.Detail.Thumbs">Thumbnails</s:String>
+  <s:String x:Key="S.Detail.Transfer">Transferred</s:String>
+  <s:String x:Key="S.Detail.FolderId">Folder ID</s:String>
+  <s:String x:Key="S.Detail.Path">Folder path</s:String>
+  <s:String x:Key="S.Detail.Mode">Mode for new files</s:String>
+  <s:String x:Key="S.Detail.Peers">Shared with</s:String>
+  <s:String x:Key="S.Detail.LastScan">Last scan</s:String>
+  <s:String x:Key="R.CountAndSize">{0} files · {1}</s:String>
+  <s:String x:Key="R.NothingOutstanding">nothing pending</s:String>
 </ResourceDictionary>
