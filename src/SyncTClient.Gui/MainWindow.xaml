@@ -325,6 +325,12 @@
 
             <TextBlock Text="{DynamicResource S.Main.Preview}" Style="{StaticResource Kopfzeile}" Margin="0,10,0,4" />
             <TextBlock x:Name="ThumbText" Text="" Style="{StaticResource Beschriftung}" />
+
+            <!-- Was in allen Freigaben zusammen liegt. Die Spalten der Tabelle
+                 zeigen es je Freigabe; hier steht die Summe, damit man sie
+                 nicht im Kopf bilden muss. -->
+            <TextBlock Text="{DynamicResource S.Main.Overall}" Style="{StaticResource Kopfzeile}" Margin="0,10,0,4" />
+            <TextBlock x:Name="OverallText" Text="—" Style="{StaticResource Beschriftung}" />
           </StackPanel>
 
           <DockPanel Grid.Column="2" Margin="12,0,0,0">

@@ -545,6 +545,14 @@ public partial class MainWindow : Window
 
         ThumbText.Text = App.S("M.PreviewShort", Format.Count(count), Format.Bytes(bytes));
         ThumbText.ToolTip = _config.ThumbnailDirectory;
+
+        // Die Summe ueber alle Freigaben. Gezaehlt wird der Index, nicht die
+        // Platte: er sagt, was zur Freigabe gehoert, unabhaengig davon, was
+        // davon gerade lokal liegt.
+        var shares = _rows.Select(r => r.Share).OfType<ShareHost>().ToList();
+        OverallText.Text = App.S("M.OverallShort",
+            Format.Count(shares.Sum(s => (long)s.IndexCount)),
+            Format.Bytes(shares.Sum(s => s.IndexBytes)));
     }
 
     private void OnRangeChanged(object sender, RoutedEventArgs e) => UpdateThroughput();
