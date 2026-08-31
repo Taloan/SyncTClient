@@ -411,6 +411,8 @@ public sealed partial class ShareHost
     {
         var offen = 0;
         long bytes = 0;
+        var gesamt = 0;
+        long gesamtBytes = 0;
         long vorhandenBytes = 0;
 
         foreach (var eintrag in vorhanden.Values) vorhandenBytes += eintrag.Size;
@@ -421,11 +423,23 @@ public sealed partial class ShareHost
             {
                 if (_index is null) return;
 
-                foreach (var (name, size, modifiedS, isDirectory) in _index.EnumerateLight())
+                foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in _index.EnumerateLight())
                 {
                     if (isDirectory || !_config.Includes(name)) continue;
-                    if (vorhanden.TryGetValue(name, out var da)
-                        && da.Size == size && da.ModifiedS == modifiedS) continue;
+
+                    gesamt++;
+                    gesamtBytes += size;
+
+                    // Zwei Gruende, dass etwas aussteht. Der erste ist unser
+                    // eigener: der Eintrag steht hier noch nicht so da.
+                    var fehlt = !vorhanden.TryGetValue(name, out var da)
+                                || da.Size != size || da.ModifiedS != modifiedS;
+
+                    // Der zweite gehoert der Gegenstelle: sie kennt die Datei,
+                    // haelt sie aber nicht. Der Platzhalter steht dann zwar
+                    // richtig da, ist aber nicht zu fuellen -- abgeglichen ist
+                    // das nicht.
+                    if (!fehlt && hatInhalt) continue;
 
                     offen++;
                     bytes += size;
@@ -439,8 +453,16 @@ public sealed partial class ShareHost
             return;
         }
 
+        // Nur wenn sich etwas bewegt hat. Eine Zeile je Minute, die immer
+        // dasselbe sagt, verdeckt die Zeilen, die etwas sagen.
+        if (offen != Outstanding)
+            _log($"[{FolderId}] Rueckstand: {offen} von {gesamt} Dateien, " +
+                 $"{bytes / (1024.0 * 1024.0):0.0} von {gesamtBytes / (1024.0 * 1024.0):0.0} MB.");
+
         LocalFiles = vorhanden.Count;
         LocalBytes = vorhandenBytes;
+        IndexFiles = gesamt;
+        IndexTotalBytes = gesamtBytes;
         Outstanding = offen;
         OutstandingBytes = bytes;
         UpdateOutstandingPhase();
