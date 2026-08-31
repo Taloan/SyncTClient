@@ -159,29 +159,39 @@
 
       <DataGrid.Columns>
 
+        <!-- Eigene Spalte, weil in der Namensspalte ein Klick das Umbenennen
+             oeffnet. Ein Knopf, der etwas anderes tut als der Platz, auf dem
+             er liegt, gewinnt diesen Streit nicht. -->
+        <DataGridTemplateColumn Width="26" CanUserSort="False" CanUserResize="False"
+                                CanUserReorder="False">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <Button Click="OnToggleDetails" Width="20" Height="20" Padding="0"
+                      Background="Transparent" BorderThickness="0" Focusable="False"
+                      Cursor="Hand" ToolTip="{DynamicResource S.Col.Details}">
+                <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="10"
+                           Foreground="{DynamicResource Gedaempft}">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Text" Value="&#xE76C;" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Expanded}" Value="True">
+                          <Setter Property="Text" Value="&#xE70D;" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </Button>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+
         <DataGridTemplateColumn x:Name="ColName" Header="{DynamicResource S.Col.Name}" Width="240"
                                 SortMemberPath="Name" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
               <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <ToggleButton IsChecked="{Binding Expanded, Mode=TwoWay}" Width="18" Height="18"
-                              Background="Transparent" BorderThickness="0" Padding="0"
-                              VerticalAlignment="Center" Focusable="False"
-                              ToolTip="{DynamicResource S.Col.Details}">
-                  <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="10"
-                             Foreground="{DynamicResource Gedaempft}">
-                    <TextBlock.Style>
-                      <Style TargetType="TextBlock">
-                        <Setter Property="Text" Value="&#xE76C;" />
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding Expanded}" Value="True">
-                            <Setter Property="Text" Value="&#xE70D;" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </TextBlock.Style>
-                  </TextBlock>
-                </ToggleButton>
                 <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="13"
                            Foreground="{DynamicResource Symbol}" Margin="4,0,7,0" VerticalAlignment="Center" />
                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center"
@@ -255,8 +265,18 @@
                                 SortMemberPath="Percent" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
+              <!-- Der Text steht neben dem Balken und nicht darauf. Auf dem
+                   Balken wechselt der Untergrund staendig, und eine Schrift,
+                   die mal auf Fuellung und mal auf Rest liegt, ist mal
+                   lesbar und mal nicht. Ohne eigene Farbe erbt sie die der
+                   Zeile und stimmt damit auch bei Auswahl. -->
               <Grid VerticalAlignment="Center" Margin="4,0">
-                <ProgressBar Height="12" Minimum="0" Maximum="100"
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ProgressBar Grid.Column="0" Height="12" Minimum="0" Maximum="100"
                              Value="{Binding Percent, Mode=OneWay}"
                              IsIndeterminate="{Binding Indeterminate, Mode=OneWay}">
                   <ProgressBar.Style>
@@ -270,8 +290,22 @@
                     </Style>
                   </ProgressBar.Style>
                 </ProgressBar>
-                <TextBlock Text="{Binding ProgressText}" FontSize="10" Foreground="{DynamicResource Sekundaer}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="10"
+                           VerticalAlignment="Center" Margin="6,0,0,0">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Style.Triggers>
+                        <!-- Ohne Balken hat der Text die Zelle fuer sich. -->
+                        <DataTrigger Binding="{Binding Busy}" Value="False">
+                          <Setter Property="Grid.Column" Value="0" />
+                          <Setter Property="Grid.ColumnSpan" Value="2" />
+                          <Setter Property="HorizontalAlignment" Value="Center" />
+                          <Setter Property="Margin" Value="0" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
               </Grid>
             </DataTemplate>
           </DataGridTemplateColumn.CellTemplate>
