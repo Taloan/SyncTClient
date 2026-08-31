@@ -70,6 +70,18 @@
               PreviewMouseRightButtonDown="OnGridRightClick"
               RowDetailsVisibilityMode="Visible">
 
+      <!-- Die Textspalten setzen ihren Inhalt sonst an den oberen Rand.
+           Solange die Zeile so hoch war wie ihr Text, fiel das nicht auf;
+           seit die uebrigen Spalten hoehere Inhalte tragen, stehen die Zahlen
+           sichtbar zu hoch. Gesetzt wird es einmal fuer alle Zellen und nicht
+           je Spalte, denn eine Ausrichtung, die man je Spalte wiederholen
+           muss, wird irgendwo vergessen. -->
+      <DataGrid.CellStyle>
+        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+          <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+      </DataGrid.CellStyle>
+
       <!-- Aufgeklappt steht in der Zeile, was in keine Spalte passt. Nicht
            alles davon gehoert nebeneinander: die Zahlen sind ein Vergleich
            und werden untereinander gelesen. Sichtbar wird es an der
