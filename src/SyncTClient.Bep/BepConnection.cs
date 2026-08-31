@@ -12,26 +12,37 @@ namespace SyncTClient.Bep;
 /// Eine BEP-Verbindung zu genau einem Peer.
 /// </summary>
 /// <remarks>
-/// Dieser Client haelt bewusst <em>keine</em> Dateien vor. Er nimmt den Index
-/// entgegen -- der die Blocklisten aller Dateien des Peers enthaelt -- und
-/// fordert Inhalte erst bei Bedarf blockweise an. Genau darauf baut die
-/// Platzhalter-Idee auf.
+/// Dieser Client haelt keine Dateien vor. Er nimmt den Index entgegen, der
+/// die Blocklisten aller Dateien des Peers enthaelt, und fordert Inhalte erst
+/// bei Bedarf blockweise an. Darauf baut das Platzhalter-Verfahren auf.
 ///
-/// Weil wir nichts mit Blockliste annoncieren, fragt uns auch niemand nach
-/// Daten: Syncthing entfernt beim Setzen lokaler Flags die Blockliste und
-/// setzt die Groesse auf null (siehe setNoContent in bep_fileinfo.go).
+/// Wir kuendigen keine Datei mit Blockliste an, deshalb fordert auch niemand
+/// Daten bei uns an: Syncthing entfernt beim Setzen lokaler Flags die
+/// Blockliste und setzt die Groesse auf null (siehe setNoContent in
+/// bep_fileinfo.go).
 /// </remarks>
 public sealed class BepConnection : IAsyncDisposable
 {
     private const string BepProtocolName = "bep/1.0";
 
+    /// <summary>
+    /// Wieviele Anfragen der Gegenstelle gleichzeitig bedient werden.
+    /// </summary>
+    /// <remarks>
+    /// Jede Bedienung liest von der Platte und rechnet einen SHA-256 darueber.
+    /// Ohne Schranke koennte die Gegenstelle allein ueber die Zahl ihrer
+    /// Anfragen bestimmen, wieviel Arbeit hier gleichzeitig laeuft.
+    /// </remarks>
+    private const int ConcurrentServes = 4;
+
     private readonly TcpClient _tcp;
     private readonly SslStream _tls;
 
-    /// <summary>Zaehlt, was ueber diese Verbindung geht.</summary>
+    /// <summary>Zaehlt die Bytes, die ueber diese Verbindung laufen.</summary>
     private readonly CountingStream _wire;
     private readonly ConcurrentDictionary<int, TaskCompletionSource<Response>> _pending = new();
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly SemaphoreSlim _serveGate = new(ConcurrentServes);
     private int _nextRequestId;
 
     private BepConnection(TcpClient tcp, SslStream tls, DeviceId peerId, Hello peerHello)
@@ -46,11 +57,26 @@ public sealed class BepConnection : IAsyncDisposable
     public DeviceId PeerId { get; }
     public Hello PeerHello { get; }
 
-    /// <summary>Bytes, die seit dem Verbinden ueber die Leitung kamen.</summary>
+    /// <summary>Bytes, die seit dem Verbindungsaufbau empfangen wurden.</summary>
     public long BytesRead => _wire.BytesRead;
 
-    /// <summary>Bytes, die seit dem Verbinden hinausgingen.</summary>
+    /// <summary>Bytes, die seit dem Verbindungsaufbau gesendet wurden.</summary>
     public long BytesWritten => _wire.BytesWritten;
+
+    /// <summary>
+    /// Beschafft die Bytes zu einer Anfrage der Gegenstelle.
+    /// </summary>
+    /// <remarks>
+    /// Diese Klasse verwaltet keine Dateien. Sie reicht die Anfrage an die
+    /// obere Schicht weiter und sendet zurueck, was von dort kommt. Ist der
+    /// Rueckruf nicht gesetzt, wird die Anfrage mit
+    /// <see cref="ErrorCode.NoSuchFile"/> abgelehnt. Aus Sicht des Protokolls
+    /// halten wir dann keine Daten.
+    ///
+    /// Nur bei <see cref="ErrorCode.NoError"/> werden Daten gesendet. Jeder
+    /// Fehlercode wird ohne Nutzlast beantwortet.
+    /// </remarks>
+    public Func<Proto.Request, CancellationToken, Task<(ErrorCode Code, byte[] Data)>>? Serve { get; set; }
 
     public event Action<ClusterConfig>? ClusterConfigReceived;
     public event Action<Proto.Index>? IndexReceived;
@@ -111,9 +137,10 @@ public sealed class BepConnection : IAsyncDisposable
     /// Server, danach derselbe Hello-Austausch.
     /// </summary>
     /// <remarks>
-    /// Eine erwartete Geraete-ID gibt es hier nicht -- wer anruft, steht erst
-    /// nach dem Handschlag fest. Ob dieses Geraet willkommen ist, entscheidet
-    /// der Aufrufer anhand von <see cref="PeerId"/>.
+    /// Eine erwartete Geraete-ID gibt es hier nicht. Welches Geraet die
+    /// Verbindung aufbaut, steht erst nach dem Handschlag fest. Ob dieses
+    /// Geraet zugelassen wird, entscheidet der Aufrufer anhand von
+    /// <see cref="PeerId"/>.
     /// </remarks>
     public static async Task<BepConnection> AcceptAsync(
         TcpClient tcp, DeviceIdentity identity,
@@ -128,8 +155,8 @@ public sealed class BepConnection : IAsyncDisposable
             {
                 ServerCertificate = identity.Certificate,
 
-                // Ohne Zertifikat der Gegenseite gaebe es keine Geraete-ID --
-                // und ohne die waere die Verbindung nichts wert.
+                // Ohne Zertifikat der Gegenseite laesst sich keine Geraete-ID
+                // bilden. Ohne Geraete-ID ist die Verbindung nicht brauchbar.
                 ClientCertificateRequired = true,
                 ApplicationProtocols = [new SslApplicationProtocol(BepProtocolName)],
                 EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
@@ -139,10 +166,10 @@ public sealed class BepConnection : IAsyncDisposable
 
             if (tls.NegotiatedApplicationProtocol.ToString() != BepProtocolName)
                 throw new InvalidDataException(
-                    $"Anrufer hat \"{tls.NegotiatedApplicationProtocol}\" statt \"{BepProtocolName}\" ausgehandelt.");
+                    $"Die Gegenstelle hat \"{tls.NegotiatedApplicationProtocol}\" statt \"{BepProtocolName}\" ausgehandelt.");
 
             var remoteCert = tls.RemoteCertificate
-                ?? throw new InvalidDataException("Anrufer hat kein Zertifikat geliefert.");
+                ?? throw new InvalidDataException("Die Gegenstelle hat kein Zertifikat geliefert.");
             var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
 
             var peerHello = await HelloExchange
@@ -199,17 +226,18 @@ public sealed class BepConnection : IAsyncDisposable
                         break;
 
                     case MessageType.Ping:
-                        // Nur ein Lebenszeichen, keine Antwort noetig.
+                        // Ping ist nur ein Lebenszeichen und wird nicht
+                        // beantwortet.
                         break;
 
                     case MessageType.Request:
-                        // Wir halten nichts vor. Hoeflich absagen statt schweigen.
+                        // Nicht in dieser Schleife bedienen: Lesen von der
+                        // Platte dauert, und solange die Schleife wartet, wird
+                        // keine Response auf unsere eigenen Anfragen
+                        // verarbeitet. Bei einer Datei, die wir gerade selbst
+                        // hydrieren, entstuende dadurch ein Deadlock.
                         var request = Proto.Request.Parser.ParseFrom(payload);
-                        await SendAsync(MessageType.Response, new Response
-                        {
-                            Id = request.Id,
-                            Code = ErrorCode.NoSuchFile
-                        }, ct).ConfigureAwait(false);
+                        _ = Task.Run(() => ServeAsync(request, ct), CancellationToken.None);
                         break;
 
                     case MessageType.Close:
@@ -232,6 +260,61 @@ public sealed class BepConnection : IAsyncDisposable
             FailPending(ex);
             Closed?.Invoke(ex.Message);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Bedient eine Anfrage der Gegenstelle abseits der Leseschleife und
+    /// schickt die Antwort, sobald sie feststeht.
+    /// </summary>
+    /// <remarks>
+    /// Es wird in jedem Fall geantwortet. Eine unbeantwortete Anfrage laesst
+    /// die Gegenstelle bis zum Ablauf ihrer eigenen Frist warten. Nur wenn die
+    /// Verbindung bereits geschlossen ist, unterbleibt die Antwort. Die
+    /// Gegenstelle erkennt den Abbruch dann selbst.
+    /// </remarks>
+    private async Task ServeAsync(Proto.Request request, CancellationToken ct)
+    {
+        var code = ErrorCode.NoSuchFile;
+        byte[] data = [];
+
+        try
+        {
+            var serve = Serve;
+            if (serve is not null)
+            {
+                await _serveGate.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    (code, data) = await serve(request, ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Die obere Schicht behandelt ihre Fehler selbst. Eine
+                    // Ausnahme, die dennoch hier ankommt, wird als eigener
+                    // Fehler gemeldet.
+                    code = ErrorCode.Generic;
+                    data = [];
+                }
+                finally
+                {
+                    _serveGate.Release();
+                }
+            }
+
+            await SendAsync(MessageType.Response, new Response
+            {
+                Id = request.Id,
+                Code = code,
+                Data = code == ErrorCode.NoError && data is { Length: > 0 }
+                    ? ByteString.CopyFrom(data)
+                    : ByteString.Empty
+            }, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Abbruch oder geschlossene Verbindung. Die Antwort hat keinen
+            // Empfaenger mehr.
         }
     }
 
@@ -306,11 +389,12 @@ public sealed class BepConnection : IAsyncDisposable
         }
         catch
         {
-            // Beim Aufraeumen ist ein fehlgeschlagenes Close belanglos.
+            // Ein fehlgeschlagenes Close ist beim Aufraeumen ohne Bedeutung.
         }
 
         await _tls.DisposeAsync().ConfigureAwait(false);
         _tcp.Dispose();
         _writeLock.Dispose();
+        _serveGate.Dispose();
     }
 }

@@ -10,8 +10,8 @@ namespace SyncTClient.Gui;
 /// </summary>
 /// <remarks>
 /// Er steht in der Registry und nicht in der Konfiguration. Eine Kopie in der
-/// eigenen Datei waere eine Behauptung, die niemand nachhaelt: wer den Eintrag
-/// von Hand entfernt, bekaeme weiterhin einen gesetzten Haken zu sehen.
+/// eigenen Datei koennte veralten: wer den Eintrag von Hand entfernt, bekaeme
+/// weiterhin einen gesetzten Haken zu sehen.
 /// </remarks>
 internal static class Autostart
 {
@@ -29,7 +29,7 @@ internal static class Autostart
     private static string? Command
         => Environment.ProcessPath is { Length: > 0 } path ? $"\"{path}\"" : null;
 
-    /// <summary>Steht der Eintrag?</summary>
+    /// <summary>Gibt an, ob der Eintrag vorhanden ist.</summary>
     public static bool Enabled
     {
         get
@@ -41,7 +41,7 @@ internal static class Autostart
             }
             catch (Exception)
             {
-                // Keine Auskunft heisst: es ist nichts eingerichtet.
+                // Laesst sich der Wert nicht lesen, gilt der Eintrag als nicht gesetzt.
                 return false;
             }
         }
@@ -49,9 +49,9 @@ internal static class Autostart
 
     /// <summary>Setzt den Eintrag oder loescht ihn.</summary>
     /// <remarks>
-    /// Beim Setzen wird der Pfad neu geschrieben, auch wenn schon einer da
-    /// steht -- eine verschobene Programmdatei bringt sich damit selbst in
-    /// Ordnung.
+    /// Beim Setzen wird der Pfad neu geschrieben, auch wenn schon einer
+    /// eingetragen ist. Nach dem Verschieben der Programmdatei stimmt der
+    /// Eintrag damit wieder.
     /// </remarks>
     public static void Set(bool wanted)
     {
@@ -64,15 +64,15 @@ internal static class Autostart
             return;
         }
 
-        // Ohne bekannten eigenen Pfad gibt es nichts einzutragen; der Haken
-        // faellt beim naechsten Nachlesen von selbst zurueck.
+        // Ohne bekannten eigenen Pfad gibt es nichts einzutragen. Der Haken
+        // steht beim naechsten Nachlesen wieder auf nicht gesetzt.
         if (Command is { } command) key.SetValue(EntryName, command);
     }
 }
 
 /// <summary>
-/// Das Symbol im Infobereich -- der einzige Weg zurueck, solange das Fenster
-/// versteckt ist.
+/// Das Symbol im Infobereich. Solange das Fenster versteckt ist, fuehrt nur
+/// ueber dieses Symbol ein Weg zurueck.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
@@ -83,7 +83,7 @@ public sealed class TrayIcon : IDisposable
     private readonly Forms.ToolStripMenuItem _quit = new();
 
     /// <param name="window">Das Fenster, das gezeigt und geholt wird.</param>
-    /// <param name="exit">Was "Beenden" tun soll -- hier wird nichts beendet.</param>
+    /// <param name="exit">Was "Beenden" ausloest. Diese Klasse beendet selbst nichts.</param>
     public TrayIcon(Window window, Action exit)
     {
         _window = window;
@@ -103,7 +103,7 @@ public sealed class TrayIcon : IDisposable
             Visible = true
         };
 
-        // Der Doppelklick ist das, was jeder zuerst versucht.
+        // Der Doppelklick ist die Geste, die Nutzer zuerst versuchen.
         _icon.DoubleClick += (_, _) => Restore();
 
         Translate();
@@ -111,8 +111,8 @@ public sealed class TrayIcon : IDisposable
 
     /// <summary>Holt das Fenster zurueck, aus jedem Zustand.</summary>
     /// <remarks>
-    /// Versteckt und minimiert sind zweierlei, und beides kann zugleich
-    /// zutreffen -- deshalb beides nacheinander.
+    /// Versteckt und minimiert sind zwei verschiedene Zustaende, und beide
+    /// koennen zugleich vorliegen. Deshalb wird beides nacheinander aufgehoben.
     /// </remarks>
     public void Restore()
     {
@@ -128,8 +128,8 @@ public sealed class TrayIcon : IDisposable
     /// Nimmt die Beschriftungen neu aus dem Woerterbuch.
     /// </summary>
     /// <remarks>
-    /// Ein Menue aus Windows Forms folgt keinem <c>DynamicResource</c>; nach
-    /// einem Sprachwechsel muss es jemand nachziehen.
+    /// Ein Menue aus Windows Forms folgt keinem <c>DynamicResource</c>. Nach
+    /// einem Sprachwechsel muessen die Beschriftungen von Hand gesetzt werden.
     /// </remarks>
     public void Translate()
     {
@@ -139,8 +139,9 @@ public sealed class TrayIcon : IDisposable
     }
 
     /// <summary>
-    /// Ein Symbol, ohne eines mitzubringen: Windows kennt das der eigenen
-    /// Programmdatei. Gibt es keines, tut es das der Anwendungen allgemein.
+    /// Ein Symbol ohne eigene Symboldatei: Windows liefert das Symbol der
+    /// eigenen Programmdatei. Fehlt es, wird das allgemeine
+    /// Anwendungssymbol verwendet.
     /// </summary>
     private static Icon Symbol()
     {
@@ -151,8 +152,8 @@ public sealed class TrayIcon : IDisposable
         }
         catch (Exception)
         {
-            // Ein Ersatzsymbol ist besser als keines: ohne Symbol waere ein
-            // verstecktes Fenster nicht mehr zu holen.
+            // Ein Ersatzsymbol ist noetig. Ohne Symbol liesse sich ein
+            // verstecktes Fenster nicht mehr zurueckholen.
         }
 
         return SystemIcons.Application;
@@ -160,8 +161,8 @@ public sealed class TrayIcon : IDisposable
 
     public void Dispose()
     {
-        // Ohne das bleibt ein totes Symbol stehen, bis jemand mit der Maus
-        // darueberfaehrt.
+        // Ohne diesen Aufruf bleibt das Symbol im Infobereich stehen, bis der
+        // Mauszeiger darueberfaehrt.
         _icon.Visible = false;
         _icon.Dispose();
     }

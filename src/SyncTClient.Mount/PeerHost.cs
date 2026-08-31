@@ -1,4 +1,5 @@
-﻿using Google.Protobuf;
+﻿using System.Collections.Concurrent;
+using Google.Protobuf;
 using SyncTClient.Bep;
 using SyncTClient.Bep.Proto;
 
@@ -23,9 +24,10 @@ public sealed record OfferedFolder(string FolderId, string Label, bool Accepted)
 /// Eine Gegenstelle mit allen Ordnern, die von ihr kommen.
 /// </summary>
 /// <remarks>
-/// Eine Verbindung je Geraet, nicht je Ordner -- so macht es Syncthing, und
-/// nur so laesst sich beantworten, was eine Gegenstelle ueberhaupt anbietet:
-/// sie zaehlt es im ClusterConfig auf, den sie gleich nach dem Hello schickt.
+/// Es gibt eine Verbindung je Geraet, nicht je Ordner. So macht es Syncthing,
+/// und nur so laesst sich feststellen, was eine Gegenstelle ueberhaupt
+/// anbietet. Sie zaehlt die Ordner im ClusterConfig auf, den sie gleich nach
+/// dem Hello schickt.
 /// </remarks>
 public sealed class PeerHost : IAsyncDisposable
 {
@@ -33,7 +35,11 @@ public sealed class PeerHost : IAsyncDisposable
     private readonly AppConfig _app;
     private readonly DeviceIdentity _identity;
     private readonly Action<string> _log;
-    private readonly Dictionary<string, ShareHost> _shares = new(StringComparer.Ordinal);
+    // Die Freigaben werden aus mehreren Threads gelesen: aus der Leseschleife
+    // (Route) und, seit die Gegenstelle Bloecke anfordern kann, aus dem
+    // Threadpool. Ein Dictionary vertraegt gleichzeitiges Lesen und Schreiben
+    // nicht. Geschrieben wird beim Uebernehmen und beim Loesen.
+    private readonly ConcurrentDictionary<string, ShareHost> _shares = new(StringComparer.Ordinal);
 
     private BepConnection? _connection;
     private Task? _readLoop;
@@ -69,12 +75,12 @@ public sealed class PeerHost : IAsyncDisposable
 
     public string? LastError { get; private set; }
 
-    /// <summary>Was die Gegenstelle mit uns teilt -- auch, was wir noch nicht uebernommen haben.</summary>
+    /// <summary>Was die Gegenstelle mit uns teilt, auch die noch nicht uebernommenen Ordner.</summary>
     public IReadOnlyList<OfferedFolder> Offered { get; private set; } = [];
 
-    public IReadOnlyCollection<ShareHost> Shares => _shares.Values;
+    public IReadOnlyCollection<ShareHost> Shares => [.. _shares.Values];
 
-    /// <summary>Bytes, die seit dem Verbinden ueber diese Leitung gingen.</summary>
+    /// <summary>Bytes, die seit dem Verbinden ueber diese Verbindung liefen.</summary>
     public (long Read, long Written) Wire =>
         _connection is null ? (0, 0) : (_connection.BytesRead, _connection.BytesWritten);
 
@@ -104,13 +110,13 @@ public sealed class PeerHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Waehlt die Gegenstelle an -- unter der eingetragenen Adresse oder unter
-    /// denen, die die Erkennung nennt.
+    /// Baut die Verbindung zur Gegenstelle auf, unter der eingetragenen
+    /// Adresse oder unter den Adressen aus der Erkennung.
     /// </summary>
     /// <remarks>
-    /// Mehrere Adressen sind der Normalfall: ein Geraet meldet seine lokale,
-    /// seine oeffentliche und die seines Relays. Wir nehmen die erste, die
-    /// traegt.
+    /// Mehrere Adressen sind der Normalfall: ein Geraet meldet seine lokale
+    /// Adresse, seine oeffentliche und die seines Relays. Verwendet wird die
+    /// erste, ueber die eine Verbindung zustande kommt.
     /// </remarks>
     private async Task<BepConnection> DialAsync(CancellationToken ct)
     {
@@ -166,15 +172,15 @@ public sealed class PeerHost : IAsyncDisposable
     /// <summary>Alle Adressen, unter denen die Gegenstelle zu versuchen ist.</summary>
     private async Task<IReadOnlyList<string>> CandidatesAsync(Bep.DeviceId expected, CancellationToken ct)
     {
-        // Eine eingetragene Adresse ist eine Ansage: dann wird nicht gesucht.
+        // Ist eine Adresse eingetragen, wird nicht gesucht.
         if (!string.IsNullOrWhiteSpace(_config.Address) &&
             !_config.Address.Equals("dynamic", StringComparison.OrdinalIgnoreCase))
             return [_config.Address];
 
         if (expected == Bep.DeviceId.Empty) return [];
 
-        // Erst im eigenen Netz nachsehen: schneller, genauer, und niemand
-        // erfaehrt dabei, wonach wir suchen.
+        // Zuerst im eigenen Netz nachsehen. Das ist schneller und genauer,
+        // und kein Server erfaehrt dabei, wonach gesucht wird.
         var local = _app.Local?.AddressesFor(expected) ?? [];
         if (local.Count > 0)
         {
@@ -197,8 +203,8 @@ public sealed class PeerHost : IAsyncDisposable
                 using var discovery = new GlobalDiscovery(server);
                 var found = await discovery.LookupAsync(expected, ct);
 
-                // Der erste Server, der etwas weiss, hat recht -- die anderen
-                // wuerden dasselbe sagen.
+                // Die Antwort des ersten Servers mit einem Ergebnis genuegt,
+                // die uebrigen liefern dieselben Adressen.
                 if (found.Count == 0) continue;
 
                 _log($"[{Display}] Erkennung nennt {found.Count}: {string.Join(", ", found)}");
@@ -214,7 +220,7 @@ public sealed class PeerHost : IAsyncDisposable
         return [];
     }
 
-    /// <summary>Nimmt einer Adresse das Schema und alles hinter dem Host ab.</summary>
+    /// <summary>Entfernt aus einer Adresse das Schema und alles hinter dem Host.</summary>
     private static string Bare(string address)
     {
         var scheme = address.IndexOf("://", StringComparison.Ordinal);
@@ -228,25 +234,28 @@ public sealed class PeerHost : IAsyncDisposable
     /// Uebernimmt eine Verbindung, die die Gegenstelle aufgebaut hat.
     /// </summary>
     /// <remarks>
-    /// Ab dem Hello ist kein Unterschied mehr: welche Seite gewaehlt hat,
-    /// steht in keiner Nachricht des Protokolls. Deshalb faengt hier nur der
-    /// Aufbau anders an -- die Sitzung selbst ist dieselbe.
+    /// Ab dem Hello gibt es keinen Unterschied mehr. Keine Nachricht des
+    /// Protokolls sagt, welche Seite die Verbindung aufgebaut hat. Deshalb
+    /// unterscheidet sich hier nur der Aufbau, die Sitzung selbst ist
+    /// dieselbe.
     ///
-    /// Nur so erreicht uns eine Gegenstelle, die wir nicht anrufen koennen:
-    /// weil ihre Adresse wechselt oder weil sie hinter einem Router sitzt.
+    /// Nur auf diesem Weg erreicht uns eine Gegenstelle, zu der wir keine
+    /// Verbindung aufbauen koennen, weil ihre Adresse wechselt oder weil sie
+    /// hinter einem Router liegt.
     /// </remarks>
     public async Task AcceptAsync(
         BepConnection connection, IEnumerable<ShareConfig> shares, CancellationToken ct = default)
     {
         if (State is PeerState.Verbunden or PeerState.Verbindet)
         {
-            // Zwei Leitungen zur selben Gegenstelle waeren eine zu viel.
+            // Eine zweite Verbindung zur selben Gegenstelle wird nicht
+            // gebraucht.
             await connection.DisposeAsync();
             return;
         }
 
         var token = Begin(ct);
-        _log($"[{Display}] Anruf angenommen.");
+        _log($"[{Display}] eingehende Verbindung angenommen.");
 
         try
         {
@@ -275,7 +284,7 @@ public sealed class PeerHost : IAsyncDisposable
         _log($"[{Display}] Fehler: {ex.Message}");
     }
 
-    /// <summary>Alles, was nach dem Hello gleich ist -- gewaehlt oder angenommen.</summary>
+    /// <summary>Alles, was nach dem Hello gleich ablaeuft, ob aufgebaut oder angenommen.</summary>
     private async Task RunSessionAsync(
         BepConnection connection, IEnumerable<ShareConfig> shares, CancellationToken token)
     {
@@ -288,10 +297,11 @@ public sealed class PeerHost : IAsyncDisposable
         connection.ClusterConfigReceived += cc => OnClusterConfig(cc);
         connection.IndexReceived += m => Route(m.Folder, m.Files);
         connection.IndexUpdateReceived += m => Route(m.Folder, m.Files);
+        connection.Serve = ServeAsync;
 
         _readLoop = connection.RunAsync(token);
 
-        // Die Ordner vorbereiten, bevor wir ankuendigen -- ihr Indexstand
+        // Die Ordner vorbereiten, bevor angekuendigt wird. Ihr Indexstand
         // geht in die Ankuendigung ein.
         foreach (var share in shares)
         {
@@ -320,7 +330,7 @@ public sealed class PeerHost : IAsyncDisposable
     private async Task NegotiateAsync(CancellationToken ct)
     {
         // Syncthing schickt seinen ClusterConfig sofort nach dem Hello. Kommt
-        // er wider Erwarten nicht, fangen wir eben bei null an.
+        // er wider Erwarten nicht, wird bei null begonnen.
         await Task.WhenAny(_clusterConfig.Task, Task.Delay(TimeSpan.FromSeconds(5), ct));
 
         var peerFolders = _clusterConfig.Task.IsCompletedSuccessfully
@@ -358,11 +368,16 @@ public sealed class PeerHost : IAsyncDisposable
                 Label = share.Config.Label,
                 Type = FolderType.SendReceive
             };
+            // Unser eigener Eintrag. Beide Zahlen sind verbindliche Angaben
+            // an die Gegenstelle: eine wechselnde IndexId bedeutet, dass die
+            // Gegenstelle alles bisher ueber uns Gespeicherte verwerfen soll.
+            // NegotiateAsync laeuft auch mitten in der Sitzung, etwa beim
+            // Uebernehmen eines Ordners.
             entry.Devices.Add(new Device
             {
                 Id = ByteString.CopyFrom(_identity.Id.Span),
-                MaxSequence = 0,
-                IndexId = (ulong)Random.Shared.NextInt64(1, long.MaxValue)
+                MaxSequence = share.LocalSequence,
+                IndexId = share.OwnIndexId
             });
             entry.Devices.Add(new Device
             {
@@ -393,6 +408,23 @@ public sealed class PeerHost : IAsyncDisposable
         if (_shares.TryGetValue(folderId, out var share)) share.Absorb(files);
     }
 
+    /// <summary>
+    /// Reicht eine Blockanfrage der Gegenstelle an den zustaendigen Ordner
+    /// weiter, so wie <see cref="Route"/> es fuer Index-Nachrichten tut.
+    /// </summary>
+    /// <remarks>
+    /// Die Anfrage nennt den Ordner selbst. Ist er hier nicht eingerichtet,
+    /// faellt die Antwort so aus wie fuer eine unbekannte Datei.
+    /// </remarks>
+    private Task<(ErrorCode Code, byte[] Data)> ServeAsync(Request request, CancellationToken ct)
+    {
+        if (_shares.TryGetValue(request.Folder, out var share))
+            return share.ServeAsync(request, ct);
+
+        _log($"[{Display}] Anfrage nach \"{request.Name}\" abgelehnt: Ordner \"{request.Folder}\" ist hier nicht eingerichtet.");
+        return Task.FromResult<(ErrorCode, byte[])>((ErrorCode.NoSuchFile, []));
+    }
+
     // ------------------------------------------------------------ Verwalten
 
     /// <summary>
@@ -401,8 +433,8 @@ public sealed class PeerHost : IAsyncDisposable
     /// </summary>
     /// <remarks>
     /// Getrennt vom zweiten Schritt, damit vorher gefragt werden kann, wohin
-    /// der Ordner soll und welche Zweige daraus. Beides steht erst fest, wenn
-    /// man weiss, was drin ist.
+    /// der Ordner soll und welche Zweige daraus uebernommen werden. Beides
+    /// laesst sich erst entscheiden, wenn der Inhalt bekannt ist.
     /// </remarks>
     public async Task<ShareHost> PrepareAsync(ShareConfig share, CancellationToken ct = default)
     {
@@ -412,7 +444,7 @@ public sealed class PeerHost : IAsyncDisposable
         host.OpenIndex();
         _shares[share.FolderId] = host;
 
-        // Erneut ankuendigen -- jetzt mit dem neuen Ordner dabei.
+        // Erneut ankuendigen, jetzt mit dem neuen Ordner.
         await NegotiateAsync(ct);
         await host.PrepareAsync(_connection, ct);
 
@@ -431,12 +463,12 @@ public sealed class PeerHost : IAsyncDisposable
     /// Nimmt zurueck, was <see cref="PrepareAsync"/> angelegt hat.
     /// </summary>
     /// <remarks>
-    /// Ohne das neue Ankuendigen schickte die Gegenstelle weiter
-    /// Aktualisierungen fuer einen Ordner, den wir gar nicht wollten.
+    /// Ohne die erneute Ankuendigung schickt die Gegenstelle weiter
+    /// Aktualisierungen fuer einen Ordner, der nicht uebernommen wurde.
     /// </remarks>
     public async Task DiscardAsync(ShareHost host)
     {
-        _shares.Remove(host.FolderId);
+        _shares.TryRemove(host.FolderId, out _);
 
         await host.UnbindAsync();
         await host.DisposeAsync();
@@ -450,7 +482,7 @@ public sealed class PeerHost : IAsyncDisposable
         MarkOffered();
     }
 
-    /// <summary>Beide Schritte auf einmal -- fuer alles, was nicht fragt.</summary>
+    /// <summary>Beide Schritte auf einmal, fuer Aufrufer ohne Rueckfrage.</summary>
     public async Task<ShareHost> AcceptAsync(ShareConfig share, CancellationToken ct = default)
     {
         var host = await PrepareAsync(share, ct);
@@ -460,7 +492,7 @@ public sealed class PeerHost : IAsyncDisposable
 
     public async Task UnbindAsync(string folderId)
     {
-        if (!_shares.Remove(folderId, out var share)) return;
+        if (!_shares.TryRemove(folderId, out var share)) return;
         await share.UnbindAsync();
         await share.DisposeAsync();
         MarkOffered();

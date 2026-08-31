@@ -9,8 +9,8 @@ namespace SyncTClient.Vfs;
 
 /// <summary>
 /// Haengt eine <see cref="IContentSource"/> als Platzhalter-Ordner in den
-/// Explorer: alle Dateien sind sichtbar, keine belegt Platz, und beim ersten
-/// Zugriff faehrt Windows den Hydrations-Rueckruf an.
+/// Explorer. Alle Dateien sind sichtbar, keine belegt Platz, und beim ersten
+/// Zugriff ruft Windows den Hydrations-Rueckruf auf.
 /// </summary>
 public sealed class CloudFilterMount : IDisposable
 {
@@ -40,7 +40,10 @@ public sealed class CloudFilterMount : IDisposable
 
     public string RootPath => _rootPath;
 
-    /// <summary>Verbindet die Rueckrufe. Ab hier bedient Windows Zugriffe ueber uns.</summary>
+    /// <summary>
+    /// Verbindet die Rueckrufe. Ab hier leitet Windows Zugriffe hierher
+    /// weiter.
+    /// </summary>
     public unsafe void Connect()
     {
         _self = GCHandle.Alloc(this);
@@ -75,8 +78,9 @@ public sealed class CloudFilterMount : IDisposable
         _connected = true;
 
         // Ohne diese Meldung gilt der Anbieter als nicht betriebsbereit.
-        // Windows fragt den Zustand, bevor es die Erweiterungen eines
-        // Sync-Roots benutzt -- wer ihn nie meldet, wird uebergangen.
+        // Windows fragt den Zustand ab, bevor es die Erweiterungen eines
+        // Sync-Roots benutzt. Ein Anbieter, der ihn nie meldet, wird
+        // uebergangen.
         ReportIdle();
 
         _log?.Invoke($"Sync-Root verbunden: {_rootPath}");
@@ -86,9 +90,9 @@ public sealed class CloudFilterMount : IDisposable
     /// Meldet der Cloud-Filter-Schicht, was wir gerade tun.
     /// </summary>
     /// <remarks>
-    /// Der Zustand landet in der Statusanzeige des Explorers und steuert
-    /// ausserdem, ob Windows uns fuer Vorschauen und aehnliche Dienste
-    /// ueberhaupt in Betracht zieht.
+    /// Der Zustand erscheint in der Statusanzeige des Explorers. Ausserdem
+    /// steuert er, ob Windows diesen Anbieter fuer Vorschauen und aehnliche
+    /// Dienste beruecksichtigt.
     /// </remarks>
     public void ReportIdle() => ReportStatus(CF_SYNC_PROVIDER_STATUS.CF_PROVIDER_STATUS_IDLE);
 
@@ -107,20 +111,21 @@ public sealed class CloudFilterMount : IDisposable
     // ------------------------------------------------------------ Platzhalter
 
     /// <summary>
-    /// Legt fuer jeden Eintrag der Quelle einen Platzhalter an -- Verzeichnisse
-    /// zuerst, damit die Kinder ein Zuhause haben.
+    /// Legt fuer jeden Eintrag der Quelle einen Platzhalter an. Verzeichnisse
+    /// werden zuerst angelegt, damit die enthaltenen Eintraege einen
+    /// uebergeordneten Ordner haben.
     /// </summary>
     /// <param name="progress">
     /// Meldet angelegte und insgesamt zu erwartende Platzhalter. Bei grossen
-    /// Freigaben dauert dieser Lauf lange genug, dass ein stummes Fenster wie
-    /// ein Absturz aussieht.
+    /// Freigaben dauert dieser Lauf lange. Ohne Rueckmeldung wirkt das Fenster
+    /// waehrenddessen wie abgestuerzt.
     /// </param>
     public void ProjectPlaceholders(Action<int, int>? progress = null)
     {
         var entries = _source.Enumerate();
 
         // Verzeichnisse aus den Pfaden ableiten, nicht nur den ausdruecklichen
-        // Eintraegen vertrauen: manche Quellen liefern nur Dateien.
+        // Eintraegen vertrauen. Manche Quellen liefern nur Dateien.
         var directories = new HashSet<string> { string.Empty };
         foreach (var entry in entries)
         {
@@ -135,10 +140,11 @@ public sealed class CloudFilterMount : IDisposable
 
         // Verzeichnisse werden echte Verzeichnisse, keine Platzhalter. Sie
         // haben keinen Inhalt zum Nachladen, und ein frisch angelegter
-        // Verzeichnis-Platzhalter nimmt nicht zuverlaessig sofort Kinder auf --
-        // CfCreatePlaceholders quittiert das mit ERROR_CLOUD_FILE_METADATA_CORRUPT
-        // fuer den gesamten Stapel. Dass Windows uns nicht nach Population
-        // fragt, regelt die Politik des Sync-Roots (Population = FULL).
+        // Verzeichnis-Platzhalter nimmt untergeordnete Eintraege nicht
+        // zuverlaessig sofort auf. CfCreatePlaceholders meldet dann
+        // ERROR_CLOUD_FILE_METADATA_CORRUPT fuer den gesamten Stapel. Dass
+        // Windows nicht nach Population fragt, regelt die Politik des
+        // Sync-Roots (Population = FULL).
         foreach (var directory in directories.OrderBy(d => d.Count(c => c == '/')))
         {
             if (string.IsNullOrEmpty(directory)) continue;
@@ -181,9 +187,9 @@ public sealed class CloudFilterMount : IDisposable
                 var leaf = LeafOf(entry.RelativePath);
 
                 var namePtr = Marshal.StringToHGlobalUni(leaf);
-                // Die Identitaet kommt im Rueckruf zurueck -- wir legen den
-                // vollen relativen Pfad hinein und finden die Datei damit
-                // spaeter ohne Umweg wieder.
+                // Die Identitaet kommt im Rueckruf zurueck. Sie enthaelt den
+                // vollen relativen Pfad, damit die Datei dort ohne Umweg
+                // gefunden wird.
                 var identityPtr = Marshal.StringToHGlobalUni(entry.RelativePath);
                 allocations.Add(namePtr);
                 allocations.Add(identityPtr);
@@ -214,10 +220,11 @@ public sealed class CloudFilterMount : IDisposable
                     //
                     // DISABLE_ON_DEMAND_POPULATION wird hier bewusst NICHT
                     // gesetzt: es erklaert ein Verzeichnis fuer vollstaendig
-                    // befuellt. Da wir die Kinder erst danach anlegen, wertet
-                    // Windows das als Widerspruch und liefert fuer den ganzen
-                    // Stapel ERROR_CLOUD_FILE_METADATA_CORRUPT. Dass Windows
-                    // uns trotzdem nicht nach Population fragt, regelt die
+                    // befuellt. Da die enthaltenen Eintraege erst danach
+                    // angelegt werden, wertet Windows das als Widerspruch und
+                    // liefert fuer den ganzen Stapel
+                    // ERROR_CLOUD_FILE_METADATA_CORRUPT. Dass Windows
+                    // trotzdem nicht nach Population fragt, regelt die
                     // Politik des Sync-Roots (Population = FULL).
                     Flags = CF_PLACEHOLDER_CREATE_FLAGS.CF_PLACEHOLDER_CREATE_FLAG_MARK_IN_SYNC
                 };
@@ -233,9 +240,10 @@ public sealed class CloudFilterMount : IDisposable
                     CF_CREATE_FLAGS.CF_CREATE_FLAG_NONE, &processed);
             }
 
-            // CfAPI haelt beim ersten fehlerhaften Eintrag an. Nicht angefasste
-            // Eintraege behalten Result = S_OK, sind also nicht von Erfolgen zu
-            // unterscheiden -- allein EntriesProcessed sagt, wie weit es kam.
+            // CfAPI haelt beim ersten fehlerhaften Eintrag an. Nicht
+            // bearbeitete Eintraege behalten Result = S_OK und sind damit
+            // nicht von erfolgreichen zu unterscheiden. Nur EntriesProcessed
+            // gibt an, wie weit der Aufruf kam.
             if (processed < entries.Count)
             {
                 var stuck = entries[(int)processed];
@@ -245,10 +253,10 @@ public sealed class CloudFilterMount : IDisposable
                              $"Aufruf 0x{(uint)callResult.Value:X8}");
             }
 
-            // Windows leitet die Ueberlagerungssymbole -- Wolke, Kringel,
-            // gruener Haken -- aus dem Anheft-Zustand ab. Ohne ihn zeigt es
-            // gar keines. "Nicht angeheftet" heisst: darf verdraengt werden,
-            // und genau das ist bei uns der Normalfall.
+            // Windows leitet die Ueberlagerungssymbole (Wolke, Kringel,
+            // gruener Haken) aus dem Anheft-Zustand ab. Ohne ihn zeigt es gar
+            // keines. "Nicht angeheftet" bedeutet, dass die Datei verdraengt
+            // werden darf. Das ist hier der Normalfall.
             for (var i = 0; i < (int)processed && i < entries.Count; i++)
             {
                 if (entries[i].IsDirectory) continue;
@@ -267,8 +275,8 @@ public sealed class CloudFilterMount : IDisposable
 
     /// <summary>
     /// Setzt den Anheft-Zustand auf "nicht angeheftet". Angeheftete Dateien
-    /// waeren solche, die Windows immer lokal halten soll -- unsere sollen
-    /// bei Bedarf kommen und wieder gehen duerfen.
+    /// haelt Windows immer lokal. Die Dateien dieser Freigabe sollen bei
+    /// Bedarf geholt und wieder verdraengt werden koennen.
     /// </summary>
     private unsafe void MarkUnpinned(string fullPath)
     {
@@ -281,7 +289,7 @@ public sealed class CloudFilterMount : IDisposable
             if (result.Failed)
                 _log?.Invoke($"  Anheft-Zustand fuer \"{Path.GetFileName(fullPath)}\": 0x{(uint)result.Value:X8}");
         }
-        catch (IOException) { /* in Benutzung -- beim naechsten Start erneut */ }
+        catch (IOException) { /* in Benutzung, beim naechsten Start erneut */ }
         catch (UnauthorizedAccessException) { }
     }
 
@@ -295,10 +303,12 @@ public sealed class CloudFilterMount : IDisposable
             var mount = (CloudFilterMount)GCHandle.FromIntPtr((nint)info->CallbackContext).Target!;
 
             // Die Zeiger gelten nur waehrend des Rueckrufs. Alles Noetige
-            // kopieren, bevor wir asynchron werden.
-            // Wer fragt? Bei voller Hydration trotz PARTIAL-Politik ist die
-            // erste Frage, ob ueberhaupt der Nutzer der Ausloeser ist -- ein
-            // Virenscanner liest die Datei beim Oeffnen komplett.
+            // wird kopiert, bevor die Verarbeitung asynchron weiterlaeuft.
+            //
+            // Der Ausloeser wird mitgefuehrt: bei voller Hydration trotz
+            // PARTIAL-Politik ist zuerst zu klaeren, ob der Benutzer den
+            // Zugriff ausgeloest hat. Ein Virenscanner liest die Datei beim
+            // Oeffnen vollstaendig.
             var caller = info->ProcessInfo is null
                 ? "(unbekannt)"
                 : $"{Marshal.PtrToStringUni((nint)info->ProcessInfo->ImagePath.Value) ?? "?"} " +
@@ -315,13 +325,14 @@ public sealed class CloudFilterMount : IDisposable
                 parameters->Anonymous.FetchData.OptionalFileOffset,
                 parameters->Anonymous.FetchData.OptionalLength);
 
-            // Der Rueckruf darf nicht blockieren -- Windows wartet sonst auf
-            // uns, waehrend wir auf das Netz warten.
+            // Der Rueckruf darf nicht blockieren. Windows wartet sonst auf
+            // diesen Aufruf, waehrend dieser auf das Netz wartet.
             _ = Task.Run(() => mount.ServeAsync(request));
         }
         catch
         {
-            // Aus einem UnmanagedCallersOnly-Rueckruf darf nichts herausfliegen.
+            // Aus einem UnmanagedCallersOnly-Rueckruf darf keine Ausnahme
+            // herausdringen.
         }
     }
 
@@ -338,7 +349,7 @@ public sealed class CloudFilterMount : IDisposable
 
     private async Task ServeAsync(HydrationRequest request)
     {
-        // Windows verlangt einen sektorausgerichteten Anfang; die Laenge darf
+        // Windows verlangt einen sektorausgerichteten Anfang. Die Laenge darf
         // nur am Dateiende davon abweichen.
         var start = request.RequiredOffset & ~((long)SectorSize - 1);
         var end = request.RequiredOffset + request.RequiredLength;
@@ -352,27 +363,58 @@ public sealed class CloudFilterMount : IDisposable
                          $"optional [{request.OptionalOffset}..{request.OptionalOffset + request.OptionalLength})");
             _log?.Invoke($"  Ausloeser: {request.Caller}");
 
-            var data = await _source.ReadAsync(request.RelativePath, start, length, CancellationToken.None)
-                .ConfigureAwait(false);
+            // Stueckweise, nicht in einem Zug. Dafuer gibt es zwei gemessene
+            // Gruende.
+            //
+            // Windows fragt fuer dieselbe Datei mehrfach und in
+            // ueberlappenden Bereichen an. Ein Dateimanager verlangt beim
+            // Doppelklick die ganze Datei, der Lader gleich darauf noch
+            // einmal fast dasselbe. Wird erst am Ende durchgereicht, faellt
+            // erst am Ende auf, dass ein anderer Abruf den Bereich laengst
+            // gefuellt hat. Bei 373 MB bedeutet das die doppelte
+            // Uebertragung. Nach jedem Stueck steht dagegen fest, ob der
+            // Bereich noch gebraucht wird.
+            //
+            // Zweitens der Speicher: eine Datei in einem Zug zu holen hiesse,
+            // sie vollstaendig im Arbeitsspeicher zu halten.
+            //
+            // Der ganze Bereich ist eine Uebertragung, auch wenn er in
+            // Stuecken kommt.
+            using var range = _source.BeginRange(request.RelativePath, length);
 
-            TransferData(request, data, start);
+            for (var offset = start; offset < alignedEnd;)
+            {
+                var take = (int)Math.Min(ChunkSize, alignedEnd - offset);
+
+                var data = await _source.ReadAsync(request.RelativePath, offset, take, CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                if (!TransferData(request, data, offset)) return;
+
+                offset += take;
+            }
         }
         catch (Exception ex)
         {
             _log?.Invoke($"Hydration fehlgeschlagen fuer {request.RelativePath}: {ex.Message}");
-            // STATUS_UNSUCCESSFUL -- der Zugriff scheitert, statt haengenzubleiben.
+            // STATUS_UNSUCCESSFUL. Der Zugriff scheitert, statt
+            // haengenzubleiben.
             TransferFailure(request, start);
         }
     }
 
-    /// <summary>Kopiert die Nutzdaten in sektorausgerichteten Speicher und reicht sie durch.</summary>
-    private unsafe void TransferData(HydrationRequest request, byte[] data, long offset)
+    /// <summary>
+    /// Kopiert die Nutzdaten in sektorausgerichteten Speicher und reicht sie
+    /// durch. <c>false</c> bedeutet, dass die Anfrage erledigt ist und nicht
+    /// weiter bedient werden muss.
+    /// </summary>
+    private unsafe bool TransferData(HydrationRequest request, byte[] data, long offset)
     {
         var buffer = NativeMemory.AlignedAlloc((nuint)data.Length, SectorSize);
         try
         {
             data.AsSpan().CopyTo(new Span<byte>(buffer, data.Length));
-            Transfer(request, buffer, offset, data.Length, ntStatus: 0);
+            return Transfer(request, buffer, offset, data.Length, ntStatus: 0);
         }
         finally
         {
@@ -380,10 +422,18 @@ public sealed class CloudFilterMount : IDisposable
         }
     }
 
+    /// <summary>
+    /// So viel wird am Stueck geholt und durchgereicht. Der Wert ist gross
+    /// genug, dass die Verbindung ausgelastet bleibt, und klein genug, dass
+    /// eine ueberfluessige Anfrage schnell erkannt wird. Er ist ein
+    /// Vielfaches der Sektorgroesse.
+    /// </summary>
+    private const int ChunkSize = 8 << 20;
+
     private unsafe void TransferFailure(HydrationRequest request, long offset)
         => Transfer(request, null, offset, 0, unchecked((int)0xC0000001));
 
-    private unsafe void Transfer(HydrationRequest request, void* buffer, long offset, long length, int ntStatus)
+    private unsafe bool Transfer(HydrationRequest request, void* buffer, long offset, long length, int ntStatus)
     {
         var operation = new CF_OPERATION_INFO
         {
@@ -401,17 +451,19 @@ public sealed class CloudFilterMount : IDisposable
         parameters.Anonymous.TransferData.Length = length;
 
         var result = PInvoke.CfExecute(&operation, &parameters);
-        if (result.Failed)
-        {
-            // 0x8007018E: die Anfrage wurde storniert. Das ist der Normalfall,
-            // wenn ein zweiter, groesserer Abruf denselben Bereich schon
-            // gefuellt hat -- kein Fehler, nur vergebene Muehe.
-            const uint requestCanceled = 0x8007018E;
-            if ((uint)result.Value == requestCanceled)
-                _log?.Invoke("  (Anfrage storniert -- Bereich war bereits gefuellt)");
-            else
-                _log?.Invoke($"  CfExecute schlug fehl: 0x{(uint)result.Value:X8}");
-        }
+        if (!result.Failed) return true;
+
+        // 0x8007018E: die Anfrage wurde storniert, weil ein anderer Abruf den
+        // Bereich bereits gefuellt hat. Das ist kein Fehler, aber ein Grund
+        // abzubrechen. Alles Weitere waere eine zweite Uebertragung derselben
+        // Bytes.
+        const uint requestCanceled = 0x8007018E;
+        if ((uint)result.Value == requestCanceled)
+            _log?.Invoke("  (Anfrage storniert -- Bereich war bereits gefuellt)");
+        else
+            _log?.Invoke($"  CfExecute schlug fehl: 0x{(uint)result.Value:X8}");
+
+        return false;
     }
 
     /// <summary>

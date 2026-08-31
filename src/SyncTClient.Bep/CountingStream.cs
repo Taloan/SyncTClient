@@ -1,14 +1,15 @@
 namespace SyncTClient.Bep;
 
 /// <summary>
-/// Legt sich um einen Datenstrom und zaehlt mit, was durch ihn hindurchgeht.
+/// Umschliesst einen Datenstrom und zaehlt die Bytes, die durch ihn
+/// hindurchgehen.
 /// </summary>
 /// <remarks>
-/// Auf dieser Ebene zu zaehlen und nicht in den einzelnen Sendemethoden hat
-/// einen Grund: hier faellt wirklich alles an -- Rahmenkoepfe, Anfragen,
-/// Index-Nachrichten, Lebenszeichen. Ein Zaehler weiter oben zeigte nur die
-/// Nutzdaten und liesse die Frage offen, wo die uebrige Leitungslast
-/// herkommt.
+/// Gezaehlt wird auf dieser Ebene und nicht in den einzelnen Sendemethoden,
+/// weil hier alles anfaellt: Rahmenkoepfe, Anfragen, Index-Nachrichten und
+/// Lebenszeichen. Ein Zaehler in einer hoeheren Schicht erfasste nur die
+/// Nutzdaten und liesse offen, woher die uebrige Last auf der Verbindung
+/// stammt.
 /// </remarks>
 public sealed class CountingStream(Stream inner) : Stream
 {

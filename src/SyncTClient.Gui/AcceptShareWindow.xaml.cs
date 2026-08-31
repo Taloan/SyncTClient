@@ -8,13 +8,13 @@ using SyncTClient.Mount;
 namespace SyncTClient.Gui;
 
 /// <summary>
-/// Was vor dem Übernehmen zu klären ist: wohin, wie viel, und welche Zweige
-/// überhaupt.
+/// Klärt vor dem Übernehmen, wohin der Ordner gelegt wird, wie viel er belegen
+/// darf und welche Zweige übernommen werden.
 /// </summary>
 /// <remarks>
-/// Der Index der Gegenstelle liegt zu diesem Zeitpunkt bereits vor -- er kommt
+/// Der Index der Gegenstelle liegt zu diesem Zeitpunkt bereits vor. Er kommt
 /// ohnehin, sobald wir den Ordner ankündigen. Im Explorer ist dagegen noch
-/// nichts entstanden: das geschieht erst, wenn hier bestätigt wird.
+/// nichts angelegt. Das geschieht erst, wenn hier bestätigt wird.
 /// </remarks>
 public partial class AcceptShareWindow : Window
 {
@@ -32,7 +32,7 @@ public partial class AcceptShareWindow : Window
         _homeDirectory = homeDirectory;
 
         TitleText.Text = title;
-        SubTitleText.Text = $"Ordner-ID {share.FolderId}";
+        SubTitleText.Text = App.S("S.FolderId", share.FolderId);
 
         _loading = true;
         LocalPathBox.Text = share.LocalPath;
@@ -61,8 +61,8 @@ public partial class AcceptShareWindow : Window
 
             _tree = FolderNode.Build(entries);
 
-            // Beim Uebernehmen ist alles ausgewaehlt: wer nichts abwaehlt,
-            // bekommt den ganzen Ordner -- das ist die erwartete Antwort.
+            // Beim Uebernehmen ist alles ausgewaehlt. Wer nichts abwaehlt,
+            // bekommt den ganzen Ordner. Das entspricht der Erwartung.
             _tree.InitializeChecked(true);
             SetAll(_tree, true);
             _tree.RecomputeUpwards();
@@ -86,7 +86,7 @@ public partial class AcceptShareWindow : Window
     {
         var dialog = new OpenFolderDialog { Multiselect = false };
 
-        // Ein Startpunkt, den es nicht gibt, laesst den Dialog irgendwo aufgehen.
+        // Ein Startpfad, den es nicht gibt, oeffnet den Dialog an unbestimmter Stelle.
         var start = LocalPathBox.Text.Trim();
         if (Directory.Exists(start)) dialog.InitialDirectory = start;
         else if (Directory.Exists(Path.GetDirectoryName(start))) dialog.InitialDirectory = Path.GetDirectoryName(start);
@@ -130,9 +130,9 @@ public partial class AcceptShareWindow : Window
             return;
         }
 
-        // Ein Ordner, in dem schon etwas liegt, ist nicht verboten -- aber
-        // eine Frage wert: Windows legt darin Platzhalter an, und das
-        // Vorhandene steht danach mitten im Share.
+        // Ein Ordner, in dem schon etwas liegt, ist erlaubt, wird aber
+        // nachgefragt. Windows legt darin Platzhalter an, und das Vorhandene
+        // steht danach mitten im Share.
         if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
         {
             var answer = MessageBox.Show(this,
@@ -146,9 +146,9 @@ public partial class AcceptShareWindow : Window
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.GenerateThumbnails = ThumbsBox.IsChecked == true;
 
-        // Alles ausgewaehlt heisst: keine Einschraenkung. Das ist nicht
-        // dasselbe wie eine Liste aller Zweige -- die waere beim naechsten
-        // neuen Ordner der Gegenstelle schon falsch.
+        // Alles ausgewaehlt bedeutet: keine Einschraenkung. Das ist nicht
+        // dasselbe wie eine Liste aller Zweige. Eine solche Liste waere
+        // falsch, sobald die Gegenstelle einen neuen Ordner anlegt.
         _share.Included = _tree is null || _tree.IsChecked == true
             ? []
             : FolderNode.CollectIncluded(_tree);

@@ -8,21 +8,22 @@ namespace SyncTClient.ThumbProvider;
 /// Explorer-Prozess.
 /// </summary>
 /// <remarks>
-/// OneDrive macht es genauso: seine Ueberlagerungssymbole kommen aus
-/// FileSyncShell64.dll im Prozess, der Vorschau-Erzeuger dagegen aus
-/// FileCoAuth.exe als LocalServer32. Fuer Platzhalter ist das plausibel --
-/// ein Anbieter, der womoeglich Daten nachladen muss, hat im Vorschau-Wirt
-/// des Explorers nichts verloren.
+/// OneDrive ist genauso aufgebaut: seine Ueberlagerungssymbole kommen aus
+/// FileSyncShell64.dll im Explorer-Prozess, der Vorschau-Erzeuger dagegen aus
+/// FileCoAuth.exe als LocalServer32. Fuer Platzhalter ist das sinnvoll. Ein
+/// Anbieter, der moeglicherweise Daten nachladen muss, gehoert nicht in den
+/// Vorschau-Wirt des Explorers.
 ///
-/// Nebenbei entfaellt damit NativeAOT: ausserhalb des Explorers darf eine
+/// Damit entfaellt auch NativeAOT: ausserhalb des Explorers darf eine
 /// .NET-Laufzeit vorausgesetzt werden.
 ///
 /// COM startet dieses Programm bei Bedarf selbst. Es meldet seine Fabrik an,
-/// pumpt Nachrichten und beendet sich, wenn eine Weile nichts mehr kam.
+/// pumpt Nachrichten und beendet sich, wenn eine Zeit lang keine Anfrage mehr
+/// eingetroffen ist.
 /// </remarks>
 internal static class Program
 {
-    /// <summary>Nach dieser Ruhezeit beenden wir uns wieder.</summary>
+    /// <summary>Nach dieser Zeit ohne Anfrage beendet sich das Programm.</summary>
     private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(5);
 
     private static DateTime _lastCall = DateTime.UtcNow;
@@ -55,7 +56,7 @@ internal static class Program
                 return 1;
             }
 
-            // Erst ab hier duerfen Anfragen ankommen -- so geht keine
+            // Erst ab hier duerfen Anfragen ankommen. So geht keine Anfrage
             // verloren, die zwischen Anmeldung und Bereitschaft eintrifft.
             CoResumeClassObjects();
             Trace.Write("Fabrik angemeldet, warte auf Anfragen");
@@ -153,7 +154,7 @@ internal static class Registration
         using var server = clsid.CreateSubKey("LocalServer32");
         server.SetValue(null, $"\"{exe}\"");
 
-        // Eine etwaige DLL-Anmeldung muss weichen, sonst gewinnt sie.
+        // Eine vorhandene DLL-Anmeldung muss entfernt werden, sonst hat sie Vorrang.
         try { clsid.DeleteSubKeyTree("InprocServer32", throwOnMissingSubKey: false); } catch { }
 
         Console.WriteLine($"Eingetragen: {ClassId} -> {exe}");

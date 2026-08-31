@@ -14,10 +14,10 @@ public enum ShareMode
     AlwaysLocal
 }
 
-/// <summary>Eine Gegenstelle -- ein Server oder ein anderer Rechner.</summary>
+/// <summary>Eine Gegenstelle. Das ist ein Server oder ein anderer Rechner.</summary>
 public sealed class PeerConfig
 {
-    /// <summary>Anzeigename. Leer heisst: den nehmen, den die Gegenstelle nennt.</summary>
+    /// <summary>Anzeigename. Ist er leer, wird der Name der Gegenstelle verwendet.</summary>
     public string Name { get; set; } = "";
 
     /// <summary>Adresse, etwa "192.168.1.42:22000".</summary>
@@ -39,10 +39,10 @@ public sealed class PeerConfig
     /// Diese Gegenstelle auch ueber einen Relay ansprechen.
     /// </summary>
     /// <remarks>
-    /// Ein Relay traegt fremde Bandbreite -- er ist der Weg zu einem Geraet,
-    /// das keinen Port nach aussen offen hat, und langsamer als jeder direkte.
-    /// Wer beides nicht will, schaltet ihn hier ab und bleibt darauf
-    /// angewiesen, dass ein direkter Weg besteht.
+    /// Ein Relay leitet fremden Verkehr weiter. Er ist der Weg zu einem Geraet,
+    /// das keinen Port nach aussen offen hat, und langsamer als jede direkte
+    /// Verbindung. Wer beides nicht will, schaltet ihn hier ab. Dann kommt eine
+    /// Verbindung nur zustande, wenn ein direkter Weg besteht.
     /// </remarks>
     public bool Relays { get; set; } = true;
 
@@ -61,7 +61,7 @@ public sealed class ShareConfig
     /// <summary>Von welcher Gegenstelle dieser Ordner kommt.</summary>
     public string PeerDeviceId { get; set; } = "";
 
-    /// <summary>Anzeigename; die Gegenstelle nennt meist einen.</summary>
+    /// <summary>Anzeigename. Die Gegenstelle nennt meist einen.</summary>
     public string Label { get; set; } = "";
 
     /// <summary>Wo der Ordner im Explorer erscheint.</summary>
@@ -74,11 +74,12 @@ public sealed class ShareConfig
     /// wir unsere Kopie verdraengen duerfen.
     /// </summary>
     /// <remarks>
-    /// Verdraengen ist eine einseitige Wette: die Bytes sind weg, und ab dann
-    /// haengt die Datei an einem anderen. Mit einer einzigen Gegenstelle --
-    /// dem Normalfall gegen einen Server -- ist 1 die einzig sinnvolle
-    /// Vorgabe. Wer mehrere Knoten hat und seine Fotos nicht an einem
-    /// einzigen Notebook haengen lassen will, setzt 2.
+    /// Beim Verdraengen werden die lokalen Bytes geloescht. Die Datei liegt
+    /// danach nur noch auf den anderen Knoten und muss bei Bedarf von dort
+    /// geholt werden. Bei einer einzigen Gegenstelle, dem Normalfall gegen
+    /// einen Server, ist 1 die sinnvolle Vorgabe. Wer mehrere Knoten hat und
+    /// seine Dateien nicht von einem einzigen Geraet abhaengig machen will,
+    /// setzt 2.
     ///
     /// 0 schaltet die Pruefung ab und verdraengt wie frueher.
     /// </remarks>
@@ -89,16 +90,16 @@ public sealed class ShareConfig
     /// bedeutet alles. Pfade relativ zum Share, mit / als Trenner.
     /// </summary>
     /// <remarks>
-    /// Das ist die Datenseite dessen, was in der Oberflaeche der aufklappbare
-    /// Baum ist. Ausgeschlossene Verzeichnisse bekommen nicht einmal einen
-    /// Platzhalter -- sie tauchen im Explorer gar nicht auf und kosten auch
-    /// keinen Index-Speicher.
+    /// Das ist die Datenseite des aufklappbaren Baums in der Oberflaeche.
+    /// Ausgeschlossene Verzeichnisse bekommen keinen Platzhalter. Sie
+    /// erscheinen nicht im Explorer und belegen keinen Index-Speicher.
     /// </remarks>
     public List<string> Included { get; set; } = [];
 
     /// <summary>
-    /// Vorschaubilder im Hintergrund vorbereiten. Kostet je Bild einen Block
-    /// von 128 KiB -- ohne sie zeigt der Explorer nur ein Ersatzsymbol.
+    /// Vorschaubilder im Hintergrund vorbereiten. Das kostet je Bild einen
+    /// Block von 128 KiB. Ohne Vorschaubilder zeigt der Explorer ein
+    /// Ersatzsymbol.
     /// </summary>
     public bool GenerateThumbnails { get; set; } = true;
 
@@ -113,8 +114,8 @@ public sealed class ShareConfig
         {
             if (relativePath.Equals(prefix, StringComparison.OrdinalIgnoreCase)) return true;
             if (relativePath.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)) return true;
-            // Elternverzeichnisse einer Auswahl muessen sichtbar bleiben,
-            // sonst haengt der ausgewaehlte Zweig in der Luft.
+            // Elternverzeichnisse einer Auswahl muessen sichtbar bleiben.
+            // Sonst ist der ausgewaehlte Zweig im Explorer nicht erreichbar.
             if (prefix.StartsWith(relativePath + "/", StringComparison.OrdinalIgnoreCase)) return true;
         }
 
@@ -128,33 +129,35 @@ public sealed class AppConfig
     public string HomeDirectory { get; set; } = "synct-home";
 
     /// <summary>
-    /// Wo neu uebernommene Ordner im Explorer erscheinen. Leer heisst:
-    /// "SyncT" im Benutzerprofil.
+    /// Wo neu uebernommene Ordner im Explorer erscheinen. Ist der Wert leer,
+    /// wird "SyncT" im Benutzerprofil verwendet.
     /// </summary>
     public string SharesRoot { get; set; } = "";
 
     /// <summary>
-    /// Budget des lokalen Caches in Bytes -- fuer alle Freigaben zusammen.
+    /// Budget des lokalen Caches in Bytes. Es gilt fuer alle Freigaben
+    /// zusammen.
     /// </summary>
     /// <remarks>
-    /// Der Cache hat kein eigenes Verzeichnis: zwischengespeichert ist eine
+    /// Der Cache hat kein eigenes Verzeichnis. Zwischengespeichert ist eine
     /// Datei, die an ihrem Platz unter <see cref="SharesRoot"/> liegt und ihre
-    /// Bytes lokal hat. Zu begrenzen ist deshalb die Summe, nicht ein Ort.
+    /// Bytes lokal vorhaelt. Begrenzt wird deshalb die Summe dieser Dateien,
+    /// nicht ein Verzeichnis.
     ///
-    /// 0 haette "unbegrenzt" bedeutet: nichts wird je verdraengt, und was
-    /// einmal geoeffnet wurde, bleibt liegen. Nach ein paar Monaten waere das
-    /// eine Vollkopie und "bei Bedarf herunterladen" nur noch ein Wort.
-    /// Die Oberflaeche laesst darum nur ganze Gigabyte ab 1 zu.
+    /// 0 wuerde "unbegrenzt" bedeuten: es wird nichts verdraengt, und jede
+    /// einmal geoeffnete Datei bleibt lokal liegen. Nach einigen Monaten waere
+    /// der Bestand eine Vollkopie, und es wuerde nichts mehr bei Bedarf
+    /// geholt. Die Oberflaeche laesst darum nur ganze Gigabyte ab 1 zu.
     /// </remarks>
     public long CacheMaxBytes { get; set; } = 2L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// So viel Platz soll auf dem Laufwerk des Caches frei bleiben. 0 heisst:
-    /// keine Ruecksicht.
+    /// So viel Platz soll auf dem Laufwerk des Caches frei bleiben. 0 schaltet
+    /// diese Grenze ab.
     /// </summary>
     /// <remarks>
-    /// Die zweite Grenze neben <see cref="CacheMaxBytes"/>. Es gilt, was
-    /// zuerst greift.
+    /// Die zweite Grenze neben <see cref="CacheMaxBytes"/>. Es greift die
+    /// Grenze, die zuerst erreicht wird.
     /// </remarks>
     public long MinimumFreeBytes { get; set; } = 10L * 1024 * 1024 * 1024;
 
@@ -163,13 +166,14 @@ public sealed class AppConfig
     public List<ShareConfig> Shares { get; set; } = [];
 
     /// <summary>
-    /// Farbschema der Oberflaeche: "Hell", "Dunkel" oder leer fuer das, was
-    /// Windows eingestellt hat.
+    /// Farbschema der Oberflaeche: "Hell", "Dunkel" oder leer fuer die
+    /// Einstellung von Windows.
     /// </summary>
     public string Theme { get; set; } = "";
 
     /// <summary>
-    /// Sprache der Oberflaeche: "de", "en" oder leer fuer die des Systems.
+    /// Sprache der Oberflaeche: "de", "en" oder leer fuer die Sprache des
+    /// Systems.
     /// </summary>
     public string Language { get; set; } = "";
 
@@ -177,12 +181,12 @@ public sealed class AppConfig
     /// Beim Start kein Fenster aufziehen.
     /// </summary>
     /// <remarks>
-    /// Zusammen mit <see cref="CloseToTray"/> heisst das: gar kein Fenster,
-    /// nur das Symbol im Infobereich. Ohne das Symbol bleibt es beim
-    /// minimierten Fenster in der Taskleiste -- sonst waere das Programm da
-    /// und niemand kaeme mehr daran.
+    /// Zusammen mit <see cref="CloseToTray"/> ergibt das: kein Fenster, nur
+    /// das Symbol im Infobereich. Ohne dieses Symbol bleibt es beim
+    /// minimierten Fenster in der Taskleiste, sonst liefe das Programm ohne
+    /// jede Bedienmoeglichkeit.
     ///
-    /// Ob Windows das Programm ueberhaupt startet, steht nicht hier: dieser
+    /// Ob Windows das Programm ueberhaupt startet, steht nicht hier. Dieser
     /// Eintrag liegt in der Registry, wo Windows ihn liest.
     /// </remarks>
     public bool StartMinimized { get; set; }
@@ -191,9 +195,9 @@ public sealed class AppConfig
     /// Das X versteckt das Fenster, statt das Programm zu beenden.
     /// </summary>
     /// <remarks>
-    /// Die Oberflaeche ist der Sync-Dienst -- wer sie schliesst, meint meist
-    /// das Fenster und nicht den Abgleich. Beendet wird dann ueber das
-    /// Kontextmenue des Symbols im Infobereich.
+    /// Die Oberflaeche ist zugleich der Sync-Dienst. Wer sie schliesst, meint
+    /// meist das Fenster und nicht den Abgleich. Beendet wird das Programm
+    /// dann ueber das Kontextmenue des Symbols im Infobereich.
     /// </remarks>
     public bool CloseToTray { get; set; }
 
@@ -204,9 +208,9 @@ public sealed class AppConfig
     /// Anrufe anderer Geraete annehmen.
     /// </summary>
     /// <remarks>
-    /// Wer nur selbst anruft, erfaehrt nie, dass ihn jemand kennenlernen
-    /// moechte -- und ist fuer eine Gegenstelle unerreichbar, deren Adresse
-    /// wir nicht kennen.
+    /// Ohne eingehende Verbindungen kann der Aufbau nur von diesem Geraet
+    /// ausgehen. Eine Gegenstelle, deren Adresse wir nicht kennen, bleibt
+    /// dann unerreichbar.
     /// </remarks>
     public bool Listen { get; set; } = true;
 
@@ -218,11 +222,11 @@ public sealed class AppConfig
     /// </summary>
 
     /// <summary>
-    /// Im eigenen Netz rufen und zuhoeren.
+    /// Im eigenen Netz Ankuendigungen senden und empfangen.
     /// </summary>
     /// <remarks>
-    /// Beides gehoert zusammen: wer nur zuhoert, findet andere -- gefunden
-    /// wird er nicht.
+    /// Beides gehoert zusammen. Wer nur empfaengt, findet andere Geraete,
+    /// wird aber selbst nicht gefunden.
     /// </remarks>
     public bool LocalDiscovery { get; set; } = true;
 
@@ -231,20 +235,22 @@ public sealed class AppConfig
     /// </summary>
     /// <remarks>
     /// Erst dadurch kann eine Gegenstelle, bei der als Adresse "dynamic"
-    /// steht, uns anrufen. Der Server erfaehrt dabei unsere IP-Adresse.
+    /// steht, eine Verbindung zu uns aufbauen. Der Server erfaehrt dabei
+    /// unsere IP-Adresse.
     /// </remarks>
     public bool Announce { get; set; } = true;
 
     /// <summary>
-    /// Was das eigene Netz gerade hergibt. Kein Teil der Konfiguration --
-    /// die Oberflaeche haengt es hier ein, damit die Gegenstellen es sehen.
+    /// Die im eigenen Netz gefundenen Geraete. Kein Teil der Konfiguration.
+    /// Die Oberflaeche traegt das Objekt hier ein, damit die Gegenstellen
+    /// darauf zugreifen koennen.
     /// </summary>
     [JsonIgnore]
     public SyncTClient.Bep.LocalDiscovery? Local { get; set; }
     /// <remarks>
     /// Der Server erfaehrt dabei, nach welchem Geraet gefragt wird, und
-    /// nebenbei unsere IP-Adresse. Wer das nicht will, traegt Adressen von
-    /// Hand ein und schaltet dies ab.
+    /// ausserdem unsere IP-Adresse. Wer das nicht will, traegt Adressen von
+    /// Hand ein und schaltet diese Option ab.
     /// </remarks>
     public bool Discovery { get; set; } = true;
 
@@ -252,14 +258,14 @@ public sealed class AppConfig
     /// Relays ueberhaupt verwenden.
     /// </summary>
     /// <remarks>
-    /// Zusammen mit <see cref="PeerConfig.Relays"/> ein Und: hier der
-    /// Hauptschalter, dort die Entscheidung je Gegenstelle.
+    /// Wirkt mit <see cref="PeerConfig.Relays"/> als Und-Verknuepfung. Hier
+    /// steht der Hauptschalter, dort die Entscheidung je Gegenstelle.
     /// </remarks>
     public bool Relays { get; set; } = true;
 
     /// <summary>
-    /// Der Erkennungsserver. Das <c>id=</c> darin ist seine Geraete-ID --
-    /// daran wird er erkannt, denn sein Zertifikat ist selbstsigniert.
+    /// Der Erkennungsserver. Das <c>id=</c> darin ist seine Geraete-ID. Daran
+    /// wird er erkannt, denn sein Zertifikat ist selbstsigniert.
     /// </summary>
     public List<string> DiscoveryServers { get; set; } =
     [
@@ -278,11 +284,11 @@ public sealed class AppConfig
     /// </summary>
     public string? DiscoveryServer { get; set; }
 
-    /// <summary>Die Server, die Fragen beantworten.</summary>
+    /// <summary>Die Server, bei denen sich Adressen abfragen lassen.</summary>
     [JsonIgnore]
     public IEnumerable<string> LookupServers => DiscoveryServers.Where(SyncTClient.Bep.GlobalDiscovery.AllowsLookup);
 
-    /// <summary>Die Server, die Anmeldungen entgegennehmen.</summary>
+    /// <summary>Die Server, bei denen sich dieses Geraet anmelden kann.</summary>
     [JsonIgnore]
     public IEnumerable<string> AnnounceServers => DiscoveryServers.Where(SyncTClient.Bep.GlobalDiscovery.AllowsAnnounce);
 
@@ -294,7 +300,7 @@ public sealed class AppConfig
 
     private CacheBudget? _budget;
 
-    /// <summary>Das Budget, das sich alle Freigaben teilen.</summary>
+    /// <summary>Das Budget, das fuer alle Freigaben gemeinsam gilt.</summary>
     [JsonIgnore]
     public CacheBudget Cache => _budget ??=
         new CacheBudget(CacheMaxBytes, MinimumFreeBytes, SharesRootOrDefault);
@@ -305,12 +311,12 @@ public sealed class AppConfig
         : SharesRoot;
 
     /// <summary>
-    /// Wo die Vorschaubilder liegen: im Cache-Verzeichnis, aber neben den
-    /// Freigaben statt darin.
+    /// Wo die Vorschaubilder liegen. Sie liegen im Cache-Verzeichnis, aber
+    /// neben den Freigaben statt darin.
     /// </summary>
     /// <remarks>
-    /// Sie gehoeren zum Cache -- sie entstehen aus fremden Dateien und
-    /// entstehen jederzeit neu. Innerhalb einer Freigabe waeren sie ein
+    /// Sie gehoeren zum Cache. Sie entstehen aus fremden Dateien und lassen
+    /// sich jederzeit neu erzeugen. Innerhalb einer Freigabe waeren sie ein
     /// Sync-Root im Sync-Root, und Windows wuerde versuchen, sie zu
     /// projizieren.
     /// </remarks>
@@ -338,6 +344,29 @@ public sealed class AppConfig
         return config;
     }
 
+    /// <summary>
+    /// Macht aus einem relativen Datenverzeichnis einen vollstaendigen Pfad.
+    /// Bezugspunkt ist die Konfigurationsdatei.
+    /// </summary>
+    /// <remarks>
+    /// Ein relativer Pfad in einer Datei ist relativ zu dieser Datei. Wird er
+    /// gegen das Arbeitsverzeichnis gerechnet, findet dieselbe Konfiguration
+    /// je nach Startverzeichnis ein anderes Datenverzeichnis und damit einen
+    /// anderen Index und ein anderes Geraetezertifikat.
+    ///
+    /// Die Oberflaeche loest den Pfad fuer ihre Laufzeitfassung selbst auf und
+    /// laesst den Eintrag in der Datei relativ, weil sie die Datei
+    /// zurueckschreibt. Die Konsole schreibt nicht zurueck und darf den
+    /// Eintrag deshalb hier ersetzen.
+    /// </remarks>
+    public void ResolveAgainst(string configPath)
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(configPath));
+        if (string.IsNullOrEmpty(directory)) return;
+
+        HomeDirectory = Path.GetFullPath(Path.Combine(directory, HomeDirectory));
+    }
+
     /// <summary>Hebt eine Konfiguration der alten Form auf die neue.</summary>
     private void Migrate()
     {
@@ -349,8 +378,8 @@ public sealed class AppConfig
 
         if (DiscoveryServer is { Length: > 0 } single)
         {
-            // Der alte Vorgabewert konnte nur fragen, nicht anmelden -- er ist
-            // in der neuen Liste ohnehin enthalten.
+            // Der alte Vorgabewert erlaubte nur Abfragen, keine Anmeldung. Er
+            // ist in der neuen Liste bereits enthalten.
             if (!DiscoveryServers.Contains(single) && !single.Contains("noannounce"))
                 DiscoveryServers.Insert(0, single);
 

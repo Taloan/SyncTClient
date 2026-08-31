@@ -3,17 +3,17 @@
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Ruft einen Vorschau-Anbieter unmittelbar auf -- ohne die Shell dazwischen.
+/// Ruft einen Vorschau-Anbieter unmittelbar auf, ohne die Shell dazwischen.
 /// </summary>
 /// <remarks>
 /// <c>--thumbcheck</c> fragt Windows und bekommt im Zweifel ein
-/// Standardsymbol; ob der Anbieter dabei ueberhaupt gefragt wurde, bleibt
-/// offen. Hier gehen wir den Weg selbst: Klasse erzeugen, mit der Datei
-/// bekanntmachen, Vorschau anfordern. Damit trennen sich zwei Fehlerbilder,
-/// die sonst gleich aussehen -- ein Anbieter, der nichts liefert, und einer,
-/// den niemand fragt.
+/// Standardsymbol. Ob der Anbieter dabei ueberhaupt aufgerufen wurde, bleibt
+/// offen. Hier werden die Schritte selbst ausgefuehrt: Klasse erzeugen, mit
+/// der Datei bekanntmachen, Vorschau anfordern. Damit trennen sich zwei
+/// Fehlerbilder, die sonst gleich aussehen: ein Anbieter, der nichts liefert,
+/// und ein Anbieter, der nicht aufgerufen wird.
 ///
-/// Mit einer fremden CLSID laesst sich damit auch nachsehen, wie ein Anbieter
+/// Mit einer fremden CLSID laesst sich damit auch pruefen, wie ein Anbieter
 /// arbeitet, der nachweislich funktioniert.
 /// </remarks>
 public static class ProviderProbe
@@ -46,10 +46,10 @@ public static class ProviderProbe
         Console.WriteLine();
 
         // Der Kontext entscheidet ueber die Bauform, und das ist hier keine
-        // Nebensache: erlaubt man INPROC, laedt COM die DLL in den eigenen
+        // Nebensache. Ist INPROC erlaubt, laedt COM die DLL in den eigenen
         // Prozess und umgeht dabei einen etwaigen Surrogat. Ein Anbieter, der
-        // auf die Abschottung des Surrogats baut, scheitert dann -- und man
-        // haelt ihn faelschlich fuer kaputt.
+        // die Abschottung des Surrogats voraussetzt, scheitert dann und wird
+        // faelschlich fuer defekt gehalten.
         Console.WriteLine($"Kontext:  {Describe(context)}");
         var hr = CoCreateInstance(in classId, 0, context, in Unknown, out var instance);
         if (hr != 0 || instance == 0)
@@ -104,9 +104,10 @@ public static class ProviderProbe
     /// </summary>
     /// <remarks>
     /// Die Shell bevorzugt <c>IInitializeWithItem</c>, weil ein Shell-Element
-    /// mehr weiss als ein Pfad -- bei Platzhaltern etwa den Sync-Root, zu dem
-    /// es gehoert. Wer nur <c>IInitializeWithFile</c> anbietet, wird trotzdem
-    /// bedient; deshalb probieren wir beides in dieser Reihenfolge.
+    /// mehr Angaben traegt als ein Pfad, bei Platzhaltern etwa den Sync-Root,
+    /// zu dem es gehoert. Ein Anbieter, der nur <c>IInitializeWithFile</c>
+    /// bietet, wird trotzdem bedient. Deshalb werden beide in dieser
+    /// Reihenfolge versucht.
     /// </remarks>
     private static bool Initialize(nint instance, string full)
     {

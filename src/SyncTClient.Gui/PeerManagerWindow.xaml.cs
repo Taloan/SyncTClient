@@ -10,8 +10,8 @@ namespace SyncTClient.Gui;
 /// </summary>
 /// <remarks>
 /// Bewusst ein eigenes Fenster und kein dauerhafter Bereich im Hauptfenster.
-/// Gegenstellen ändern sich selten -- der Platz gehört den Freigaben, und die
-/// Zugehörigkeit steht ohnehin in deren Zeile.
+/// Gegenstellen ändern sich selten. Der Platz im Hauptfenster bleibt damit den
+/// Freigaben, und die Zugehörigkeit steht ohnehin in deren Zeile.
 /// </remarks>
 public partial class PeerManagerWindow : Window
 {

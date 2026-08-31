@@ -4,13 +4,13 @@ using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 namespace SyncTClient.Bep;
 
 /// <summary>
-/// Der Index eines Ordners, so wie der Peer ihn uns geschickt hat: alle
-/// Dateinamen, Groessen und -- entscheidend -- die vollstaendigen Blocklisten.
+/// Der Index eines Ordners, so wie der Peer ihn geschickt hat: alle
+/// Dateinamen, Groessen und die vollstaendigen Blocklisten.
 /// </summary>
 /// <remarks>
-/// Genau das ist die Grundlage fuer Platzhalter: der Katalog liegt vor,
-/// die Inhalte nicht. Ein Eintrag ohne Blockliste bedeutet, dass der Peer
-/// die Datei selbst nicht haelt.
+/// Das ist die Grundlage fuer Platzhalter: der Katalog liegt vor, die
+/// Inhalte nicht. Ein Eintrag ohne Blockliste bedeutet, dass der Peer die
+/// Datei selbst nicht haelt.
 ///
 /// Diese Implementierung haelt alles im Speicher. Fuer eine echte
 /// Fotobibliothek muss das auf die Platte: 100.000 Dateien zu je 5 MB
@@ -24,8 +24,8 @@ public sealed class FolderIndex(string folderId)
     public string FolderId { get; } = folderId;
 
     /// <summary>
-    /// Zahl der empfangenen Index-Nachrichten. Unterscheidet "der Ordner ist
-    /// leer" von "es kam ueberhaupt nichts an" -- Syncthing verschickt nur
+    /// Zahl der empfangenen Index-Nachrichten. Sie unterscheidet "der Ordner
+    /// ist leer" von "es kam ueberhaupt nichts an". Syncthing verschickt nur
     /// nicht-leere Stapel, ein leerer Ordner erzeugt also gar keine Nachricht.
     /// </summary>
     public int MessageCount => _messageCount;

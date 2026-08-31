@@ -1,6 +1,10 @@
-﻿using SyncTClient.Bep;
+﻿using System.Security.Cryptography;
+using System.Collections.Concurrent;
+using SyncTClient.Bep;
 using SyncTClient.Vfs;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
+using BepRequest = SyncTClient.Bep.Proto.Request;
+using ErrorCode = SyncTClient.Bep.Proto.ErrorCode;
 
 namespace SyncTClient.Mount;
 
@@ -18,9 +22,9 @@ public enum ShareState
 /// </summary>
 /// <remarks>
 /// Der Abgleich nach einem Neustart dauert bei grossen Freigaben lange, und
-/// die Teilschritte sind ungleich lang. Ohne Benennung waere ein
-/// Fortschrittsbalken irrefuehrend: er stuende scheinbar still, waehrend in
-/// Wahrheit ein anderer Schritt laeuft.
+/// die Teilschritte sind ungleich lang. Ohne die Benennung der Phase waere ein
+/// Fortschrittsbalken irrefuehrend: er wuerde stillzustehen scheinen, waehrend
+/// tatsaechlich ein anderer Schritt laeuft.
 /// </remarks>
 public enum SyncPhase
 {
@@ -36,19 +40,49 @@ public enum SyncPhase
 /// Ein Share: Index, Platzhalter, Cache, Vorschaubilder.
 /// </summary>
 /// <remarks>
-/// Die Verbindung gehoert ihm nicht -- die haelt <see cref="PeerHost"/> und
-/// teilt sie unter allen Ordnern derselben Gegenstelle. Syncthing macht es
-/// genauso: eine Verbindung je Geraet, nicht je Ordner.
+/// Die Verbindung gehoert nicht zu dieser Klasse. Sie liegt bei
+/// <see cref="PeerHost"/> und wird von allen Ordnern derselben Gegenstelle
+/// gemeinsam genutzt. Syncthing macht es genauso: eine Verbindung je Geraet,
+/// nicht je Ordner.
 /// </remarks>
 public sealed class ShareHost : IAsyncDisposable, IContentSource
 {
-    /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS -- Inhalt liegt noch nicht lokal.</summary>
+    /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: der Inhalt liegt noch nicht lokal.</summary>
     private const uint RecallOnDataAccess = 0x0040_0000;
 
+    /// <summary>FILE_ATTRIBUTE_RECALL_ON_OPEN: schon das Oeffnen holt den Inhalt.</summary>
+    private const uint RecallOnOpen = 0x0004_0000;
+
+    /// <summary>FILE_ATTRIBUTE_OFFLINE: der Inhalt liegt woanders.</summary>
+    private const uint Offline = 0x1000;
+
+    /// <summary>Groesster Block, den das Protokoll kennt: 16 MiB.</summary>
+    private const int MaximumRequestSize = 16 << 20;
+
+    /// <summary>Gibt an, ob von dieser Datei nur der Name lokal vorliegt.</summary>
+    /// <remarks>
+    /// Die drei Attribute bedeuten dasselbe: der Inhalt liegt woanders. Ein
+    /// Lesezugriff holt ihn. Beim Bedienen einer Anfrage waere das ein
+    /// Herunterladen, nur um die Bytes zurueckzugeben. Im Zweifel gilt die
+    /// Datei als Platzhalter, denn eine Absage kostet nichts, ein
+    /// irrtuemlicher Zugriff auf das Netz dagegen schon.
+    /// </remarks>
+    private static bool IsPlaceholder(string path)
+    {
+        try
+        {
+            var attributes = (uint)new System.IO.FileInfo(path).Attributes;
+            return (attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0;
+        }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
+    }
+
     /// <summary>
-    /// Wieviele Dateien gleichzeitig geholt werden. Der Rest wartet sichtbar --
-    /// ohne diese Schranke gaebe es keine Warteschlange, sondern nur einen
-    /// Schwarm, der sich gegenseitig die Bandbreite wegnimmt.
+    /// Wieviele Dateien gleichzeitig geholt werden. Die uebrigen warten
+    /// sichtbar in der Warteschlange. Ohne diese Schranke gibt es keine
+    /// Warteschlange, sondern beliebig viele gleichzeitige Uebertragungen,
+    /// die sich die Bandbreite teilen.
     /// </summary>
     private const int ConcurrentHydrations = 3;
 
@@ -69,8 +103,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     /// <remarks>
     /// Der Explorer fragt einen ganzen Ordner auf einmal ab. Ungebremst
-    /// waeren das hunderte gleichzeitiger Anfragen -- und der Doppelklick des
-    /// Nutzers, der wirklich eine Datei oeffnen will, stuende hinten an.
+    /// waeren das hunderte gleichzeitiger Anfragen. Ein Doppelklick, mit dem
+    /// tatsaechlich eine Datei geoeffnet werden soll, muesste dahinter
+    /// warten.
     /// </remarks>
     private readonly SemaphoreSlim _thumbnailGate = new(6);
 
@@ -100,8 +135,11 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     public event Action<ShareState>? StateChanged;
     public event Action<TransferInfo>? TransferStarted;
     public event Action<TransferInfo>? TransferFinished;
+
+    /// <summary>Eine Datei liess sich nicht holen, weil eine Grenze erreicht ist.</summary>
+    public event Action<CacheLimitHit>? LimitReached;
     public event Action? CacheChanged;
-    /// <summary>Meldet, wie viele Vorschauen bisher auf Zuruf entstanden sind.</summary>
+    /// <summary>Meldet, wie viele Vorschauen bisher auf Anforderung entstanden sind.</summary>
     public event Action<int>? ThumbnailProduced;
 
     /// <summary>Meldet den Fortschritt des Abgleichs.</summary>
@@ -116,9 +154,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// Erwartete Einheiten der laufenden Phase, oder 0 wenn unbekannt.
     /// </summary>
     /// <remarks>
-    /// Beim ersten Abgleich weiss niemand vorab, wie viele Eintraege der
-    /// Index enthaelt -- er kommt in Stapeln. Statt eine Zahl zu erfinden,
-    /// steht hier 0, und die Oberflaeche zeigt dafuer einen unbestimmten
+    /// Beim ersten Abgleich ist vorab nicht bekannt, wie viele Eintraege der
+    /// Index enthaelt, denn er kommt in Stapeln. Statt einer geschaetzten
+    /// Zahl steht hier 0, und die Oberflaeche zeigt dafuer einen unbestimmten
     /// Balken.
     /// </remarks>
     public int PhaseTotal { get; private set; }
@@ -137,6 +175,12 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     public long IndexBytes => _index?.TotalBytes ?? 0;
     public long MaxSequence => _index?.MaxSequence ?? 0;
     public ulong PeerIndexId => _index?.PeerIndexId ?? 0;
+
+    /// <summary>Unsere eigene IndexId zu diesem Ordner. Sie bleibt ueber Neustarts hinweg dieselbe.</summary>
+    public ulong OwnIndexId => _index?.OwnIndexId ?? 0;
+
+    /// <summary>Wie weit unser eigener Index reicht.</summary>
+    public long LocalSequence => _index?.LocalSequence ?? 0;
     public long CacheUsedBytes => _cache?.UsedBytes ?? 0;
     public long CacheMaxBytes => _cache?.MaxBytes ?? 0;
     public int CacheFileCount => _cache?.FileCount ?? 0;
@@ -145,9 +189,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>Was diese Freigabe seit dem Start empfangen hat.</summary>
     /// <remarks>
     /// Die Verbindung zaehlt nur je Gegenstelle. Fuer eine Spalte je Freigabe
-    /// braucht es diesen Zaehler hier -- er enthaelt Hydration und
-    /// Vorschau-Koepfe, also alles, was wegen dieser Freigabe ueber die
-    /// Leitung kam.
+    /// wird dieser Zaehler gebraucht. Er enthaelt Hydration und
+    /// Vorschau-Koepfe, also alles, was wegen dieser Freigabe uebertragen
+    /// wurde.
     /// </remarks>
     public long BytesReceived => Interlocked.Read(ref _bytesReceived);
 
@@ -161,13 +205,15 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     /// <remarks>
     /// Ein BEP-Index ist pro Datei alles oder nichts: wer eine Datei
-    /// auffuehrt, hat sie ganz. Halbe Dateien liegen als temporaere Dateien
-    /// daneben und stehen nicht im Index -- deshalb genuegt die Frage "kommt
-    /// sie mit Inhalt vor?", und "vielleicht verteilt bei mehreren" stellt
-    /// sich innerhalb einer Datei gar nicht.
+    /// auffuehrt, haelt sie vollstaendig. Unvollstaendige Dateien liegen als
+    /// temporaere Dateien daneben und stehen nicht im Index. Deshalb genuegt
+    /// die Pruefung, ob die Datei mit Inhalt im Index vorkommt. Ein ueber
+    /// mehrere Knoten verteilter Teilbestand einer einzelnen Datei kommt
+    /// nicht vor.
     ///
-    /// Heute tragen wir je Freigabe genau eine Gegenstelle, also ist das
-    /// Ergebnis 0 oder 1. Die Form traegt aber schon mehrere.
+    /// Zurzeit ist je Freigabe genau eine Gegenstelle eingetragen, das
+    /// Ergebnis ist also 0 oder 1. Die Signatur laesst groessere Werte
+    /// bereits zu.
     /// </remarks>
     public int HoldersOf(string relativePath)
     {
@@ -177,7 +223,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>
     /// Ob eine Datei nach der Ankuendigung der Gegenstelle wiederbeschaffbar
-    /// ist -- die Bedingung dafuer, unsere Kopie herzugeben.
+    /// ist. Das ist die Bedingung dafuer, die lokale Kopie zu verdraengen.
     /// </summary>
     private bool MayEvict(string relativePath)
     {
@@ -185,21 +231,23 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         return wanted <= 0 || HoldersOf(relativePath) >= wanted;
     }
 
-    /// <summary>Fuehrt diese Ankuendigung wirklich Inhalt, oder nur einen Namen?</summary>
+    /// <summary>Gibt an, ob diese Ankuendigung Inhalt fuehrt und nicht nur einen Namen.</summary>
     /// <remarks>
     /// <c>setNoContent()</c> in Syncthing streicht genau diese beiden Felder.
-    /// Eine Ankuendigung ohne Bloecke heisst: ich kenne die Datei, aber hol
-    /// sie nicht bei mir.
+    /// Eine Ankuendigung ohne Bloecke bedeutet, dass die Gegenstelle die Datei
+    /// kennt, sie aber nicht selbst vorhaelt.
     /// </remarks>
     private static bool HasContent(BepFileInfo file)
         => !file.Deleted && file.Size > 0 && file.Blocks.Count > 0;
 
     /// <summary>
-    /// Wie viele erreichbare Knoten diese Freigabe tragen -- fuer die Anzeige.
+    /// Wie viele erreichbare Knoten diese Freigabe fuehren. Der Wert dient
+    /// der Anzeige.
     /// </summary>
     /// <remarks>
-    /// Es ist eine Untergrenze, keine Wahrheit ueber das Netz: von Knoten,
-    /// mit denen wir gerade nicht verbunden sind, wissen wir nichts.
+    /// Der Wert ist eine Untergrenze und keine vollstaendige Aussage ueber
+    /// das Netz. Ueber Knoten, mit denen gerade keine Verbindung besteht, ist
+    /// nichts bekannt.
     /// </remarks>
     public int ReachableCopies => _connection is not null && (_index?.Count ?? 0) > 0 ? 1 : 0;
 
@@ -214,8 +262,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     // ------------------------------------------------------------ Index
 
     /// <summary>
-    /// Oeffnet die Datenbank, bevor die Gegenstelle angesprochen wird -- ihr
-    /// Stand geht in die Ankuendigung ein, damit nur Neueres kommt.
+    /// Oeffnet die Datenbank, bevor die Gegenstelle angesprochen wird. Ihr
+    /// Stand geht in die Ankuendigung ein, damit nur Neueres geschickt wird.
     /// </summary>
     public void OpenIndex()
     {
@@ -223,7 +271,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _index ??= new PersistentFolderIndex(databasePath, FolderId);
     }
 
-    /// <summary>Der Peer hat seinen Index neu aufgebaut -- unserer ist wertlos.</summary>
+    /// <summary>Die Gegenstelle hat ihren Index neu aufgebaut. Der lokale ist damit unbrauchbar.</summary>
     public void ResetIndex(ulong newPeerIndexId)
     {
         _log($"[{FolderId}] die Gegenstelle hat ihren Index neu aufgebaut -- verwerfe den lokalen.");
@@ -245,7 +293,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         if (Phase == SyncPhase.Index) SetPhase(SyncPhase.Index, _index.Count);
 
         // Geaenderte Dateien duerfen nicht mit alten Bytes im Cache bleiben.
-        // Das ist Korrektheit, nicht Cache-Politik.
+        // Das ist eine Frage der Korrektheit, nicht der Cache-Verwaltung.
         if (changed.Count > 0 && _cache is not null && _cache.Invalidate(
                 changed.Where(_config.Includes).Select(LocalPathOf)) > 0)
         {
@@ -266,9 +314,9 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     /// <remarks>
     /// Der erste von zwei Schritten. Wer einen angebotenen Ordner uebernimmt,
-    /// soll vorher sehen, was darin ist -- und das steht erst mit dem Index
-    /// fest. Kostet nichts zusaetzlich: der Index kommt ohnehin, sobald wir
-    /// den Ordner ankuendigen.
+    /// soll vorher sehen, was darin ist, und das steht erst mit dem Index
+    /// fest. Zusaetzliche Kosten entstehen nicht, denn der Index kommt
+    /// ohnehin, sobald wir den Ordner ankuendigen.
     /// </remarks>
     public async Task PrepareAsync(BepConnection connection, CancellationToken ct)
     {
@@ -287,8 +335,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
-    /// Legt die Platzhalter an. Ab hier ist der Ordner im Explorer -- vorher
-    /// war nichts geschehen, was zurueckzunehmen waere.
+    /// Legt die Platzhalter an. Ab hier ist der Ordner im Explorer sichtbar.
+    /// Vorher ist nichts geschehen, was zurueckzunehmen waere.
     /// </summary>
     public async Task CommitAsync(CancellationToken ct)
     {
@@ -316,8 +364,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     private async Task WaitForIndexAsync(CancellationToken ct)
     {
-        // Nach einem Neustart liegt der Index bereits vor -- dann ist diese
-        // Phase in dem Moment vorbei, in dem sie beginnt.
+        // Nach einem Neustart liegt der Index bereits vor. Diese Phase ist
+        // dann sofort beendet.
         SetPhase(SyncPhase.Index, _index!.Count);
         if (_index.Count > 0) return;
 
@@ -350,8 +398,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>
     /// Haelt an, ohne die Platzhalter aufzugeben. Anfragen werden abgewiesen
-    /// statt liegengelassen -- ein wartender Zugriff wuerde den Explorer
-    /// blockieren, bis Windows von selbst aufgibt.
+    /// statt liegengelassen. Ein wartender Zugriff wuerde den Explorer
+    /// blockieren, bis Windows die Anfrage von sich aus abbricht.
     /// </summary>
     public void Pause()
     {
@@ -374,31 +422,31 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _log($"[{FolderId}] registriere Sync-Root: {_config.LocalPath}");
 
         // Ueber StorageProviderSyncRootManager statt CfRegisterSyncRoot: nur
-        // dieser Weg legt den Registry-Schluessel an, an dem die
-        // Vorschau-Erweiterung haengt. Nebenbei erscheint der Ordner mit Namen
-        // und Symbol in der Navigationsleiste des Explorers.
+        // dieser Weg legt den Registry-Schluessel an, in den die
+        // Vorschau-Erweiterung eingetragen wird. Ausserdem erscheint der
+        // Ordner mit Namen und Symbol in der Navigationsleiste des Explorers.
         var name = string.IsNullOrWhiteSpace(_config.Label) ? FolderId : _config.Label;
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
-        // "Vollstaendig lokal" nimmt am Budget nicht teil -- dort soll nichts
-        // weichen, sonst waere die Zusage keine.
+        // "Vollstaendig lokal" nimmt am Budget nicht teil. Dort darf nichts
+        // verdraengt werden, sonst gilt die Zusage nicht.
         var budget = _config.Mode == ShareMode.AlwaysLocal ? null : _app.Cache;
         if (budget is not null) budget.Log ??= _log;
 
         _cache = new HydrationCache(_config.LocalPath, budget, statePath, _log)
         {
-            // Der Cache kennt nur Groessen und Zugriffszeiten; ob eine Datei
-            // wiederbeschaffbar ist, steht im Index der Gegenstelle.
+            // Der Cache speichert nur Groessen und Zugriffszeiten. Ob eine
+            // Datei wiederbeschaffbar ist, steht im Index der Gegenstelle.
             MayEvict = MayEvict
         };
 
         _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
         _thumbnails.Prepare();
 
-        // Der Eintrag muss stehen, bevor die Shell den Sync-Root zur Kenntnis
-        // nimmt -- sie liest seine Eigenschaften beim Anmelden. Deshalb danach
-        // noch einmal anmelden, damit sie den Vorschau-Erzeuger mitbekommt.
+        // Der Eintrag muss stehen, bevor die Shell den Sync-Root uebernimmt.
+        // Sie liest seine Eigenschaften beim Anmelden. Deshalb wird danach
+        // noch einmal angemeldet, damit sie den Vorschau-Erzeuger erfasst.
         RegisterThumbnailProvider();
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
@@ -434,7 +482,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
             if (!ThumbnailProviderRegistration.AttachToSyncRoot(_syncRootId))
                 _log($"[{FolderId}] Vorschau-Erweiterung liess sich nicht am Sync-Root eintragen.");
 
-            // Zusaetzlich zur Eintragung in der Registrierung: solange der
+            // Zusaetzlich zur Eintragung in der Registrierung. Solange der
             // Client laeuft, beantwortet er Anfragen selbst.
             ThumbnailService.EnsureStarted(_log);
 
@@ -451,8 +499,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     {
         if (_config.Mode != ShareMode.AlwaysLocal) return;
 
-        // "Vollstaendig lokal bereithalten" heisst schlicht: alles einmal
-        // anfassen. Der erste Lesezugriff loest die Hydration aus.
+        // "Vollstaendig lokal bereithalten" bedeutet, auf jede Datei einmal
+        // zuzugreifen. Der erste Lesezugriff loest die Hydration aus.
         var pending = Enumerate()
             .Where(e => !e.IsDirectory && e.Size > 0)
             .Select(e => LocalPathOf(e.RelativePath))
@@ -492,7 +540,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     // ------------------------------------------------------------ Vorschaubilder
 
-    /// <summary>Alle laufenden Freigaben -- der Vorschau-Erzeuger sucht hier seine.</summary>
+    /// <summary>Alle laufenden Freigaben. Der Vorschau-Erzeuger sucht hier die zustaendige.</summary>
     private static readonly List<ShareHost> Laufende = [];
 
     /// <summary>
@@ -520,19 +568,18 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
-    /// Beschafft die Vorschau zu genau dieser Datei und zieht die uebrigen
-    /// Bilder desselben Ordners nach.
+    /// Beschafft die Vorschau zu genau dieser Datei.
     /// </summary>
     /// <remarks>
-    /// Nichts wird auf Vorrat erzeugt: 500 Bilder vorab kosten 500 Bloecke,
-    /// von denen die meisten nie jemand ansieht. Geholt wird genau, wonach
-    /// gefragt wurde.
+    /// Es wird nichts auf Vorrat erzeugt. 500 Bilder vorab kosten 500
+    /// Bloecke, von denen die meisten nie angesehen werden. Geholt wird genau
+    /// das, wonach gefragt wurde.
     ///
-    /// Ein Vorlauf auf die Geschwister desselben Ordners lag nahe, war aber
-    /// falsch: der Explorer tastet fuer die Ordnersymbole einzelne Bilder aus
-    /// Unterordnern an, und jeder dieser Griffe haette den ganzen Unterordner
-    /// nachgezogen. Gemessen wurden so 502 von 511 Bildern statt der 145,
-    /// nach denen tatsaechlich gefragt wurde.
+    /// Ein Vorlauf auf die uebrigen Bilder desselben Ordners lag nahe, war
+    /// aber falsch: der Explorer greift fuer die Ordnersymbole auf einzelne
+    /// Bilder aus Unterordnern zu, und jeder dieser Zugriffe haette den
+    /// ganzen Unterordner nachgezogen. Gemessen wurden so 502 von 511 Bildern
+    /// statt der 145, nach denen tatsaechlich gefragt wurde.
     /// </remarks>
     private bool Produce(string localFilePath)
     {
@@ -544,13 +591,13 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
-    /// Wartet auf ein Ergebnis, aber nicht ewig.
+    /// Wartet auf ein Ergebnis, hoechstens jedoch bis zum Ablauf einer Frist.
     /// </summary>
     /// <remarks>
     /// Der Aufruf kommt aus einer COM-Methode, die ein Ergebnis zurueckgeben
-    /// muss -- warten laesst sich nicht vermeiden. Eine Frist muss trotzdem
-    /// sein: haengt die Gegenstelle, soll der Explorer sein Ersatzsymbol
-    /// zeigen und nicht der Ordner stehenbleiben.
+    /// muss. Warten laesst sich deshalb nicht vermeiden. Die Frist ist
+    /// trotzdem noetig: antwortet die Gegenstelle nicht, soll der Explorer
+    /// sein Ersatzsymbol zeigen, statt den Ordner anzuhalten.
     /// </remarks>
     private bool Await(Task<bool> work)
     {
@@ -571,7 +618,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>
     /// Holt den Dateikopf ueber BEP und legt die darin eingebettete Vorschau
-    /// ab. Ein Kopf ist genau ein Block -- der Platzhalter bleibt dehydriert.
+    /// ab. Ein Kopf ist genau ein Block. Der Platzhalter bleibt dehydriert.
     /// </summary>
     private async Task<bool> FetchThumbnailAsync(string relativePath, CancellationToken ct)
     {
@@ -584,7 +631,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         await _thumbnailGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // Zwischen Warten und Zug kann ein anderer Aufruf fertig geworden sein.
+            // Waehrend des Wartens kann ein anderer Aufruf fertig geworden sein.
             if (_thumbnails.Has(local)) return true;
 
             var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, file.Size);
@@ -644,6 +691,56 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
                 e.Name, e.Size, DateTimeOffset.FromUnixTimeSeconds(e.ModifiedS), e.IsDirectory))
             .ToList();
 
+    /// <summary>
+    /// Die Uebertragungen, die gerade als ein Bereich laufen. Je Datei gibt
+    /// es eine.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, TransferInfo> _ranges = new(StringComparer.Ordinal);
+
+    public IDisposable BeginRange(string relativePath, long totalLength)
+    {
+        // Erst pruefen, ob der Platz ueberhaupt reicht. Wird erst geladen und
+        // danach aufgeraeumt, ist die Uebertragung bereits gelaufen.
+        var limit = _cache is null ? CacheBudget.Limit.None : _app.Cache.CanHold(totalLength);
+        if (limit != CacheBudget.Limit.None)
+        {
+            var hit = new CacheLimitHit(
+                FolderId, relativePath, totalLength,
+                limit == CacheBudget.Limit.Budget,
+                limit == CacheBudget.Limit.Budget ? _app.Cache.MaxBytes : _app.Cache.MinimumFreeBytes);
+
+            LimitReached?.Invoke(hit);
+            throw new IOException(
+                $"\"{relativePath}\" passt nicht: " +
+                (hit.Budget ? "groesser als das Cache-Budget" : "es bliebe zu wenig frei"));
+        }
+
+        var transfer = new TransferInfo(FolderId, relativePath, totalLength);
+        _ranges[relativePath] = transfer;
+        TransferStarted?.Invoke(transfer);
+
+        return new Range(this, relativePath, transfer);
+    }
+
+    /// <summary>Schliesst den Bereich ab, sobald die Hydration ihn verlaesst.</summary>
+    private sealed class Range(ShareHost host, string path, TransferInfo transfer) : IDisposable
+    {
+        public void Dispose()
+        {
+            // Nur den eigenen Eintrag entfernen. Eine zweite, ueberlappende
+            // Anfrage kann ihn inzwischen ersetzt haben.
+            host._ranges.TryRemove(new KeyValuePair<string, TransferInfo>(path, transfer));
+
+            if (transfer.State != TransferState.Fehler)
+            {
+                transfer.State = TransferState.Fertig;
+                transfer.DoneBytes = transfer.TotalBytes;
+            }
+
+            host.TransferFinished?.Invoke(transfer);
+        }
+    }
+
     public async Task<byte[]> ReadAsync(string relativePath, long offset, long length, CancellationToken ct)
     {
         if (IsPaused)
@@ -654,8 +751,15 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         if (!_index!.TryGet(relativePath, out var file))
             throw new FileNotFoundException($"\"{relativePath}\" ist nicht im Index.");
 
-        var transfer = new TransferInfo(FolderId, relativePath, length);
-        TransferStarted?.Invoke(transfer);
+        // Gehoert dieses Stueck zu einem angemeldeten Bereich, zaehlt es auf
+        // dessen Eintrag ein. Sonst, etwa bei einem einzelnen Zugriff,
+        // bekommt es einen eigenen Eintrag.
+        var part = _ranges.TryGetValue(relativePath, out var running);
+        var transfer = running ?? new TransferInfo(FolderId, relativePath, length);
+
+        if (!part) TransferStarted?.Invoke(transfer);
+
+        var already = part ? transfer.DoneBytes : 0;
 
         // Ab hier steht der Auftrag in der Warteschlange, bis ein Platz frei wird.
         await _hydrationGate.WaitAsync(ct).ConfigureAwait(false);
@@ -665,21 +769,22 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
             var blockSize = Math.Max(file.BlockSize, 1);
             var progress = new Progress<int>(blocks =>
-                transfer.DoneBytes = Math.Min((long)blocks * blockSize, length));
+                transfer.DoneBytes = already + Math.Min((long)blocks * blockSize, length));
 
             var data = await FileFetcher.FetchRangeAsync(
                 _connection, FolderId, file, offset, length, _app.Parallelism, progress, ct)
                 .ConfigureAwait(false);
 
-            transfer.DoneBytes = data.Length;
-            transfer.State = TransferState.Fertig;
+            transfer.DoneBytes = already + data.Length;
+            if (!part) transfer.State = TransferState.Fertig;
             NoteReceived(data.Length);
 
             _cache?.NoteHydrated(relativePath, data.Length);
             CacheChanged?.Invoke();
 
-            // Nach dem Zuwachs pruefen, ob das Budget noch stimmt -- im
-            // Hintergrund, damit der Hydrations-Rueckruf nicht darauf wartet.
+            // Nach dem Zuwachs pruefen, ob das Budget noch eingehalten ist.
+            // Das laeuft im Hintergrund, damit der Hydrations-Rueckruf nicht
+            // darauf wartet.
             _ = Task.Run(EnforceBudgetAsync, CancellationToken.None);
 
             return data;
@@ -693,7 +798,129 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         finally
         {
             _hydrationGate.Release();
-            TransferFinished?.Invoke(transfer);
+
+            // Ein einzelnes Stueck beendet den Bereich nicht. Das tut erst
+            // der umschliessende Bereich.
+            if (!part) TransferFinished?.Invoke(transfer);
+        }
+    }
+
+    // ------------------------------------------------------------ Ausliefern
+
+    /// <summary>
+    /// Beantwortet eine Blockanfrage der Gegenstelle.
+    /// </summary>
+    /// <remarks>
+    /// Herausgegeben wird nur, was hier bereits vollstaendig auf der Platte
+    /// liegt. Eine dehydrierte Datei zu lesen wuerde sie ueber genau die
+    /// Verbindung herunterladen, von der die Anfrage kam. Die Bytes liefen
+    /// also im Kreis und kaemen als unsere Antwort zurueck. Deshalb wird in
+    /// diesem Fall abgesagt und nicht hydriert.
+    ///
+    /// Geprueft wird der Reihe nach: temporaere Datei, Index, Pfad,
+    /// Materialisierung, Bereich, Hash. Jede Absage schreibt eine Zeile ins
+    /// Protokoll, ein Erfolg keine. Sonst entstuenden hier tausende Zeilen.
+    /// </remarks>
+    public async Task<(ErrorCode Code, byte[] Data)> ServeAsync(BepRequest request, CancellationToken ct)
+    {
+        // Unvollstaendige Uebertragungen liegen bei Syncthing in
+        // .syncthing.*.tmp. Solche Dateien fuehren wir nicht.
+        if (request.FromTemporary)
+            return Deny(request, ErrorCode.NoSuchFile, "nach der temporaeren Datei gefragt");
+
+        if (_index is null || !_index.TryGet(request.Name, out var known) || known.Deleted)
+            return Deny(request, ErrorCode.NoSuchFile, "nicht im Index");
+
+        // Der Name kommt von aussen. Ohne diese Pruefung waere ein "../" darin
+        // ein Lesezugriff auf beliebige Dateien dieses Rechners.
+        var local = ResolveInside(request.Name);
+        if (local is null)
+            return Deny(request, ErrorCode.NoSuchFile, "der Name fuehrt aus der Freigabe heraus");
+
+        var info = new System.IO.FileInfo(local);
+        if (!info.Exists)
+            return Deny(request, ErrorCode.NoSuchFile, "liegt hier nicht");
+
+        if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
+            return Deny(request, ErrorCode.NoSuchFile, "liegt hier nur als Platzhalter");
+
+        if (request.Size <= 0 || request.Size > MaximumRequestSize)
+            return Deny(request, ErrorCode.NoSuchFile, $"unmoegliche Blockgroesse {request.Size}");
+
+        if (request.Offset < 0 || request.Offset > info.Length - request.Size)
+            return Deny(request, ErrorCode.NoSuchFile,
+                $"Bereich {request.Offset}+{request.Size} liegt nicht in {info.Length} Bytes");
+
+        byte[] data;
+        try
+        {
+            data = new byte[request.Size];
+            await using var stream = new FileStream(
+                local, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.Asynchronous);
+
+            // Zwischen der Pruefung oben und dieser Stelle kann die Datei
+            // verdraengt worden sein. Das Oeffnen allein holt sie noch nicht,
+            // erst das Lesen wuerde es. Deshalb wird hier noch einmal
+            // geprueft, solange das guenstig ist. Sonst wird die Datei vom
+            // Server heruntergeladen, nur um sie zurueckzugeben.
+            if (IsPlaceholder(local))
+                return Deny(request, ErrorCode.NoSuchFile, "wurde inzwischen verdraengt");
+
+            stream.Seek(request.Offset, SeekOrigin.Begin);
+            await stream.ReadExactlyAsync(data, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return Deny(request, ErrorCode.Generic, ex.Message);
+        }
+
+        // Der Hash gehoert zur Anfrage, nicht zu unserer Datei. Die
+        // Gegenstelle gibt damit an, welchen Inhalt sie erwartet. Weicht
+        // unser Hash ab, ist unsere Kopie eine andere und darf nicht als der
+        // angeforderte Block ausgeliefert werden.
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(data), request.Hash.Span))
+            return Deny(request, ErrorCode.InvalidFile, "unsere Bytes ergeben einen anderen Hash");
+
+        return (ErrorCode.NoError, data);
+    }
+
+    private (ErrorCode Code, byte[] Data) Deny(BepRequest request, ErrorCode code, string reason)
+    {
+        _log($"[{FolderId}] Anfrage nach \"{request.Name}\" Block {request.BlockNo} abgelehnt: {reason}.");
+        return (code, []);
+    }
+
+    /// <summary>
+    /// Setzt einen Namen aus dem Protokoll in einen lokalen Pfad um, oder
+    /// liefert <c>null</c>, wenn er aus der Freigabe herausfuehrt.
+    /// </summary>
+    /// <remarks>
+    /// Geprueft wird am aufgeloesten Pfad, nicht am Text. Nur so faellt auch
+    /// auf, was ueber Umwege aus der Freigabe hinausfuehrt. Ein absoluter
+    /// Name ist besonders heikel: <see cref="Path.Combine(string, string)"/>
+    /// uebernimmt ihn stillschweigend und verwirft den Wurzelpfad.
+    /// </remarks>
+    private string? ResolveInside(string name)
+    {
+        if (string.IsNullOrEmpty(name) || name.Contains('\0')) return null;
+
+        try
+        {
+            var relative = name.Replace('/', Path.DirectorySeparatorChar);
+            if (Path.IsPathRooted(relative)) return null;
+
+            var root = Path.GetFullPath(_config.LocalPath).TrimEnd(Path.DirectorySeparatorChar);
+            var full = Path.GetFullPath(Path.Combine(root, relative));
+
+            return full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                ? full
+                : null;
+        }
+        catch (ArgumentException)
+        {
+            // Zeichen, die Windows in einem Pfad nicht zulaesst.
+            return null;
         }
     }
 
@@ -701,8 +928,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>
     /// Loest die Bindung vollstaendig: Sync-Root abmelden, Vorschaubilder
-    /// verwerfen, Index loeschen. Die lokalen Dateien bleiben, wo sie sind --
-    /// darueber entscheidet der Aufrufer.
+    /// verwerfen, Index loeschen. Die lokalen Dateien bleiben liegen. Ueber
+    /// sie entscheidet der Aufrufer.
     /// </summary>
     public async Task UnbindAsync()
     {

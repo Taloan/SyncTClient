@@ -4,14 +4,15 @@ using System.Security.Cryptography;
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Beschreibt eine Vorschau-Bitmap so, dass ein Standardsymbol auffaellt.
+/// Beschreibt eine Vorschau-Bitmap so, dass sich ein Standardsymbol erkennen
+/// laesst.
 /// </summary>
 /// <remarks>
-/// Ein hochskaliertes Symbol traegt dieselben Kopfdaten wie eine echte
-/// Vorschau -- 256x256, 32 bpp. Erst die Bildpunkte trennen beide:
-/// verschiedene Fotos ergeben verschiedene Abdruecke, ein Symbol liefert fuer
-/// jede Datei denselben. Ohne diesen Vergleich haelt man ein Symbol leicht
-/// faelschlich fuer einen Erfolg.
+/// Ein hochskaliertes Symbol hat dieselben Kopfdaten wie eine echte Vorschau:
+/// 256x256, 32 bpp. Unterscheiden lassen sich beide nur an den Bildpunkten.
+/// Verschiedene Fotos ergeben verschiedene Abdruecke, ein Symbol ergibt fuer
+/// jede Datei denselben. Ohne diesen Vergleich wird ein Symbol leicht
+/// faelschlich als Erfolg gewertet.
 /// </remarks>
 internal static class BitmapFingerprint
 {

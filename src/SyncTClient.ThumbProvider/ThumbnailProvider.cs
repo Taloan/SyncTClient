@@ -6,9 +6,9 @@ using System.Text;
 namespace SyncTClient.ThumbProvider;
 
 // Diese DLL laedt der Explorer in seinen eigenen Prozess. Sie ist deshalb
-// bewusst dumm gehalten: sie liest eine lokale Datei und gibt sie zurueck.
-// Kein Netz, keine Wartezeit, kein Rueckruf in unser Programm. Ein Fehler
-// hier reisst den Explorer mit, nicht nur uns.
+// bewusst einfach gehalten: sie liest eine lokale Datei und gibt sie zurueck.
+// Sie benutzt kein Netz, wartet auf nichts und ruft nicht in unser Programm
+// zurueck. Ein Fehler an dieser Stelle beendet auch den Explorer.
 
 [GeneratedComInterface]
 [Guid("00000001-0000-0000-C000-000000000046")]
@@ -57,10 +57,10 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
     private const int Ok = 0;
     private const int Fail = unchecked((int)0x80004005);
 
-    /// <summary>WTS_E_FAILEDEXTRACTION -- Explorer nimmt dann sein Ersatzsymbol.</summary>
+    /// <summary>WTS_E_FAILEDEXTRACTION. Der Explorer zeigt dann sein Ersatzsymbol.</summary>
     private const int NoThumbnail = unchecked((int)0x8004B200);
 
-    /// <summary>WTSAT_RGB: undurchsichtig, JPEG kennt keine Transparenz.</summary>
+    /// <summary>WTSAT_RGB: undurchsichtig, da JPEG keine Transparenz kennt.</summary>
     private const int AlphaTypeRgb = 1;
 
     private string? _filePath;
@@ -74,7 +74,7 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
 
     /// <summary>
     /// Der Weg, den Windows fuer Platzhalter bevorzugt: ein IShellItem
-    /// impliziert -- anders als ein Dateipfad -- keinen Lesezugriff.
+    /// impliziert keinen Lesezugriff, ein Dateipfad dagegen schon.
     /// </summary>
     public int Initialize(IShellItem item, uint mode)
     {
@@ -118,9 +118,9 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
 
             if (!File.Exists(cached))
             {
-                // Nichts im Vorrat -- vielleicht laesst sie sich beschaffen.
-                // Wenn wir im Client laufen, hat der eine Leitung dorthin;
-                // als DLL im fremden Prozess bleibt es beim Nachsehen.
+                // Im Vorrat liegt nichts. Laeuft dieser Code im Client, kann
+                // die Vorschau ueber dessen Verbindung nachgeladen werden. Als
+                // DLL in einem fremden Prozess bleibt es beim Nachsehen.
                 if (Store.Produce is null || !Store.Produce(_filePath) || !File.Exists(cached))
                 {
                     Trace.Write($"  keine Vorschau unter {cached}");
@@ -136,7 +136,7 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
         }
         catch (Exception ex)
         {
-            // Aus einer Shell-Erweiterung darf niemals etwas herausfliegen.
+            // Aus einer Shell-Erweiterung darf niemals eine Ausnahme nach aussen gelangen.
             Trace.Write("  Ausnahme: " + ex.Message);
             return NoThumbnail;
         }
@@ -146,8 +146,8 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
 
 /// <summary>
 /// Ein Protokoll fuer die Fehlersuche. Die Erweiterung laeuft in einem
-/// fremden Prozess, in den man nicht hineinsehen kann -- ohne Spur bliebe
-/// unklar, ob Windows sie ueberhaupt aufruft.
+/// fremden Prozess, in den man nicht hineinsehen kann. Ohne dieses Protokoll
+/// bliebe unklar, ob Windows sie ueberhaupt aufruft.
 /// </summary>
 internal static class Trace
 {
@@ -161,13 +161,13 @@ internal static class Trace
             File.AppendAllText(Path,
                 $"{DateTime.Now:HH:mm:ss.fff}  {Environment.ProcessId,6}  {line}{Environment.NewLine}");
         }
-        catch { /* die Fehlersuche darf nie stoeren */ }
+        catch { /* das Protokollieren darf den Ablauf nie stoeren */ }
     }
 }
 
 /// <summary>
 /// Haelt den Wirtsprozess wach, solange Anfragen kommen. Im DLL-Fall gibt es
-/// keinen -- dann tut das hier nichts.
+/// keinen eigenen Wirtsprozess, dann bleibt der Aufruf wirkungslos.
 /// </summary>
 internal static class Host
 {
@@ -183,8 +183,8 @@ internal static class Store
     /// </summary>
     /// <remarks>
     /// Bleibt leer, solange die Erweiterung als DLL in einem fremden Prozess
-    /// steckt -- dort gibt es keine Verbindung zur Gegenstelle. Laeuft sie
-    /// dagegen im Client, traegt der hier ein, wie sich ein Dateikopf holen
+    /// laeuft, denn dort gibt es keine Verbindung zur Gegenstelle. Laeuft sie
+    /// dagegen im Client, traegt dieser hier ein, wie sich ein Dateikopf holen
     /// laesst. Damit muss nichts mehr auf Vorrat erzeugt werden.
     /// </remarks>
     public static Func<string, bool>? Produce { get; set; }
@@ -205,7 +205,7 @@ internal static class Store
 
     /// <summary>
     /// Wo der Vorrat liegt, hinterlegt der Client bei der Registrierung.
-    /// Einmal nachschlagen genuegt -- der Explorer laedt uns oft.
+    /// Einmal nachschlagen genuegt, denn der Explorer laedt die Erweiterung oft.
     /// </summary>
     private static string? Directory()
     {
@@ -227,8 +227,8 @@ internal static class Store
 }
 
 /// <summary>
-/// JPEG von der Platte zu einem HBITMAP -- ueber die flache GDI+-Schnittstelle,
-/// die ohne verwaltete Bildbibliothek auskommt.
+/// Wandelt ein JPEG von der Platte in ein HBITMAP. Das geschieht ueber die
+/// flache GDI+-Schnittstelle, die ohne verwaltete Bildbibliothek auskommt.
 /// </summary>
 internal static partial class Gdi
 {
@@ -251,8 +251,8 @@ internal static partial class Gdi
                 width == 0 || height == 0) return false;
 
             // In das angeforderte Quadrat einpassen, Seitenverhaeltnis behalten.
-            // Nie hochskalieren: eine 256er Vorschau auf 1024 aufgeblasen sieht
-            // schlechter aus als das Ersatzsymbol.
+            // Nie hochskalieren: eine auf 1024 vergroesserte 256er Vorschau
+            // sieht schlechter aus als das Ersatzsymbol.
             var scale = Math.Min(requestedSize / (double)width, requestedSize / (double)height);
             if (scale > 1.0) scale = 1.0;
 
@@ -344,7 +344,7 @@ internal sealed partial class Factory : IClassFactory
 
 internal static class Exports
 {
-    /// <summary>Unsere CLSID -- steht so auch in der Registrierung.</summary>
+    /// <summary>Unsere CLSID. Sie steht so auch in der Registrierung.</summary>
     public static readonly Guid ClassId = new("7E4B2A61-3C9D-4F58-9A17-6D2E5B84C013");
 
     public static readonly StrategyBasedComWrappers Wrappers = new();
@@ -380,9 +380,9 @@ internal static class Exports
     }
 
     /// <summary>
-    /// Wir lassen uns nie entladen. Der Explorer haelt die DLL dann bis zu
-    /// seinem Ende -- das kostet ein Megabyte und erspart eine ganze Klasse
-    /// von Abstuerzen beim Entladen waehrend eines laufenden Aufrufs.
+    /// Die DLL laesst sich nie entladen. Der Explorer haelt sie dann bis zu
+    /// seinem Ende. Das kostet ein Megabyte und vermeidet alle Abstuerze, die
+    /// beim Entladen waehrend eines laufenden Aufrufs entstehen.
     /// </summary>
     [UnmanagedCallersOnly(EntryPoint = "DllCanUnloadNow")]
     public static int DllCanUnloadNow() => 1; // S_FALSE

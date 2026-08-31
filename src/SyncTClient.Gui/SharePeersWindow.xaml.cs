@@ -3,7 +3,7 @@ using SyncTClient.Mount;
 
 namespace SyncTClient.Gui;
 
-/// <summary>Wer diese Freigabe trägt, und was mit ihm noch offen ist.</summary>
+/// <summary>Zeigt, welche Gegenstellen diese Freigabe vorhalten und was ihnen gegenüber noch aussteht.</summary>
 public partial class SharePeersWindow : Window
 {
     private sealed record Zeile(string Activity, string Name, string Address, string Outstanding);
@@ -41,9 +41,9 @@ public partial class SharePeersWindow : Window
     /// </summary>
     /// <remarks>
     /// Bei „bei Bedarf“ steht nichts aus: die Platzhalter sind vollständig,
-    /// die Inhalte kommen absichtlich erst beim Zugriff. Nur „vollständig
-    /// lokal“ hat einen echten Rückstand, und der ist die Differenz zwischen
-    /// Index und dem, was lokal liegt.
+    /// die Inhalte werden absichtlich erst beim Zugriff geholt. Nur bei
+    /// „vollständig lokal“ gibt es einen Rückstand. Er ist die Differenz
+    /// zwischen Index und dem, was lokal liegt.
     /// </remarks>
     private static string Offen(ShareRow row)
     {

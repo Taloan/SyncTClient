@@ -3,12 +3,12 @@ using System.Runtime.InteropServices;
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Erzeugt die Vorschau-Erweiterung ueber COM -- unabhaengig davon, ob
-/// Windows sie von sich aus fragt.
+/// Erzeugt die Vorschau-Erweiterung ueber COM. Das geschieht unabhaengig
+/// davon, ob Windows sie von sich aus aufruft.
 /// </summary>
 /// <remarks>
 /// Trennt zwei Fehlerbilder, die sonst gleich aussehen: eine DLL, die sich
-/// nicht laden laesst, und eine Verdrahtung, die Windows nicht beachtet.
+/// nicht laden laesst, und eine Registrierung, die Windows nicht auswertet.
 /// </remarks>
 public static class ComCheck
 {

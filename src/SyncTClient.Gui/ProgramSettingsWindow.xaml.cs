@@ -9,7 +9,8 @@ namespace SyncTClient.Gui;
 
 /// <summary>
 /// Was fuer das ganze Programm gilt. Diese Einstellungen haengen an keiner
-/// Freigabe -- sonst kaeme niemand an sie heran, der noch keine hat.
+/// Freigabe. Sonst waeren sie fuer jemanden, der noch keine Freigabe hat,
+/// nicht erreichbar.
 /// </summary>
 public partial class ProgramSettingsWindow : Window
 {
@@ -24,7 +25,7 @@ public partial class ProgramSettingsWindow : Window
     /// <summary>Waehrend des Fuellens sollen die Felder nichts ausloesen.</summary>
     private bool _loading;
 
-    /// <summary>Das Datenverzeichnis zeigt woanders hin -- das gilt erst beim naechsten Start.</summary>
+    /// <summary>Das Datenverzeichnis zeigt auf einen anderen Ort. Das gilt erst beim naechsten Start.</summary>
     public bool HomeChanged { get; private set; }
 
     public ProgramSettingsWindow(
@@ -38,8 +39,8 @@ public partial class ProgramSettingsWindow : Window
         _cacheUsage = cacheUsage;
         _clearCache = clearCache;
 
-        // In der Datei darf der Pfad relativ stehen; zu sehen bekommt man ihn
-        // ausgeschrieben, sonst raet man, worauf er sich bezieht.
+        // In der Datei darf der Pfad relativ stehen. Angezeigt wird er
+        // ausgeschrieben, sonst bleibt unklar, worauf er sich bezieht.
         _home = Path.GetFullPath(Path.Combine(configDirectory, config.HomeDirectory));
 
         _loading = true;
@@ -66,8 +67,8 @@ public partial class ProgramSettingsWindow : Window
     }
 
     /// <summary>
-    /// Zeigt, wieviel auf dem Laufwerk des Cache-Verzeichnisses frei ist --
-    /// die Zahl, gegen die das Mindestmass laeuft.
+    /// Zeigt, wieviel auf dem Laufwerk des Cache-Verzeichnisses frei ist. Das
+    /// ist die Zahl, mit der das Mindestmass verglichen wird.
     /// </summary>
     private void ShowFreeSpace()
     {
@@ -87,8 +88,8 @@ public partial class ProgramSettingsWindow : Window
     private void OnSharesRootChanged(object sender, TextChangedEventArgs e) => ShowFreeSpace();
 
     /// <summary>
-    /// Sprache und Farbschema wirken sofort -- man will sehen, was man wählt,
-    /// und nicht raten, wie es aussehen wird.
+    /// Sprache und Farbschema wirken sofort. So ist die Auswahl unmittelbar zu
+    /// sehen und muss nicht erwartet werden.
     /// </summary>
     private void OnLookChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -106,15 +107,15 @@ public partial class ProgramSettingsWindow : Window
     {
         var dialog = new OpenFolderDialog { Multiselect = false };
 
-        // Ein Startpunkt, den es nicht gibt, laesst den Dialog irgendwo aufgehen.
+        // Ein Startpfad, den es nicht gibt, oeffnet den Dialog an unbestimmter Stelle.
         if (Directory.Exists(box.Text)) dialog.InitialDirectory = box.Text;
 
         if (dialog.ShowDialog(this) == true) box.Text = dialog.FolderName;
     }
 
     /// <summary>
-    /// Leert den Cache auf Zuruf. Das Verzeichnis bleibt stehen -- es ist
-    /// zugleich der Platz der Freigaben; nur der Inhalt wird wieder zum
+    /// Leert den Cache auf Zuruf. Das Verzeichnis bleibt bestehen, denn es ist
+    /// zugleich der Platz der Freigaben. Nur der Inhalt wird wieder zum
     /// Platzhalter.
     /// </summary>
     private async void OnClearCache(object sender, RoutedEventArgs e)
@@ -146,8 +147,8 @@ public partial class ProgramSettingsWindow : Window
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        // Kein 0: unbegrenzt hiesse, dass nie etwas weicht -- und damit waere
-        // aus "bei Bedarf" nach ein paar Monaten eine Vollkopie geworden.
+        // Keine 0: unbegrenzt bedeutet, dass nie etwas verdraengt wird. Aus
+        // "bei Bedarf" wuerde nach ein paar Monaten eine Vollkopie.
         if (!long.TryParse(CacheBudgetBox.Text.Trim(), out var gigabytes) || gigabytes < 1)
         {
             Hint.Text = App.S("G.BudgetInvalid");
@@ -180,8 +181,8 @@ public partial class ProgramSettingsWindow : Window
             return;
         }
 
-        // Nur anfassen, wenn es wirklich woanders hinzeigt -- sonst wuerde aus
-        // dem relativen Eintrag der Vorlage ein absoluter Pfad.
+        // Nur aendern, wenn der Pfad wirklich auf einen anderen Ort zeigt.
+        // Sonst wuerde aus dem relativen Eintrag der Vorlage ein absoluter Pfad.
         if (!PathsEqual(Path.Combine(_configDirectory, home), _home))
         {
             _config.HomeDirectory = home;
@@ -192,8 +193,8 @@ public partial class ProgramSettingsWindow : Window
         var standard = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SyncT");
 
-        // Der Normalfall bleibt leer in der Datei: dann zieht er mit, wenn er
-        // sich einmal aendern sollte.
+        // Der Normalfall bleibt in der Datei leer. Aendert sich der
+        // Standardpfad spaeter, gilt dann der neue.
         _config.SharesRoot = root.Length == 0 || PathsEqual(root, standard) ? "" : root;
 
         _config.CacheMaxBytes = gigabytes * Gigabyte;
@@ -227,7 +228,7 @@ public partial class ProgramSettingsWindow : Window
         }
         catch (ArgumentException)
         {
-            // Unsinnige Pfade sind nicht gleich -- sie fliegen beim Speichern auf.
+            // Ungueltige Pfade gelten als ungleich. Der Fehler zeigt sich beim Speichern.
             return false;
         }
     }

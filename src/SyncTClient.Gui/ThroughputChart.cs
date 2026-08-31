@@ -10,12 +10,12 @@ namespace SyncTClient.Gui;
 /// </summary>
 /// <remarks>
 /// Selbst gezeichnet statt mit einer Diagrammbibliothek: gebraucht werden
-/// zwei Reihen ueber einer gemeinsamen Zeitachse, und dafuer waere jede
-/// Bibliothek mehr Abhaengigkeit als Nutzen.
+/// zwei Reihen ueber einer gemeinsamen Zeitachse. Dafuer waere jede Bibliothek
+/// mehr Abhaengigkeit als Nutzen.
 ///
-/// Die Hochachse skaliert selbst und nur nach oben sichtbar gerundet. Eine
-/// feste Obergrenze waere entweder bei einer schnellen Leitung nutzlos oder
-/// bei einer langsamen ein flacher Strich.
+/// Die Hochachse skaliert selbst und rundet dabei nach oben. Eine feste
+/// Obergrenze waere bei einer schnellen Leitung nutzlos, und bei einer
+/// langsamen bliebe die Kurve ein flacher Strich.
 /// </remarks>
 public sealed class ThroughputChart : FrameworkElement
 {
@@ -24,8 +24,8 @@ public sealed class ThroughputChart : FrameworkElement
     private static readonly Brush RasterErsatz = Neu(Color.FromRgb(0xE0, 0xE0, 0xE0));
     private static readonly Brush SchriftErsatz = Neu(Color.FromRgb(0x88, 0x88, 0x88));
 
-    // Beim Zeichnen aus dem Farbschema geholt: ein Raster in Hellgrau waere
-    // auf dunklem Grund ein Gitter aus Neon.
+    // Beim Zeichnen aus dem Farbschema geholt. Ein fest hellgraues Raster
+    // waere auf dunklem Grund viel zu hell.
     private Brush EmpfangenFuellung => Transparent(Farbe("Ein", EmpfangenErsatz), 60);
     private Pen EmpfangenLinie => NeuStift(Farbe("Ein", EmpfangenErsatz), 1.6);
     private Pen GesendetLinie => NeuStift(Farbe("Aus", GesendetErsatz), 1.4);
@@ -34,7 +34,7 @@ public sealed class ThroughputChart : FrameworkElement
 
     private Brush Farbe(string key, Brush ersatz) => TryFindResource(key) as Brush ?? ersatz;
 
-    /// <summary>Dieselbe Farbe, nur durchscheinend -- fuer die Flaeche unter der Kurve.</summary>
+    /// <summary>Dieselbe Farbe, nur durchscheinend. Fuer die Flaeche unter der Kurve.</summary>
     private static Brush Transparent(Brush brush, byte alpha)
     {
         if (brush is not SolidColorBrush solid) return brush;
@@ -65,8 +65,8 @@ public sealed class ThroughputChart : FrameworkElement
         var spitze = 0.0;
         foreach (var p in _points) spitze = Math.Max(spitze, Math.Max(p.Read, p.Written));
 
-        // Eine glatte Obergrenze oberhalb der Spitze, mindestens 1 KB/s, damit
-        // eine ruhige Leitung nicht als Zickzack im Rauschen erscheint.
+        // Eine glatte Obergrenze oberhalb der Spitze, mindestens 1 KB/s. Sonst
+        // erscheint bei geringem Durchsatz das Rauschen als Zickzack.
         var obergrenze = Rundung(Math.Max(spitze * 1.15, 1024));
 
         for (var i = 0; i <= 4; i++)
@@ -109,7 +109,7 @@ public sealed class ThroughputChart : FrameworkElement
         => new(flaeche.Left + index * schritt,
                flaeche.Bottom - flaeche.Height * Math.Clamp(wert / obergrenze, 0, 1));
 
-    /// <summary>Rundet auf 1, 2 oder 5 mal eine Zweierpotenz.</summary>
+    /// <summary>Rundet auf das 1-, 1,25-, 1,5- oder 2-fache einer Zweierpotenz auf.</summary>
     private static double Rundung(double wert)
     {
         var basis = Math.Pow(2, Math.Floor(Math.Log2(wert)));

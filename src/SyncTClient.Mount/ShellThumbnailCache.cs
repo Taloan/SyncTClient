@@ -3,16 +3,17 @@ using System.Runtime.InteropServices;
 namespace SyncTClient.Mount;
 
 /// <summary>
-/// Fragt die Vorschau ueber den Zwischenspeicher der Shell ab -- den Weg, den
-/// der Explorer selbst nimmt.
+/// Fragt die Vorschau ueber den Zwischenspeicher der Shell ab. Das ist der
+/// Weg, den der Explorer selbst nimmt.
 /// </summary>
 /// <remarks>
-/// <c>IShellItemImageFactory</c> ist bequemer, aber eine Ebene zu hoch: es
-/// liefert im Zweifel ein Symbol und verschweigt, ob ein Anbieter gefragt
-/// wurde. <c>IThumbnailCache</c> ist die Ebene darunter. Vor allem kennt es
-/// Flags, die es sonst nirgends gibt -- etwa die Aufforderung, den Anbieter in
-/// einem eigenen Prozess zu betreiben. Genau daran hat sich unsere Suche
-/// aufgehalten, also messen wir es hier einzeln durch.
+/// <c>IShellItemImageFactory</c> ist bequemer, liegt aber eine Ebene zu hoch:
+/// es liefert im Zweifel ein Symbol und gibt nicht an, ob ein Anbieter
+/// aufgerufen wurde. <c>IThumbnailCache</c> ist die Ebene darunter. Vor allem
+/// kennt es Flags, die es sonst nirgends gibt, etwa die Aufforderung, den
+/// Anbieter in einem eigenen Prozess zu betreiben. Genau daran hat sich die
+/// Fehlersuche aufgehalten, deshalb werden die Flags hier einzeln
+/// durchgemessen.
 /// </remarks>
 public static class ShellThumbnailCache
 {
@@ -99,10 +100,10 @@ public static class ShellThumbnailCache
     }
 
     /// <remarks>
-    /// FORCEEXTRACTION umgeht den Zwischenspeicher -- ohne das misst man alte
-    /// Bilder statt der Anbieterkette. REQUIRESURROGATE erzwingt den eigenen
-    /// Prozess, INPROC verbietet ihn; welcher der beiden Wege bedient wird,
-    /// ist genau die offene Frage.
+    /// FORCEEXTRACTION umgeht den Zwischenspeicher. Ohne dieses Flag werden
+    /// alte Bilder gemessen statt der Anbieterkette. REQUIRESURROGATE
+    /// erzwingt den eigenen Prozess, INPROC verbietet ihn. Welcher der beiden
+    /// Wege bedient wird, ist genau die offene Frage.
     /// </remarks>
     private static readonly (string Name, uint Flags)[] Probes =
     [

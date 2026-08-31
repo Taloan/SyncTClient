@@ -7,8 +7,8 @@ using SyncTClient.Mount;
 namespace SyncTClient.Gui;
 
 /// <summary>
-/// Was andere über dieses Gerät wissen müssen -- und wie es sich beim Anmelden
-/// und beim Schließen verhält.
+/// Zeigt, was andere über dieses Gerät wissen müssen, und stellt ein, wie sich
+/// das Programm beim Anmelden und beim Schließen verhält.
 /// </summary>
 public partial class DeviceWindow : Window
 {
@@ -20,7 +20,7 @@ public partial class DeviceWindow : Window
 
     /// <param name="save">
     /// Schreibt die Konfiguration und zieht nach, was daran hängt. Dieses
-    /// Fenster hat keinen Speichern-Knopf -- jeder Haken gilt sofort.
+    /// Fenster hat keinen Speichern-Knopf, jeder Haken gilt sofort.
     /// </param>
     public DeviceWindow(string deviceId, string configPath, AppConfig config, Action save)
     {
@@ -46,12 +46,12 @@ public partial class DeviceWindow : Window
 
     /// <summary>
     /// Dieselbe Kennung als Bild. Auf einem Mobilgerät ist Abtippen keine
-    /// Möglichkeit -- 63 Zeichen ohne Tastatur sind eine Zumutung.
+    /// Möglichkeit, denn 63 Zeichen ohne Tastatur sind zu viel.
     /// </summary>
     private void ShowQrCode(string deviceId)
     {
-        // Ohne Identität gibt es nichts zu zeigen; der Platzhalter "—" wäre
-        // ein Code, der auf nichts zeigt.
+        // Ohne Identität gibt es nichts zu zeigen. Aus dem Platzhalter "—"
+        // entstünde ein Code ohne verwertbaren Inhalt.
         if (deviceId.Length < 20)
         {
             QrPanel.Visibility = Visibility.Collapsed;
@@ -63,7 +63,8 @@ public partial class DeviceWindow : Window
             using var generator = new QRCodeGenerator();
 
             // Die Device-ID ist Base32 mit Bindestrichen und passt damit in
-            // den alphanumerischen Modus: derselbe Inhalt, weniger Module.
+            // den alphanumerischen Modus. Der Inhalt bleibt derselbe und
+            // braucht weniger Module.
             using var data = generator.CreateQrCode(deviceId, QRCodeGenerator.ECCLevel.M);
 
             var png = new PngByteQRCode(data).GetGraphic(8);
@@ -79,7 +80,7 @@ public partial class DeviceWindow : Window
         }
         catch (Exception ex)
         {
-            // Ein Bild weniger ist kein Grund, das Fenster nicht zu zeigen.
+            // Ein fehlendes Bild ist kein Grund, das Fenster nicht zu zeigen.
             QrPanel.Visibility = Visibility.Collapsed;
             CopyHint.Text = App.S("D.QrFailed", ex.Message);
         }
@@ -93,8 +94,8 @@ public partial class DeviceWindow : Window
 
     /// <summary>
     /// Der Windows-Autostart. Er wirkt sofort, denn er steht nicht in der
-    /// Konfiguration, sondern in der Registry -- und danach wird nachgelesen,
-    /// was dort wirklich steht.
+    /// Konfiguration, sondern in der Registry. Danach wird nachgelesen, was
+    /// dort wirklich steht.
     /// </summary>
     private void OnAutostartChanged(object sender, RoutedEventArgs e)
     {

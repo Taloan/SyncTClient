@@ -1,6 +1,10 @@
-﻿using SyncTClient.Bep;
+﻿using System.Diagnostics;
+using SyncTClient.Bep;
 using SyncTClient.Mount;
 using SyncTClient.Vfs;
+using BepBlockInfo = SyncTClient.Bep.Proto.BlockInfo;
+using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
+using FileInfoType = SyncTClient.Bep.Proto.FileInfoType;
 
 // Haengt Syncthing-Ordner als Platzhalter-Verzeichnisse in den Explorer.
 // Nichts wird heruntergeladen, bis jemand eine Datei tatsaechlich oeffnet.
@@ -21,9 +25,9 @@ if (Arg("--thumbtest") is { } thumbTarget)
     {
         try
         {
-            // Dehydrierte Platzhalter auslassen -- sie zu lesen wuerde einen
-            // Download ausloesen, und beim Testen will niemand fremde Dateien
-            // vom Server holen.
+            // Dehydrierte Platzhalter auslassen. Sie zu lesen wuerde einen
+            // Download ausloesen, und beim Testen sollen keine fremden
+            // Dateien vom Server geholt werden.
             const uint recallOnDataAccess = 0x0040_0000;
             if (((uint)new FileInfo(file).Attributes & recallOnDataAccess) != 0) { skipped++; continue; }
 
@@ -47,7 +51,7 @@ if (Arg("--thumbtest") is { } thumbTarget)
     return 0;
 }
 
-// Fragt Windows nach der Vorschau -- pruet die Shell-Erweiterung von aussen.
+// Fragt Windows nach der Vorschau. Prueft die Shell-Erweiterung von aussen.
 if (Arg("--thumbcheck") is { } checkTarget) return ThumbnailCheck.Run(checkTarget);
 
 // Erzeugt die Vorschau-Erweiterung direkt ueber COM.
@@ -56,13 +60,18 @@ if (args.Contains("--comtest")) return ComCheck.Run();
 // Zeigt, was die Shell ueber eine Datei weiss.
 if (Arg("--shellprops") is { } propsTarget) return ShellProperties.Run(propsTarget);
 
-// Schaltet den Anheft-Zustand um -- zum Vergleichen mit fremden Anbietern.
+// Schaltet den Anheft-Zustand um. Dient dem Vergleich mit fremden Anbietern.
 if (Arg("--pin") is { } pinTarget)
     return PinStateTool.Run(pinTarget, Arg("--state") ?? "unspecified", args.Contains("--recurse"));
 
-// Fragt die Vorschau ueber den Zwischenspeicher der Shell ab -- Explorers Weg.
+// Fragt die Vorschau ueber den Zwischenspeicher der Shell ab. Das ist der Weg
+// des Explorers.
 if (Arg("--cachecheck") is { } cacheTarget)
     return ShellThumbnailCache.Run(cacheTarget, Arg("--width") is { } w ? uint.Parse(w) : 256u);
+
+// Rechnet die Blocklisten lokal vorhandener Dateien nach und vergleicht sie
+// mit dem, was die Gegenstelle angekuendigt hat.
+if (args.Contains("--blockcheck")) return BlockCheck();
 
 // Meldet die Vorschau-Erweiterung an, ohne den Client zu starten.
 if (Arg("--register-thumbs") is { } thumbStore)
@@ -85,8 +94,9 @@ if (Arg("--register-thumbs") is { } thumbStore)
     return 0;
 }
 
-// Ruft einen Vorschau-Anbieter unmittelbar auf. Ohne --clsid ist es unserer;
-// mit fremder CLSID laesst sich ein Anbieter vermessen, der funktioniert.
+// Ruft einen Vorschau-Anbieter unmittelbar auf. Ohne --clsid ist das der
+// eigene. Mit einer fremden CLSID laesst sich ein Anbieter vermessen, der
+// funktioniert.
 if (Arg("--providertest") is { } probeTarget)
 {
     var providerId = Arg("--clsid") is { } given
@@ -141,6 +151,7 @@ if (!File.Exists(configPath))
           --reset <pfad>        haengengebliebenen Sync-Root loeschen
           --unregister <pfad>   Sync-Root nur abmelden
           --clean-winrt         verwaiste WinRT-Registrierungen abmelden
+          --blockcheck          eigene Blocklisten gegen den Index pruefen
         """);
     return 2;
 }
@@ -148,6 +159,7 @@ if (!File.Exists(configPath))
 // --- Betrieb -----------------------------------------------------------------
 
 var config = AppConfig.Load(configPath);
+config.ResolveAgainst(configPath);
 if (config.Peers.Count == 0)
 {
     Console.Error.WriteLine("Die Konfiguration enthaelt keine Gegenstellen.");
@@ -196,7 +208,7 @@ try
     var stop = new TaskCompletionSource();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
 
-    // Das Budget wird nach jeder Hydration geprueft; dieser Takt faengt die
+    // Das Budget wird nach jeder Hydration geprueft. Dieser Takt deckt die
     // Faelle ab, in denen von aussen etwas dazukommt.
     while (!stop.Task.IsCompleted)
     {
@@ -233,6 +245,232 @@ string? Arg(string name)
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 }
 
+// Vergleicht die selbst gerechnete Blockliste mit der der Gegenstelle.
+//
+// Der Befehl prueft BlockList nach: Blockgroessen-Regel und BlocksHash-Formel
+// sind aus Syncthings Quelltext abgeleitet, und erst der Vergleich mit echten
+// Ankuendigungen zeigt, ob sie stimmen. Geprueft wird byteweise: Blockgroesse,
+// Zahl der Bloecke, je Block Hash, Offset und Groesse, dazu der BlocksHash.
+int BlockCheck()
+{
+    if (!File.Exists(configPath))
+    {
+        Console.Error.WriteLine($"Keine Konfiguration unter \"{Path.GetFullPath(configPath)}\".");
+        return 2;
+    }
+
+    var settings = AppConfig.Load(configPath);
+    settings.ResolveAgainst(configPath);
+    var wantedFolder = Arg("--folder");
+    var perShareLimit = Arg("--max") is { } maxText && int.TryParse(maxText, out var given) && given > 0
+        ? given
+        : int.MaxValue;
+
+    var chosen = settings.Shares
+        .Where(s => wantedFolder is null || s.FolderId.Equals(wantedFolder, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    if (chosen.Count == 0)
+    {
+        Console.Error.WriteLine(wantedFolder is null
+            ? "Die Konfiguration enthaelt keine Freigaben."
+            : $"Keine Freigabe mit der Ordner-ID \"{wantedFolder}\".");
+        return 2;
+    }
+
+    // Zaehler ueber alle Freigaben hinweg. Aus ihnen ergibt sich am Ende das
+    // Ergebnis.
+    long sizeRuleChecked = 0, sizeRuleFailed = 0;
+    long blocksHashChecked = 0, blocksHashFailed = 0;
+    long differingTotal = 0;
+    var sizesSeen = new SortedDictionary<int, int>();
+
+    foreach (var share in chosen)
+    {
+        var databasePath = Path.Combine(settings.HomeDirectory, $"index-{share.FolderId}.db");
+        if (!File.Exists(databasePath))
+        {
+            Console.WriteLine($"[{share.Display}] kein Index unter \"{Path.GetFullPath(databasePath)}\" -- uebersprungen.");
+            continue;
+        }
+
+        using var index = new PersistentFolderIndex(databasePath, share.FolderId);
+
+        // Erst die leichte Liste vollstaendig einsammeln, dann je Eintrag die
+        // volle FileInfo holen. Die Blocklisten sind der grosse Teil des
+        // Index und sollen nicht alle gleichzeitig im Speicher liegen.
+        var entries = index.EnumerateLight().Where(e => !e.IsDirectory).ToList();
+
+        int examined = 0, equal = 0, differing = 0;
+        int dehydrated = 0, absent = 0, sizeDiffers = 0, withoutBlocks = 0, unreadable = 0;
+        long bytes = 0;
+        var shown = 0;
+        var clock = Stopwatch.StartNew();
+
+        foreach (var entry in entries)
+        {
+            if (examined >= perShareLimit) break;
+            if (!index.TryGet(entry.Name, out var announced)) continue;
+            if (announced.Type != FileInfoType.File || announced.Deleted || announced.Invalid) continue;
+
+            // Ohne Blockliste haelt die Gegenstelle die Datei selbst nicht
+            // vor. Es gibt dann nichts zu vergleichen.
+            if (announced.Blocks.Count == 0 && announced.Size > 0) { withoutBlocks++; continue; }
+
+            var localPath = Path.Combine(share.LocalPath, entry.Name.Replace('/', Path.DirectorySeparatorChar));
+            var local = new FileInfo(localPath);
+            if (!local.Exists) { absent++; continue; }
+
+            // Ein dehydrierter Platzhalter wird gezaehlt und nicht gelesen.
+            // Ihn zu lesen wuerde ihn herunterladen. Bei einer Bibliothek
+            // dieser Groesse waeren das Stunden Uebertragung und ein vielfach
+            // ueberschrittenes Cache-Budget. RECALL_ON_DATA_ACCESS ist das
+            // entscheidende Merkmal. Die beiden anderen Attribute bedeuten
+            // ebenfalls, dass die Bytes nicht lokal liegen.
+            const uint recallOnDataAccess = 0x0040_0000;
+            const uint recallOnOpen = 0x0004_0000;
+            const uint offline = 0x0000_1000;
+            if (((uint)local.Attributes & (recallOnDataAccess | recallOnOpen | offline)) != 0)
+            {
+                dehydrated++;
+                continue;
+            }
+
+            // Eine lokal veraenderte Datei ergibt zwangslaeufig eine andere
+            // Blockliste. Das sagt nichts ueber die Rechnung aus.
+            if (local.Length != announced.Size) { sizeDiffers++; continue; }
+
+            int blockSize;
+            byte[] blocksHash;
+            string? problem;
+            try
+            {
+                using var stream = File.OpenRead(localPath);
+                (blockSize, var blocks, blocksHash) = BlockList.For(stream, local.Length);
+                problem = BlockDifference(announced, blockSize, blocks);
+            }
+            catch (Exception ex)
+            {
+                unreadable++;
+                Console.WriteLine($"  nicht lesbar: {entry.Name} -- {ex.Message}");
+                continue;
+            }
+
+            examined++;
+            bytes += local.Length;
+
+            var announcedBlockSize = AnnouncedBlockSize(announced);
+            sizesSeen[announcedBlockSize] = sizesSeen.GetValueOrDefault(announcedBlockSize) + 1;
+
+            sizeRuleChecked++;
+            if (blockSize != announcedBlockSize) sizeRuleFailed++;
+
+            var hashDiffers = announced.BlocksHash.Length > 0
+                              && !blocksHash.AsSpan().SequenceEqual(announced.BlocksHash.Span);
+
+            // Ueber die BlocksHash-Formel sagt nur eine Datei etwas aus, deren
+            // Blockliste schon uebereinstimmt. Weichen die Bloecke ab, weicht
+            // der Hash darueber zwangslaeufig ebenfalls ab, und das sagt
+            // nichts ueber die Formel aus. Aeltere Gegenstellen schicken das
+            // Feld gar nicht.
+            if (problem is null && announced.BlocksHash.Length > 0)
+            {
+                blocksHashChecked++;
+                if (hashDiffers) blocksHashFailed++;
+            }
+
+            problem ??= hashDiffers
+                ? $"BlocksHash: erwartet {Short(announced.BlocksHash.Span)}, berechnet {Short(blocksHash)}"
+                : null;
+
+            if (problem is null) { equal++; continue; }
+
+            differing++;
+            if (shown++ < 5)
+            {
+                Console.WriteLine($"  abweichend: {entry.Name}");
+                Console.WriteLine($"              {problem}");
+            }
+        }
+
+        clock.Stop();
+        differingTotal += differing;
+
+        var megabytes = bytes / 1024.0 / 1024.0;
+        var seconds = Math.Max(clock.Elapsed.TotalSeconds, 0.001);
+
+        Console.WriteLine(
+            $"[{share.Display}] geprueft {examined}, uebereinstimmend {equal}, abweichend {differing}, " +
+            $"uebersprungen {absent + dehydrated + sizeDiffers + withoutBlocks + unreadable}" +
+            $" (nicht materialisiert {dehydrated}, nicht vorhanden {absent}, " +
+            $"Groesse abweichend {sizeDiffers}, ohne Blockliste {withoutBlocks}, nicht lesbar {unreadable})");
+        Console.WriteLine(
+            $"          {megabytes:F1} MB in {clock.Elapsed.TotalSeconds:F1} s -- {megabytes / seconds:F1} MB/s");
+        Console.WriteLine();
+    }
+
+    if (sizesSeen.Count > 0)
+    {
+        Console.WriteLine("Angekuendigte Blockgroessen im geprueften Bestand:");
+        foreach (var (size, count) in sizesSeen)
+            Console.WriteLine($"  {size / 1024,6} KiB  {count} Dateien");
+        Console.WriteLine();
+    }
+
+    Console.WriteLine(sizeRuleChecked == 0
+        ? "Blockgroessen-Regel: nicht pruefbar -- keine Datei lag lokal vollstaendig vor."
+        : sizeRuleFailed == 0
+            ? $"Blockgroessen-Regel bestaetigt: {sizeRuleChecked} Dateien, " +
+              $"{sizesSeen.Count} verschiedene Groessen, keine Abweichung."
+            : $"Blockgroessen-Regel WIDERLEGT: {sizeRuleFailed} von {sizeRuleChecked} Dateien weichen ab.");
+
+    Console.WriteLine(blocksHashChecked == 0
+        ? "BlocksHash-Formel: nicht pruefbar -- keine Ankuendigung trug einen BlocksHash."
+        : blocksHashFailed == 0
+            ? $"BlocksHash-Formel bestaetigt (SHA-256 ueber die verketteten Blockhashes): " +
+              $"{blocksHashChecked} Dateien, keine Abweichung."
+            : $"BlocksHash-Formel WIDERLEGT: {blocksHashFailed} von {blocksHashChecked} Dateien weichen ab.");
+
+    return differingTotal == 0 ? 0 : 1;
+}
+
+// Im Protokoll ist block_size optional. 0 bedeutet nicht "keine", sondern 128 KiB.
+static int AnnouncedBlockSize(BepFileInfo file)
+    => file.BlockSize == 0 ? BlockList.MinimumBlockSize : file.BlockSize;
+
+// Liefert die erste Stelle, an der sich die gerechnete Blockliste von der
+// angekuendigten unterscheidet, oder null, wenn sie Byte fuer Byte gleich
+// sind. Der BlocksHash wird getrennt geprueft, damit er als eigener Befund
+// zaehlt und nicht in einer ohnehin abweichenden Liste untergeht.
+static string? BlockDifference(BepFileInfo announced, int blockSize, IReadOnlyList<BepBlockInfo> blocks)
+{
+    var announcedBlockSize = AnnouncedBlockSize(announced);
+    if (blockSize != announcedBlockSize)
+        return $"Blockgroesse: erwartet {announcedBlockSize / 1024} KiB, berechnet {blockSize / 1024} KiB " +
+               $"(Dateigroesse {announced.Size})";
+
+    if (blocks.Count != announced.Blocks.Count)
+        return $"Blockzahl: erwartet {announced.Blocks.Count}, berechnet {blocks.Count}";
+
+    for (var i = 0; i < blocks.Count; i++)
+    {
+        var mine = blocks[i];
+        var theirs = announced.Blocks[i];
+
+        if (mine.Offset != theirs.Offset)
+            return $"Block {i} Offset: erwartet {theirs.Offset}, berechnet {mine.Offset}";
+        if (mine.Size != theirs.Size)
+            return $"Block {i} Groesse: erwartet {theirs.Size}, berechnet {mine.Size}";
+        if (!mine.Hash.Span.SequenceEqual(theirs.Hash.Span))
+            return $"Block {i} Hash: erwartet {Short(theirs.Hash.Span)}, berechnet {Short(mine.Hash.Span)}";
+    }
+
+    return null;
+}
+
+static string Short(ReadOnlySpan<byte> value)
+    => Convert.ToHexStringLower(value[..Math.Min(8, value.Length)]) + (value.Length > 8 ? "..." : "");
+
 static int CleanWinRt()
 {
     var found = 0;
@@ -255,7 +493,8 @@ static int CleanWinRt()
 }
 
 // Der Cloud-Filter-Treiber gibt Platzhalter nur frei, solange ein Anbieter
-// verbunden ist -- also verbinden wir kurz einen leeren, loeschen, und melden ab.
+// verbunden ist. Deshalb wird kurz ein leerer Anbieter verbunden, dann
+// geloescht und danach abgemeldet.
 static int Reset(string path)
 {
     try
@@ -277,7 +516,7 @@ static int Reset(string path)
     return Directory.Exists(path) ? 1 : 0;
 }
 
-/// <summary>Leere Quelle fuer den Reparaturmodus -- es soll nichts projiziert werden.</summary>
+/// <summary>Leere Quelle fuer den Reparaturmodus. Es soll nichts projiziert werden.</summary>
 file sealed class EmptySource : IContentSource
 {
     public IReadOnlyList<VirtualEntry> Enumerate() => [];
