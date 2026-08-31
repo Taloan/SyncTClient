@@ -42,6 +42,21 @@
          reicht nicht: DataGridTextColumn setzt dem TextBlock eine eigene
          Vorlage auf, und die gewinnt. Die Ausrichtung muss also dort stehen,
          wo der TextBlock entsteht. -->
+    <!-- Das Netzzeichen. Es steht in der Knotenspalte und vor den beiden
+         Spalten, die den Stand im Netz nennen; die beiden lokalen tragen
+         daneben ihr Datentraegerzeichen. Ohne diese Unterscheidung heissen
+         vier Spalten "Dateien" und "Groesse", und keine sagt, wovon. -->
+    <ControlTemplate x:Key="Netzzeichen">
+      <Canvas Width="18" Height="16" Background="Transparent">
+        <Line X1="4" Y1="5" X2="13" Y2="5" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+        <Line X1="4" Y1="5" X2="8.5" Y2="12" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+        <Line X1="13" Y1="5" X2="8.5" Y2="12" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+        <Ellipse Canvas.Left="1.5" Canvas.Top="2.5" Width="5" Height="5" Fill="{DynamicResource Sekundaer}" />
+        <Ellipse Canvas.Left="10.5" Canvas.Top="2.5" Width="5" Height="5" Fill="{DynamicResource Sekundaer}" />
+        <Ellipse Canvas.Left="6" Canvas.Top="9.5" Width="5" Height="5" Fill="{DynamicResource Sekundaer}" />
+      </Canvas>
+    </ControlTemplate>
+
     <Style x:Key="ZelleMitte" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="TextTrimming" Value="CharacterEllipsis" />
@@ -257,15 +272,8 @@
                eine Ueberschrift aus zwei Woertern waere breiter als ihr
                Inhalt. Der Name steht im Tooltip. -->
           <DataGridTemplateColumn.Header>
-            <Canvas Width="18" Height="16" Background="Transparent"
-                    ToolTip="{DynamicResource S.Col.Nodes}">
-              <Line X1="4" Y1="5" X2="13" Y2="5" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
-              <Line X1="4" Y1="5" X2="8.5" Y2="12" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
-              <Line X1="13" Y1="5" X2="8.5" Y2="12" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
-              <Ellipse Canvas.Left="1.5" Canvas.Top="2.5" Width="5" Height="5" Fill="{DynamicResource Sekundaer}" />
-              <Ellipse Canvas.Left="10.5" Canvas.Top="2.5" Width="5" Height="5" Fill="{DynamicResource Sekundaer}" />
-              <Ellipse Canvas.Left="6" Canvas.Top="9.5" Width="5" Height="5" Fill="{DynamicResource Sekundaer}" />
-            </Canvas>
+            <Control Template="{StaticResource Netzzeichen}" Width="18" Height="16"
+                     ToolTip="{DynamicResource S.Col.Nodes}" />
           </DataGridTemplateColumn.Header>
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
@@ -387,8 +395,17 @@
         </DataGridTextColumn>
 
 
-        <DataGridTextColumn x:Name="ColSize" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Size}" Width="95"
-                            Binding="{Binding SizeText}" SortMemberPath="SizeValue" />
+        <DataGridTextColumn x:Name="ColSize" ElementStyle="{StaticResource ZelleMitte}" Width="95"
+                            Binding="{Binding SizeText}" SortMemberPath="SizeValue">
+          <DataGridTextColumn.Header>
+            <StackPanel Orientation="Horizontal" Background="Transparent"
+                        ToolTip="{DynamicResource S.Col.Size}">
+              <Control Template="{StaticResource Netzzeichen}" Width="18" Height="16"
+                       VerticalAlignment="Center" Margin="0,0,4,0" />
+              <TextBlock Text="{DynamicResource S.Col.Size}" VerticalAlignment="Center" />
+            </StackPanel>
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
 
         <DataGridTextColumn x:Name="ColLocalFiles" ElementStyle="{StaticResource ZelleMitte}" Width="85"
                             Binding="{Binding LocalFilesText}" SortMemberPath="LocalFilesValue">
@@ -423,8 +440,17 @@
             </StackPanel>
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
-        <DataGridTextColumn x:Name="ColFiles" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Files}" Width="90" Visibility="Collapsed"
-                            Binding="{Binding FilesText}" SortMemberPath="FilesValue" />
+        <DataGridTextColumn x:Name="ColFiles" ElementStyle="{StaticResource ZelleMitte}" Width="90" Visibility="Collapsed"
+                            Binding="{Binding FilesText}" SortMemberPath="FilesValue">
+          <DataGridTextColumn.Header>
+            <StackPanel Orientation="Horizontal" Background="Transparent"
+                        ToolTip="{DynamicResource S.Col.Files}">
+              <Control Template="{StaticResource Netzzeichen}" Width="18" Height="16"
+                       VerticalAlignment="Center" Margin="0,0,4,0" />
+              <TextBlock Text="{DynamicResource S.Col.Files}" VerticalAlignment="Center" />
+            </StackPanel>
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
         <DataGridTextColumn x:Name="ColThumbs" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Thumbs}" Width="110" Visibility="Collapsed"
                             Binding="{Binding ThumbsText}" SortMemberPath="ThumbsValue" />
         <DataGridTextColumn x:Name="ColLimit" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Limit}" Width="110" Visibility="Collapsed"
