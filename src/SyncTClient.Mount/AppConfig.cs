@@ -14,6 +14,35 @@ public enum ShareMode
     AlwaysLocal
 }
 
+/// <summary>
+/// Was geschieht, wenn beide Seiten dieselbe Datei geaendert haben.
+/// </summary>
+public enum ConflictResolution
+{
+    /// <summary>
+    /// Beide Fassungen bleiben. Die unterlegene wird umbenannt.
+    /// </summary>
+    /// <remarks>
+    /// Der Name folgt dem Muster von Syncthing:
+    /// <c>name.sync-conflict-JJJJMMTT-HHMMSS-KURZID.endung</c>. Ein eigenes
+    /// Muster wuerde dazu fuehren, dass beide Seiten fuer denselben Konflikt
+    /// verschiedene Dateien anlegen.
+    /// </remarks>
+    KeepBoth,
+
+    /// <summary>Die zuletzt geaenderte Fassung gewinnt.</summary>
+    Newer,
+
+    /// <summary>Die aeltere Fassung gewinnt.</summary>
+    Older,
+
+    /// <summary>Die hiesige Fassung gewinnt.</summary>
+    Local,
+
+    /// <summary>Die Fassung der Gegenstelle gewinnt.</summary>
+    Remote
+}
+
 /// <summary>Eine Gegenstelle. Das ist ein Server oder ein anderer Rechner.</summary>
 public sealed class PeerConfig
 {
@@ -68,6 +97,32 @@ public sealed class ShareConfig
     public string LocalPath { get; set; } = "";
 
     public ShareMode Mode { get; set; } = ShareMode.OnDemand;
+
+    /// <summary>
+    /// Was geschieht, wenn beide Seiten dieselbe Datei geaendert haben.
+    /// </summary>
+    /// <remarks>
+    /// Ausser bei <see cref="ConflictResolution.KeepBoth"/> wird die
+    /// unterlegene Fassung geloescht. Wirksam wird die Einstellung mit der
+    /// Konfliktbehandlung; bis dahin gibt es keine lokalen Aenderungen, die
+    /// in einen Konflikt geraten koennten.
+    /// </remarks>
+    public ConflictResolution Conflict { get; set; } = ConflictResolution.KeepBoth;
+
+    /// <summary>
+    /// Ersetzte und geloeschte Fassungen werden aufgehoben, statt sofort
+    /// fortzufallen.
+    /// </summary>
+    /// <remarks>
+    /// Sie liegen im Ordner ".stversions" innerhalb der Freigabe. Dieser
+    /// Ordner nimmt am Abgleich nicht teil: er wird nicht angekuendigt, nicht
+    /// in den Index aufgenommen und beim Freigeben von Speicherplatz nicht
+    /// angefasst.
+    /// </remarks>
+    public bool KeepVersions { get; set; } = true;
+
+    /// <summary>Wie lange eine aufgehobene Fassung liegen bleibt, in Tagen.</summary>
+    public int VersionDays { get; set; } = 7;
 
     /// <summary>
     /// Wie viele andere Knoten eine Datei vollstaendig fuehren muessen, bevor
@@ -385,6 +440,11 @@ public sealed class AppConfig
 
             DiscoveryServer = null;
         }
+
+        // 0 hiess: ohne Pruefung freigeben. Damit konnte der letzte Inhalt
+        // einer Datei im Netz verschwinden. Der Wert wird angehoben.
+        foreach (var share in Shares.Where(s => s.MinimumCopies < 1))
+            share.MinimumCopies = 1;
 
         var fallback = Peers.FirstOrDefault()?.DeviceId ?? "";
         foreach (var share in Shares)

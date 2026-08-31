@@ -108,6 +108,19 @@ public sealed class HydrationCache
             _entries[relativePath] = entry with { LastAccess = DateTimeOffset.UtcNow };
     }
 
+    /// <summary>
+    /// Nimmt eine Datei aus der Buchfuehrung, ohne sie anzufassen.
+    /// </summary>
+    /// <remarks>
+    /// Fuer eine Datei, die gerade fortgenommen und durch einen Platzhalter
+    /// ersetzt wurde. Dehydrieren waere hier verkehrt: es gibt nichts mehr zu
+    /// dehydrieren, und der Aufruf schluege fehl.
+    /// </remarks>
+    public bool Forget(string relativePath)
+    {
+        return _entries.TryRemove(relativePath, out _);
+    }
+
     // ------------------------------------------------------------ Invalidierung
 
     /// <summary>

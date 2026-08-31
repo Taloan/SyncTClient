@@ -80,6 +80,9 @@ public sealed class PeerHost : IAsyncDisposable
 
     public IReadOnlyCollection<ShareHost> Shares => [.. _shares.Values];
 
+    /// <summary>Die laufende Verbindung, oder null, solange keine besteht.</summary>
+    public BepConnection? Connection => _connection;
+
     /// <summary>Bytes, die seit dem Verbinden ueber diese Verbindung liefen.</summary>
     public (long Read, long Written) Wire =>
         _connection is null ? (0, 0) : (_connection.BytesRead, _connection.BytesWritten);
@@ -305,7 +308,9 @@ public sealed class PeerHost : IAsyncDisposable
         // geht in die Ankuendigung ein.
         foreach (var share in shares)
         {
-            var host2 = new ShareHost(share, _app, _log);
+            // Die eigene Geraete-ID gehoert in jede eigene Ankuendigung: in
+            // modified_by und in den eigenen Zaehler des Versionsvektors.
+            var host2 = new ShareHost(share, _app, _log) { OwnDeviceId = _identity.Id };
             host2.OpenIndex();
             _shares[share.FolderId] = host2;
             ShareAdded?.Invoke(host2);
@@ -440,7 +445,7 @@ public sealed class PeerHost : IAsyncDisposable
     {
         if (_connection is null) throw new InvalidOperationException("nicht verbunden.");
 
-        var host = new ShareHost(share, _app, _log);
+        var host = new ShareHost(share, _app, _log) { OwnDeviceId = _identity.Id };
         host.OpenIndex();
         _shares[share.FolderId] = host;
 

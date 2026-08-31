@@ -23,6 +23,7 @@ public sealed class CloudFilterMount : IDisposable
     private static readonly uint TransferDataParamSize = ComputeTransferDataParamSize();
 
     private readonly string _rootPath;
+    private readonly string _volumeRelativeRoot;
     private readonly IContentSource _source;
     private readonly Action<string>? _log;
 
@@ -34,11 +35,32 @@ public sealed class CloudFilterMount : IDisposable
     public CloudFilterMount(string rootPath, IContentSource source, Action<string>? log = null)
     {
         _rootPath = Path.GetFullPath(rootPath);
+        _volumeRelativeRoot = StripDriveLetter(_rootPath).TrimEnd('\\');
         _source = source;
         _log = log;
     }
 
     public string RootPath => _rootPath;
+
+    /// <summary>
+    /// Ein Handle auf eine Datei der Freigabe wurde geschlossen. Der Parameter
+    /// ist der relative Pfad.
+    /// </summary>
+    /// <remarks>
+    /// Das Ereignis sagt nichts darueber aus, ob die Datei geaendert wurde.
+    /// Auch reines Lesen loest es aus. Ob eine Aenderung vorliegt, entscheidet
+    /// die obere Schicht anhand des In-Sync-Zustands.
+    /// </remarks>
+    public event Action<string>? FileClosed;
+
+    /// <summary>Eine Datei der Freigabe wurde geloescht. Relativer Pfad.</summary>
+    public event Action<string>? FileDeleted;
+
+    /// <summary>
+    /// Eine Datei wurde umbenannt oder verschoben. Erst der alte, dann der
+    /// neue relative Pfad.
+    /// </summary>
+    public event Action<string, string>? FileRenamed;
 
     /// <summary>
     /// Verbindet die Rueckrufe. Ab hier leitet Windows Zugriffe hierher
@@ -51,14 +73,32 @@ public sealed class CloudFilterMount : IDisposable
         // Die Tabelle muss ueber die gesamte Verbindungsdauer gueltig bleiben,
         // deshalb nativ statt auf dem verschiebbaren Heap.
         _callbacks = (CF_CALLBACK_REGISTRATION*)NativeMemory.Alloc(
-            2, (nuint)sizeof(CF_CALLBACK_REGISTRATION));
+            5, (nuint)sizeof(CF_CALLBACK_REGISTRATION));
 
         _callbacks[0] = new CF_CALLBACK_REGISTRATION
         {
             Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_FETCH_DATA,
             Callback = &OnFetchData
         };
+        // Der Abschluss-Rueckruf kommt einmal je geschlossenem Handle, nicht
+        // bei jedem Schreibvorgang. Damit ist er der genaueste Ausloeser fuer
+        // eine abgeschlossene lokale Aenderung.
         _callbacks[1] = new CF_CALLBACK_REGISTRATION
+        {
+            Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_FILE_CLOSE_COMPLETION,
+            Callback = &OnFileCloseCompletion
+        };
+        _callbacks[2] = new CF_CALLBACK_REGISTRATION
+        {
+            Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_DELETE_COMPLETION,
+            Callback = &OnDeleteCompletion
+        };
+        _callbacks[3] = new CF_CALLBACK_REGISTRATION
+        {
+            Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NOTIFY_RENAME_COMPLETION,
+            Callback = &OnRenameCompletion
+        };
+        _callbacks[4] = new CF_CALLBACK_REGISTRATION
         {
             Type = CF_CALLBACK_TYPE.CF_CALLBACK_TYPE_NONE,
             Callback = null
@@ -168,6 +208,35 @@ public sealed class CloudFilterMount : IDisposable
         }
 
         _log?.Invoke($"{directories.Count - 1} Verzeichnisse, {created} Platzhalter angelegt (0 Bytes belegt).");
+    }
+
+    /// <summary>
+    /// Legt einen einzelnen Platzhalter an. Fehlende Elternordner entstehen
+    /// dabei mit.
+    /// </summary>
+    /// <remarks>
+    /// Fuer Eintraege, die erst nach dem Verbinden dazukommen. Der grosse Lauf
+    /// beim Start gruppiert nach Ordner, weil CfAPI stapelweise arbeitet; fuer
+    /// einen Eintrag lohnt das nicht.
+    /// </remarks>
+    public bool CreatePlaceholder(VirtualEntry entry)
+    {
+        var parent = ParentOf(entry.RelativePath);
+
+        var directory = string.IsNullOrEmpty(parent)
+            ? _rootPath
+            : Path.Combine(_rootPath, parent.Replace('/', Path.DirectorySeparatorChar));
+
+        Directory.CreateDirectory(directory);
+
+        if (entry.IsDirectory)
+        {
+            Directory.CreateDirectory(
+                Path.Combine(_rootPath, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar)));
+            return true;
+        }
+
+        return CreatePlaceholders(parent, [entry]) == 1;
     }
 
     private unsafe int CreatePlaceholders(string directory, List<VirtualEntry> entries)
@@ -477,7 +546,125 @@ public sealed class CloudFilterMount : IDisposable
         return (uint)(offset + sizeof(CF_OPERATION_PARAMETERS._Anonymous_e__Union._TransferData_e__Struct));
     }
 
+    // ------------------------------------------------------------ Meldungen
+
+    // Fuer die drei Melde-Rueckrufe gelten dieselben Regeln wie fuer
+    // OnFetchData: die Zeiger sind nur waehrend des Aufrufs gueltig, es darf
+    // keine Ausnahme herausdringen, und der Rueckruf darf nicht blockieren.
+    // Deshalb werden die Pfade sofort kopiert und die Ereignisse auf einem
+    // anderen Thread ausgeloest.
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    private static unsafe void OnFileCloseCompletion(CF_CALLBACK_INFO* info, CF_CALLBACK_PARAMETERS* parameters)
+    {
+        try
+        {
+            var mount = (CloudFilterMount)GCHandle.FromIntPtr((nint)info->CallbackContext).Target!;
+            var path = mount.ToRelativePath(info->NormalizedPath.Value);
+            if (path.Length == 0) return;
+
+            mount.Raise(() => mount.FileClosed?.Invoke(path), "FileClosed", path);
+        }
+        catch
+        {
+            // Aus einem UnmanagedCallersOnly-Rueckruf darf keine Ausnahme
+            // herausdringen.
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    private static unsafe void OnDeleteCompletion(CF_CALLBACK_INFO* info, CF_CALLBACK_PARAMETERS* parameters)
+    {
+        try
+        {
+            var mount = (CloudFilterMount)GCHandle.FromIntPtr((nint)info->CallbackContext).Target!;
+            var path = mount.ToRelativePath(info->NormalizedPath.Value);
+            if (path.Length == 0) return;
+
+            mount.Raise(() => mount.FileDeleted?.Invoke(path), "FileDeleted", path);
+        }
+        catch
+        {
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    private static unsafe void OnRenameCompletion(CF_CALLBACK_INFO* info, CF_CALLBACK_PARAMETERS* parameters)
+    {
+        try
+        {
+            var mount = (CloudFilterMount)GCHandle.FromIntPtr((nint)info->CallbackContext).Target!;
+
+            // Der alte Pfad steht in den Parametern, der neue in
+            // NormalizedPath. Beide sind volumenrelativ, ohne Laufwerksbuchstabe.
+            var oldPath = mount.ToRelativePath(parameters->Anonymous.RenameCompletion.SourcePath.Value);
+            var newPath = mount.ToRelativePath(info->NormalizedPath.Value);
+            if (oldPath.Length == 0 && newPath.Length == 0) return;
+
+            mount.Raise(() => mount.FileRenamed?.Invoke(oldPath, newPath),
+                        "FileRenamed", $"{oldPath} -> {newPath}");
+        }
+        catch
+        {
+        }
+    }
+
+    /// <summary>
+    /// Loest ein Ereignis ausserhalb des Rueckrufs aus. Windows wartet auf die
+    /// Rueckkehr des Rueckrufs, deshalb darf dort nichts laufen, was Zeit
+    /// braucht.
+    /// </summary>
+    private void Raise(Action raise, string what, string subject)
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                raise();
+            }
+            catch (Exception ex)
+            {
+                _log?.Invoke($"{what} fuer {subject} fehlgeschlagen: {ex.Message}");
+            }
+        });
+    }
+
     // ------------------------------------------------------------ Hilfsmittel
+
+    /// <summary>
+    /// Wandelt einen Pfad der Cloud-Files-Schicht in die Form um, die der Rest
+    /// benutzt: relativ zur Freigabe, mit / als Trenner, ohne fuehrenden
+    /// Trenner.
+    /// </summary>
+    /// <remarks>
+    /// Die Schicht liefert volumenrelative Pfade ohne Laufwerksbuchstabe, also
+    /// etwa <c>\Users\name\Freigabe\Ordner\Datei.txt</c>. Liegt der Pfad
+    /// ausserhalb der Freigabe -- etwa das Ziel einer Verschiebung heraus --,
+    /// kommt eine leere Zeichenkette zurueck.
+    /// </remarks>
+    private unsafe string ToRelativePath(char* path)
+    {
+        if (path is null) return string.Empty;
+
+        var text = Marshal.PtrToStringUni((nint)path);
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+
+        text = StripDriveLetter(text);
+
+        if (!text.StartsWith(_volumeRelativeRoot, StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+
+        var rest = text[_volumeRelativeRoot.Length..];
+
+        // Der Rest muss an einer Trennstelle beginnen, sonst ist es ein
+        // Nachbarordner mit gleichem Anfang.
+        if (rest.Length > 0 && rest[0] is not ('\\' or '/')) return string.Empty;
+
+        return rest.Replace('\\', '/').TrimStart('/');
+    }
+
+    private static string StripDriveLetter(string path)
+        => path.Length >= 2 && path[1] == ':' ? path[2..] : path;
 
     private static string ParentOf(string relativePath)
     {
