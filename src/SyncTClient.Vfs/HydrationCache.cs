@@ -355,7 +355,9 @@ public sealed class HydrationCache
                 return false;
             }
 
-            _log?.Invoke($"  \"{relativePath}\" in einen Platzhalter umgewandelt ({reason}).");
+            // Kein Wort je Datei. Beim Aufraeumen sind es hunderte auf einmal,
+            // und sie verdraengen im Protokollfenster alles, was etwas sagt.
+            // Die Bilanz am Ende nennt Anzahl und Menge.
             return true;
         }
         finally

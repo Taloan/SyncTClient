@@ -459,9 +459,10 @@ public sealed partial class ShareHost
             return;
         }
 
-        // Nur wenn sich etwas bewegt hat. Eine Zeile je Minute, die immer
-        // dasselbe sagt, verdeckt die Zeilen, die etwas sagen.
-        if (offen != Outstanding)
+        // Nur wenn sich etwas bewegt hat -- und einmal am Anfang. Eine Zeile
+        // je Minute, die immer dasselbe sagt, verdeckt die Zeilen, die etwas
+        // sagen; gar keine Zeile laesst offen, ob ueberhaupt gemessen wurde.
+        if (offen != Outstanding || IndexFiles == 0)
             _log($"[{FolderId}] Rueckstand: {offen} von {gesamt} Dateien, " +
                  $"{bytes / (1024.0 * 1024.0):0.0} von {gesamtBytes / (1024.0 * 1024.0):0.0} MB.");
 
