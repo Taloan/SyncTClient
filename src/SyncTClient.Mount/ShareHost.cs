@@ -370,6 +370,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public long LocalBytes { get; private set; }
 
+    /// <summary>
+    /// Wie viele Dateien der Abgleich umfasst und wie viel das zusammen ist.
+    /// </summary>
+    /// <remarks>
+    /// Der Nenner. Gezaehlt beim selben Durchgang wie der Rueckstand, damit
+    /// beide Zahlen vom selben Zeitpunkt stammen -- sonst koennte der Anteil
+    /// aus zwei Messungen entstehen und ueber hundert Prozent hinauslaufen.
+    /// </remarks>
+    public int IndexFiles { get; private set; }
+
+    public long IndexTotalBytes { get; private set; }
+
     /// <summary>Wann zuletzt ueber den Ordner gegangen wurde.</summary>
     public DateTime LastScan { get; private set; }
 
@@ -405,11 +417,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Rueckstand bleibt nur die Frage, ob die Gegenstelle noch redet.
         if (Outstanding == 0 && DateTime.UtcNow - _letzteMeldung >= Ruhe) return;
 
-        // Auch ohne Rueckstand bekommt der Balken seinen Bezug. Steht die
-        // Gegenstelle noch in der Leitung, ist der Abgleich nicht vorbei --
-        // aber wie weit er ist, laesst sich sagen.
-        var gesamt = IndexCount;
-        SetPhase(SyncPhase.Abgleich, Math.Max(0, gesamt - Outstanding), gesamt);
+        // Gezaehlt wird in Bytes und nicht in Dateien. Eine von tausend
+        // Dateien kann die Haelfte des Ordners sein; ein Anteil nach
+        // Stueckzahl stuende dann bei 99,9 Prozent und waere trotzdem eine
+        // halbe Stunde von fertig entfernt.
+        var gesamt = IndexTotalBytes;
+        var offen = Math.Min(OutstandingBytes, gesamt);
+
+        SetPhase(SyncPhase.Abgleich,
+            (int)((gesamt - offen) / 1024), (int)(gesamt / 1024));
     }
 
     /// <summary>

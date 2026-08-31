@@ -1,4 +1,4 @@
-using Google.Protobuf;
+﻿using Google.Protobuf;
 using Microsoft.Data.Sqlite;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 using FileInfoType = SyncTClient.Bep.Proto.FileInfoType;
@@ -69,6 +69,14 @@ public sealed class PersistentFolderIndex : IDisposable
             CREATE INDEX IF NOT EXISTS local_sequence ON local_files(sequence);
             CREATE INDEX IF NOT EXISTS local_state ON local_files(state);
             """);
+
+        // Eine Ankuendigung ohne Bloecke heisst: die Gegenstelle kennt die
+        // Datei, haelt sie aber nicht. Sie ist damit nicht zu beschaffen und
+        // gehoert zum Rueckstand. Aeltere Datenbanken kennen die Spalte
+        // nicht; sie bekommen sie hier, mit 1 als Vorgabe -- so entsteht aus
+        // Unwissen kein erfundener Rueckstand.
+        try { Execute("ALTER TABLE files ADD COLUMN has_blocks INTEGER NOT NULL DEFAULT 1"); }
+        catch (SqliteException) { /* steht schon da */ }
     }
 
     /// <summary>Zahl der empfangenen Index-Nachrichten in dieser Sitzung.</summary>
@@ -167,16 +175,17 @@ public sealed class PersistentFolderIndex : IDisposable
         using var upsert = _db.CreateCommand();
         upsert.Transaction = transaction;
         upsert.CommandText = """
-            INSERT INTO files (name, sequence, size, modified, kind, deleted, version, info)
-            VALUES ($name, $sequence, $size, $modified, $kind, $deleted, $version, $info)
+            INSERT INTO files (name, sequence, size, modified, kind, deleted, version, info, has_blocks)
+            VALUES ($name, $sequence, $size, $modified, $kind, $deleted, $version, $info, $hasBlocks)
             ON CONFLICT(name) DO UPDATE SET
-                sequence = excluded.sequence,
-                size     = excluded.size,
-                modified = excluded.modified,
-                kind     = excluded.kind,
-                deleted  = excluded.deleted,
-                version  = excluded.version,
-                info     = excluded.info
+                sequence   = excluded.sequence,
+                size       = excluded.size,
+                modified   = excluded.modified,
+                kind       = excluded.kind,
+                deleted    = excluded.deleted,
+                version    = excluded.version,
+                info       = excluded.info,
+                has_blocks = excluded.has_blocks
             """;
         var pName = upsert.Parameters.Add("$name", SqliteType.Text);
         var pSequence = upsert.Parameters.Add("$sequence", SqliteType.Integer);
@@ -186,6 +195,7 @@ public sealed class PersistentFolderIndex : IDisposable
         var pDeleted = upsert.Parameters.Add("$deleted", SqliteType.Integer);
         var pVersion = upsert.Parameters.Add("$version", SqliteType.Blob);
         var pInfo = upsert.Parameters.Add("$info", SqliteType.Blob);
+        var pHasBlocks = upsert.Parameters.Add("$hasBlocks", SqliteType.Integer);
 
         foreach (var file in files)
         {
@@ -204,6 +214,13 @@ public sealed class PersistentFolderIndex : IDisposable
             pDeleted.Value = file.Deleted ? 1 : 0;
             pVersion.Value = version;
             pInfo.Value = file.ToByteArray();
+
+            // Ein Verzeichnis und eine leere Datei haben keine Bloecke und
+            // fehlen trotzdem nicht.
+            pHasBlocks.Value =
+                file.Deleted || file.Size == 0 || file.Type != FileInfoType.File || file.Blocks.Count > 0
+                    ? 1 : 0;
+
             upsert.ExecuteNonQuery();
         }
 
@@ -374,11 +391,11 @@ public sealed class PersistentFolderIndex : IDisposable
     /// Blocklisten bleiben aussen vor, sie machen den Grossteil der
     /// Datenmenge aus.
     /// </summary>
-    public IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory)> EnumerateLight()
+    public IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> EnumerateLight()
     {
         using var command = _db.CreateCommand();
         command.CommandText = """
-            SELECT name, size, modified, kind FROM files
+            SELECT name, size, modified, kind, has_blocks FROM files
             WHERE deleted = 0 AND name <> ''
             ORDER BY name
             """;
@@ -390,7 +407,8 @@ public sealed class PersistentFolderIndex : IDisposable
                 reader.GetString(0),
                 reader.GetInt64(1),
                 reader.GetInt64(2),
-                (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory);
+                (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
+                reader.GetInt32(4) != 0);
         }
     }
 
