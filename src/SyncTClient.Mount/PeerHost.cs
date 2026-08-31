@@ -299,8 +299,10 @@ public sealed class PeerHost : IAsyncDisposable
         _log($"[{Display}] verbunden ({ClientVersion})");
 
         connection.ClusterConfigReceived += cc => OnClusterConfig(cc);
-        connection.IndexReceived += m => Route(m.Folder, m.Files);
-        connection.IndexUpdateReceived += m => Route(m.Folder, m.Files);
+        connection.IndexReceived += m => { Melde("Index", m.Folder, m.Files); Route(m.Folder, m.Files); };
+        connection.IndexUpdateReceived += m => { Melde("Index-Aktualisierung", m.Folder, m.Files); Route(m.Folder, m.Files); };
+        connection.MessageReceived += (typ, bytes) => Zaehle(typ, bytes, true);
+        connection.MessageSent += (typ, bytes) => Zaehle(typ, bytes, false);
         connection.Serve = ServeAsync;
 
         _readLoop = connection.RunAsync(token);
@@ -400,6 +402,7 @@ public sealed class PeerHost : IAsyncDisposable
     private void OnClusterConfig(ClusterConfig config)
     {
         _clusterConfig.TrySetResult(config);
+        _log($"[{Display}] Ordnerliste: {config.Folders.Count} Ordner angeboten.");
 
         Offered = config.Folders
             .Select(f => new OfferedFolder(f.Id, f.Label, _shares.ContainsKey(f.Id)))
@@ -408,6 +411,90 @@ public sealed class PeerHost : IAsyncDisposable
 
         OfferedChanged?.Invoke();
     }
+
+    // ------------------------------------------------------------ Protokoll
+
+    private readonly Lock _verkehrSchloss = new();
+    private readonly Dictionary<(MessageType Typ, bool Rein), (int Anzahl, long Bytes)> _verkehr = [];
+    private DateTime _verkehrSeit = DateTime.UtcNow;
+
+    /// <summary>Wie lange Kleinkram gesammelt wird, bevor eine Zeile entsteht.</summary>
+    private static readonly TimeSpan Verkehrsfenster = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// Sagt im Protokoll, was ein Index gebracht hat.
+    /// </summary>
+    /// <remarks>
+    /// Die interessante Zahl ist die hoechste Sequenz. An ihr sieht man, ob
+    /// die Gegenstelle etwas Neues gefunden hat oder nur wiederholt, was
+    /// bereits bekannt war.
+    /// </remarks>
+    private void Melde(string art, string folderId, IEnumerable<Bep.Proto.FileInfo> files)
+    {
+        var bekannt = _shares.ContainsKey(folderId) ? "" : " (nicht uebernommen)";
+        var anzahl = 0;
+        long sequenz = 0;
+
+        foreach (var file in files)
+        {
+            anzahl++;
+            if (file.Sequence > sequenz) sequenz = file.Sequence;
+        }
+
+        _log($"[{Display}] {art} {folderId}{bekannt}: {anzahl} Eintraege, Sequenz bis {sequenz}.");
+    }
+
+    /// <summary>
+    /// Sammelt den Kleinkram und meldet ihn hoechstens einmal je Minute.
+    /// </summary>
+    /// <remarks>
+    /// Ohne diese Zeilen zeigt das Diagramm Verkehr, der Status sagt
+    /// "abgeglichen", und dazwischen steht nichts. Eine Zeile je Nachricht
+    /// waere aber unbrauchbar: waehrend eine Datei geholt wird, sind es
+    /// tausende Bloecke, und die Freigabe meldet den Vorgang ohnehin.
+    ///
+    /// Index, Ordnerliste und Abschied haben eigene Zeilen und werden hier
+    /// nicht noch einmal gezaehlt.
+    /// </remarks>
+    private void Zaehle(MessageType typ, int bytes, bool rein)
+    {
+        if (typ is MessageType.Index or MessageType.IndexUpdate
+                or MessageType.ClusterConfig or MessageType.Close) return;
+
+        string zeile;
+
+        lock (_verkehrSchloss)
+        {
+            var schluessel = (typ, rein);
+            var (anzahl, summe) = _verkehr.GetValueOrDefault(schluessel);
+            _verkehr[schluessel] = (anzahl + 1, summe + bytes);
+
+            if (DateTime.UtcNow - _verkehrSeit < Verkehrsfenster) return;
+
+            zeile = string.Join(", ", _verkehr
+                .OrderByDescending(e => e.Value.Bytes)
+                .Select(e => $"{e.Value.Anzahl}x {Benennung(e.Key.Typ)} " +
+                             $"{(e.Key.Rein ? "empfangen" : "gesendet")} ({Menge(e.Value.Bytes)})"));
+
+            _verkehr.Clear();
+            _verkehrSeit = DateTime.UtcNow;
+        }
+
+        _log($"[{Display}] Leitung: {zeile}.");
+    }
+
+    private static string Benennung(MessageType typ) => typ switch
+    {
+        MessageType.Ping => "Lebenszeichen",
+        MessageType.DownloadProgress => "Fortschrittsmeldung",
+        MessageType.Request => "Blockanfrage",
+        MessageType.Response => "Blockantwort",
+        _ => typ.ToString()
+    };
+
+    private static string Menge(long bytes) => bytes < 1024
+        ? $"{bytes} B"
+        : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.0} KB" : $"{bytes / (1024.0 * 1024.0):0.0} MB";
 
     private void Route(string folderId, IEnumerable<Bep.Proto.FileInfo> files)
     {

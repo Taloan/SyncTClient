@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 
 namespace SyncTClient.ThumbProvider;
@@ -17,7 +17,7 @@ namespace SyncTClient.ThumbProvider;
 /// Damit entfaellt auch NativeAOT: ausserhalb des Explorers darf eine
 /// .NET-Laufzeit vorausgesetzt werden.
 ///
-/// COM startet dieses Programm bei Bedarf selbst. Es meldet seine Fabrik an,
+/// COM startet dieses Programm on-demand selbst. Es meldet seine Fabrik an,
 /// pumpt Nachrichten und beendet sich, wenn eine Zeit lang keine Anfrage mehr
 /// eingetroffen ist.
 /// </remarks>

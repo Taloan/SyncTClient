@@ -60,7 +60,7 @@ public static class SyncRoot
                     Modifier = CF_HYDRATION_POLICY_MODIFIER.CF_HYDRATION_POLICY_MODIFIER_NONE
                 },
                 // FULL: wir legen alle Platzhalter selbst an, Windows muss
-                // Verzeichnisse nicht bei Bedarf nachfragen.
+                // Verzeichnisse nicht on-demand nachfragen.
                 Population = new CF_POPULATION_POLICY
                 {
                     Primary = CF_POPULATION_POLICY_PRIMARY.CF_POPULATION_POLICY_FULL,

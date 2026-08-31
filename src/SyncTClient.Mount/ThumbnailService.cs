@@ -46,7 +46,7 @@ public static class ThumbnailService
             //
             // Im Einzelthread-Apartment reiht COM alle Aufrufe auf einem
             // Thread auf. Solange die Vorschauen fertig auf der Platte lagen,
-            // fiel das nicht auf. Seit der Dateikopf bei Bedarf geholt wird,
+            // fiel das nicht auf. Seit der Dateikopf on-demand geholt wird,
             // wartet jeder Aufruf auf das Netz, und der naechste kommt erst
             // danach an die Reihe: gemessen 69 Bilder in 45 Sekunden. Im MTA
             // stellt COM die Aufrufe nebenlaeufig zu, und die Drossel weiter

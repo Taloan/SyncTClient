@@ -306,6 +306,15 @@
             <TextBlock FontSize="14" Margin="0,0,0,2" ToolTip="{DynamicResource S.Main.SessionTip}"><Run Text="{DynamicResource S.Main.RecvSince}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text="  " /><Run x:Name="TotalDown" Text="0 B" Foreground="{DynamicResource Ein}" /></TextBlock>
             <TextBlock FontSize="14" Margin="0,0,0,2" ToolTip="{DynamicResource S.Main.SessionTip}"><Run Text="{DynamicResource S.Main.SentSince}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text="  " /><Run x:Name="TotalUp" Text="0 B" Foreground="{DynamicResource Aus}" /></TextBlock>
             <TextBlock FontSize="14"><Run Text="{DynamicResource S.Main.Peak}" FontSize="11" Foreground="{DynamicResource Gedaempft}" /><Run Text="  " /><Run x:Name="PeakRate" Text="0 B/s" /></TextBlock>
+
+            <!-- Vorschau und Gesamtbestand stehen hier, weil links jetzt die
+                 Laufwerke Platz brauchen. Es sind ohnehin Zahlen ueber alles
+                 und nicht ueber ein einzelnes Laufwerk. -->
+            <TextBlock Text="{DynamicResource S.Main.Preview}" Style="{StaticResource Kopfzeile}" Margin="0,10,0,4" />
+            <TextBlock x:Name="ThumbText" Text="" Style="{StaticResource Beschriftung}" />
+
+            <TextBlock Text="{DynamicResource S.Main.Overall}" Style="{StaticResource Kopfzeile}" Margin="0,10,0,4" />
+            <TextBlock x:Name="OverallText" Text="—" Style="{StaticResource Beschriftung}" />
           </StackPanel>
 
           <!-- Die Zahlen stehen hier, also gehoert das Aufraeumen auch hierher
@@ -319,18 +328,31 @@
             </StackPanel.ContextMenu>
 
             <TextBlock Text="{DynamicResource S.Main.Cache}" Style="{StaticResource Kopfzeile}" />
+
+            <!-- Eine Zeile je Laufwerk mit Freigabe. Eine Summe ueber alle
+                 waere die falsche Zahl: das Limit gilt je Datentraeger, und
+                 die Summe kann harmlos aussehen, waehrend ein einzelnes
+                 Laufwerk schon verdraengt. -->
+            <ItemsControl x:Name="CacheList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid Margin="0,0,10,4" ToolTip="{Binding Tip}">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto" />
+                      <ColumnDefinition Width="*" MinWidth="40" />
+                      <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding Drive}" Style="{StaticResource Beschriftung}"
+                               VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <ProgressBar Grid.Column="1" Height="8" Minimum="0" Maximum="100"
+                                 Value="{Binding Percent, Mode=OneWay}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Text}" Style="{StaticResource Beschriftung}"
+                               VerticalAlignment="Center" Margin="6,0,0,0" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <TextBlock x:Name="CacheText" Text="—" Style="{StaticResource Beschriftung}" />
-            <ProgressBar x:Name="CacheBar" Height="8" Minimum="0" Maximum="100" Margin="0,3,10,0" />
-            <TextBlock x:Name="FreeText" Text="—" Style="{StaticResource Beschriftung}" Margin="0,3,0,0" />
-
-            <TextBlock Text="{DynamicResource S.Main.Preview}" Style="{StaticResource Kopfzeile}" Margin="0,10,0,4" />
-            <TextBlock x:Name="ThumbText" Text="" Style="{StaticResource Beschriftung}" />
-
-            <!-- Was in allen Freigaben zusammen liegt. Die Spalten der Tabelle
-                 zeigen es je Freigabe; hier steht die Summe, damit man sie
-                 nicht im Kopf bilden muss. -->
-            <TextBlock Text="{DynamicResource S.Main.Overall}" Style="{StaticResource Kopfzeile}" Margin="0,10,0,4" />
-            <TextBlock x:Name="OverallText" Text="—" Style="{StaticResource Beschriftung}" />
           </StackPanel>
 
           <DockPanel Grid.Column="2" Margin="12,0,0,0">

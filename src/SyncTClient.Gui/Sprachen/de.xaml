@@ -52,7 +52,7 @@
   <s:String x:Key="S.Main.RecvSince">Empfangen</s:String>
   <s:String x:Key="S.Main.SentSince">Gesendet</s:String>
   <s:String x:Key="S.Main.Peak">Höchste Rate</s:String>
-  <s:String x:Key="S.Main.Cache">CACHE</s:String>
+  <s:String x:Key="S.Main.Cache">ON-DEMAND CACHE</s:String>
   <s:String x:Key="S.Main.Preview">VORSCHAU</s:String>
   <s:String x:Key="S.Main.Span5">5 Minuten</s:String>
   <s:String x:Key="S.Main.Span30">30 Minuten</s:String>
@@ -90,10 +90,10 @@
   <s:String x:Key="S.Nodes.Node">Knoten</s:String>
   <s:String x:Key="S.Nodes.Open">Offen</s:String>
   <s:String x:Key="S.Share.LocalPath">Lokaler Pfad</s:String>
-  <s:String x:Key="S.Mode.OnDemand">Bei Bedarf herunterladen (Platzhalter)</s:String>
+  <s:String x:Key="S.Mode.OnDemand">on-demand herunterladen (Platzhalter)</s:String>
   <s:String x:Key="S.Mode.Always">Vollständig lokal bereithalten</s:String>
   <s:String x:Key="S.Share.MinCopies">Platzhalter-Schwelle</s:String>
-  <s:String x:Key="S.Share.Thumbs">Vorschaubilder bei Bedarf erzeugen</s:String>
+  <s:String x:Key="S.Share.Thumbs">Vorschaubilder on-demand erzeugen</s:String>
   <s:String x:Key="S.Share.CopiesHint">Wird der Speicherplatz freigegeben, verschwindet der lokale Inhalt und die Datei wird wieder zum Platzhalter. Das geschieht erst, wenn so viele andere Knoten die Datei vollständig führen. Bei einem einzelnen Server ist 1 richtig, bei mehreren Knoten 2. Weniger als 1 ist nicht möglich: dann könnte der letzte Inhalt im Netz verschwinden.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">Was soll angezeigt werden?</s:String>
   <s:String x:Key="S.Share.SaveHint">Änderungen werden wirksam, wenn der Share neu gestartet wird.</s:String>
@@ -237,7 +237,7 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="R.CopiesNone">Kein erreichbarer Knoten führt diesen Share. Platzhalter lassen sich gerade nicht öffnen. Ob Speicherplatz freigegeben werden darf, richtet sich weiterhin nach der zuletzt empfangenen Ankündigung, nicht nach der Erreichbarkeit.</s:String>
   <s:String x:Key="R.CopiesSome">Erreichbare Knoten mit dem Inhalt: {0}. Über nicht verbundene Knoten liegen keine Angaben vor, die Zahl ist daher eine Untergrenze.</s:String>
   <s:String x:Key="R.ModeAlways">vollständig lokal</s:String>
-  <s:String x:Key="R.ModeOnDemand">bei Bedarf</s:String>
+  <s:String x:Key="R.ModeOnDemand">on-demand</s:String>
   <s:String x:Key="I.Connecting">verbindet ...</s:String>
   <s:String x:Key="I.Connected">verbunden</s:String>
   <s:String x:Key="I.Error">Fehler</s:String>
@@ -301,7 +301,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Settings.StorageGroup">SPEICHERMANAGEMENT</s:String>
   <s:String x:Key="S.Settings.Threshold">Platzhalter Schwelle</s:String>
   <s:String x:Key="S.Settings.ThresholdHint">Der Wert bestimmt, bei wie vielen anderen Knoten eine Datei mindestens vollständig vorliegen muss, bevor sie lokal zum Platzhalter werden kann.</s:String>
-  <s:String x:Key="S.Settings.Thumbs">Vorschaubilder bei Bedarf erzeugen</s:String>
+  <s:String x:Key="S.Settings.Thumbs">Vorschaubilder on-demand erzeugen</s:String>
   <s:String x:Key="S.Settings.ThumbsHint">Fragt der Dateimanager nach einer Vorschau, holt der Client den Dateikopf — einen Block von 128 KiB — und gewinnt das eingebettete Bild daraus. Die Datei selbst bleibt ein Platzhalter.</s:String>
   <s:String x:Key="S.Settings.ClearThumbs">Vorschaubildercache jetzt löschen …</s:String>
   <s:String x:Key="G.ThresholdInvalid">Die Platzhalter-Schwelle muss mindestens 1 sein.</s:String>
@@ -315,9 +315,10 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Settings.LimitsLead">Es gilt das Limit, das zuerst erreicht wird.</s:String>
   <s:String x:Key="S.Settings.VolumeGroup">SPEICHERPLATZ JE DATENTRÄGER</s:String>
   <s:String x:Key="S.Settings.UseLimit">Verbrauchs Limit (GB)</s:String>
-  <s:String x:Key="S.Settings.UseLimitNote">(sollen „Bei Bedarf“ Dateien maximal belegen)</s:String>
+  <s:String x:Key="S.Settings.UseLimitNote">(sollen on-demand-Dateien maximal belegen)</s:String>
   <s:String x:Key="S.Settings.KeepLimit">Freihalte Limit (GB)</s:String>
   <s:String x:Key="S.Settings.KeepLimitNote">(Speicherplatz soll auf dem Laufwerk frei bleiben)</s:String>
   <s:String x:Key="S.Settings.VolumeDefaults">Neue Laufwerke erhalten Vorgabewerte (2 GB / 10 % zum Zeitpunkt der ersten Freigabe).</s:String>
   <s:String x:Key="M.VolumeEvictable">{0} Dateien ({1}) erreichen die Platzhalter-Schwelle</s:String>
+  <s:String x:Key="M.CacheNone">Noch keine Freigabe.</s:String>
 </ResourceDictionary>

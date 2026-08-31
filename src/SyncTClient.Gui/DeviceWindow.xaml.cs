@@ -31,12 +31,6 @@ public partial class DeviceWindow : Window
         OwnIdBox.Text = deviceId;
         ConfigPathBox.Text = configPath;
         ShowQrCode(deviceId);
-
-        // Der Autostart kommt aus der Registry: nur dort steht, ob Windows
-        // dieses Programm wirklich startet.
-        AutostartBox.IsChecked = Autostart.Enabled;
-        StartMinimizedBox.IsChecked = config.StartMinimized;
-        CloseToTrayBox.IsChecked = config.CloseToTray;
     }
 
     /// <summary>
@@ -96,10 +90,6 @@ public partial class DeviceWindow : Window
     /// Abbrechen mehr zurueck. Jetzt gilt hier dieselbe Regel wie in den
     /// Freigabe-Einstellungen -- vor "Speichern" aendert sich nichts.
     ///
-    /// Der Autostart ist dabei der Sonderfall: er steht nicht in der
-    /// Konfiguration, sondern in der Registrierung. Er wird deshalb getrennt
-    /// geschrieben und danach zurueckgelesen, denn nur dort steht, ob Windows
-    /// das Programm wirklich startet.
     /// </remarks>
     private void OnSave(object sender, RoutedEventArgs e)
     {
@@ -107,26 +97,7 @@ public partial class DeviceWindow : Window
         if (name.Length == 0) name = Environment.MachineName;
 
         _config.DeviceName = name;
-        _config.StartMinimized = StartMinimizedBox.IsChecked == true;
-        _config.CloseToTray = CloseToTrayBox.IsChecked == true;
         _save();
-
-        var autostart = AutostartBox.IsChecked == true;
-        if (autostart != Autostart.Enabled)
-        {
-            try
-            {
-                Autostart.Set(autostart);
-            }
-            catch (Exception ex)
-            {
-                // Alles andere ist gespeichert. Das Fenster bleibt offen,
-                // damit die Meldung nicht mit ihm verschwindet.
-                Hint.Text = App.S("D.AutostartFailed", ex.Message);
-                AutostartBox.IsChecked = Autostart.Enabled;
-                return;
-            }
-        }
 
         DialogResult = true;
     }
