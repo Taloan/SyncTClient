@@ -277,9 +277,9 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="M.PreviewShort">{0} Bilder, {1}</s:String>
   <s:String x:Key="S.Share.KeepVersions">Ersetzte Fassungen aufheben</s:String>
   <s:String x:Key="S.Share.VersionsHint">Wird eine Datei durch die Fassung der Gegenstelle ersetzt oder auf deren Wunsch gelöscht, wandert die hier liegende Fassung in den Ordner „.stversions“ innerhalb der Freigabe. Dieser Ordner nimmt am Abgleich nicht teil. Platzhalter ohne Inhalt werden nicht aufgehoben — bei ihnen gibt es nichts zu sichern.</s:String>
-  <s:String x:Key="S.Share.VersionDays">Haltedauer in Tagen</s:String>
+  <s:String x:Key="S.Share.VersionDays">Haltedauer für gelöschte Dateien in Tagen (0 = sofort löschen)</s:String>
   <s:String x:Key="S.Share.VersionDaysHint">Nach dieser Zeit wird eine aufgehobene Fassung entfernt. Gezählt wird ab dem Tag, an dem sie abgelegt wurde, nicht ab ihrer Änderungszeit.</s:String>
-  <s:String x:Key="S2.DaysInvalid">Die Haltedauer muss mindestens 1 Tag betragen.</s:String>
+  <s:String x:Key="S2.DaysInvalid">Die Haltedauer muss 0 oder größer sein.</s:String>
   <s:String x:Key="S.Share.LabelHint">Nur die Anzeige. Der Name im Explorer folgt beim nächsten Verbinden.</s:String>
   <s:String x:Key="M.Renamed">„{0}“ heißt jetzt „{1}“. Der Name im Explorer folgt beim nächsten Verbinden.</s:String>
   <s:String x:Key="S.Device.Name">Name dieses Geräts</s:String>
@@ -298,4 +298,25 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Main.SessionTip">Empfangen und gesendet seit dem Programmstart</s:String>
   <s:String x:Key="S.Main.Overall">GESAMT</s:String>
   <s:String x:Key="M.OverallShort">{0} Dateien · {1}</s:String>
+  <s:String x:Key="S.Settings.StorageGroup">SPEICHERMANAGEMENT</s:String>
+  <s:String x:Key="S.Settings.SafetyGroup">SICHERHEITSVORGABE</s:String>
+  <s:String x:Key="S.Settings.Threshold">Platzhalter-Schwelle</s:String>
+  <s:String x:Key="S.Settings.ThresholdHint">Bei wie vielen anderen Knoten eine Datei mindestens vollständig vorliegen muss, bevor sie hier zum Platzhalter werden darf. Mindestens 1: sonst gäbe es keine Zusicherung, dass eine freigegebene Datei überhaupt noch irgendwo liegt.</s:String>
+  <s:String x:Key="S.Settings.Thumbs">Vorschaubilder bei Bedarf erzeugen</s:String>
+  <s:String x:Key="S.Settings.ThumbsHint">Fragt der Dateimanager nach einer Vorschau, holt der Client den Dateikopf — einen Block von 128 KiB — und gewinnt das eingebettete Bild daraus. Die Datei selbst bleibt ein Platzhalter.</s:String>
+  <s:String x:Key="S.Settings.LimitsGroup">SPEICHERPLATZ-LIMITS</s:String>
+  <s:String x:Key="S.Settings.LimitsLead">Es gilt das Limit, das zuerst erreicht wird.</s:String>
+  <s:String x:Key="S.Settings.PerVolume">Limit je Datenträger (GB)</s:String>
+  <s:String x:Key="S.Settings.PerVolumeHint">Wie viel Speicherplatz die „Bei Bedarf“-Dateien aller Freigaben auf dem jeweiligen Datenträger höchstens belegen sollen. Wird das Limit erreicht, werden die am längsten nicht geöffneten Dateien in Platzhalter umgewandelt — sobald sie die Platzhalter-Schwelle erreicht haben.</s:String>
+  <s:String x:Key="S.Settings.KeepFree">Datenträger freier Platz (GB) — 0 = kein Limit</s:String>
+  <s:String x:Key="S.Settings.KeepFreeHint">Wie viel auf jedem Datenträger mindestens frei bleiben soll. Wird das Limit erreicht, werden die am längsten nicht geöffneten „Bei Bedarf“-Dateien dieses Datenträgers in Platzhalter umgewandelt — sobald sie die Platzhalter-Schwelle erreicht haben. Nötig, weil andere Programme die Platte füllen können, während die Freigaben ihr eigenes Limit einhalten.</s:String>
+  <s:String x:Key="S.Settings.NowGroup">SPEICHERPLATZ SOFORT</s:String>
+  <s:String x:Key="S.Settings.NowLead">Belegung von „Bei Bedarf“-Dateien auf den Datenträgern:</s:String>
+  <s:String x:Key="S.Settings.ClearThumbs">Vorschaubilder jetzt löschen …</s:String>
+  <s:String x:Key="G.ThresholdInvalid">Die Platzhalter-Schwelle muss mindestens 1 sein.</s:String>
+  <s:String x:Key="M.VolumeLine">Laufwerk {0} ({1} frei)   {2} in {3} Dateien   |   {4} Dateien ({5}) erreichen die Platzhalter-Schwelle</s:String>
+  <s:String x:Key="M.VolumeRelease">Jetzt {0} Dateien ({1}) in Platzhalter wandeln …</s:String>
+  <s:String x:Key="M.ThumbUsage">Globaler Vorschaubilder-Cache: {0} Dateien ({1})</s:String>
+  <s:String x:Key="M.ReleasedVolume">{0} {1} Dateien freigegeben, {2} zurückgewonnen.</s:String>
+  <s:String x:Key="S.Share.ModeNew">Modus für neue Dateien</s:String>
 </ResourceDictionary>

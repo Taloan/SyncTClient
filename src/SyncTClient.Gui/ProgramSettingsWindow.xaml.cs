@@ -1,3 +1,4 @@
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,7 +20,6 @@ public partial class ProgramSettingsWindow : Window
     private readonly AppConfig _config;
     private readonly string _configDirectory;
     private readonly string _home;
-    private readonly Func<string> _cacheUsage;
     private readonly Func<Task<string>> _clearCache;
 
     /// <summary>Waehrend des Fuellens sollen die Felder nichts ausloesen.</summary>
@@ -28,16 +28,35 @@ public partial class ProgramSettingsWindow : Window
     /// <summary>Das Datenverzeichnis zeigt auf einen anderen Ort. Das gilt erst beim naechsten Start.</summary>
     public bool HomeChanged { get; private set; }
 
+    private readonly Func<IReadOnlyList<VolumeUsage>> _volumes;
+    private readonly Func<string, Task<string>> _release;
+    private readonly Func<(int Files, long Bytes)> _thumbUsage;
+
+    private readonly ObservableCollection<VolumeRow> _rows = [];
+
+    /// <summary>Eine Zeile je Datentraeger, so wie sie im Fenster steht.</summary>
+    private sealed record VolumeRow(string Text, string ButtonText, string Root, bool CanRelease);
+
+    /// <param name="volumes">Was auf welchem Datentraeger liegt.</param>
+    /// <param name="release">Gibt einen Datentraeger frei und meldet das Ergebnis.</param>
+    /// <param name="thumbUsage">Anzahl und Groesse der Vorschaubilder.</param>
     public ProgramSettingsWindow(
         AppConfig config, string configDirectory,
-        Func<string> cacheUsage, Func<Task<string>> clearCache)
+        Func<IReadOnlyList<VolumeUsage>> volumes,
+        Func<string, Task<string>> release,
+        Func<(int Files, long Bytes)> thumbUsage,
+        Func<Task<string>> clearThumbnails)
     {
         InitializeComponent();
 
         _config = config;
         _configDirectory = configDirectory;
-        _cacheUsage = cacheUsage;
-        _clearCache = clearCache;
+        _volumes = volumes;
+        _release = release;
+        _thumbUsage = thumbUsage;
+        _clearCache = clearThumbnails;
+
+        VolumeList.ItemsSource = _rows;
 
         // In der Datei darf der Pfad relativ stehen. Angezeigt wird er
         // ausgeschrieben, sonst bleibt unklar, worauf er sich bezieht.
@@ -46,14 +65,14 @@ public partial class ProgramSettingsWindow : Window
         _loading = true;
 
         HomeBox.Text = _home;
-        SharesRootBox.Text = config.SharesRootOrDefault;
         CacheBudgetBox.Text = Math.Max(1, config.CacheMaxBytes / Gigabyte).ToString();
         MinimumFreeBox.Text = (config.MinimumFreeBytes / Gigabyte).ToString();
         LanguageBox.SelectedIndex = config.Language switch { "de" => 1, "en" => 2, _ => 0 };
         ThemeBox.SelectedIndex = config.Theme switch { "Hell" => 1, "Dunkel" => 2, _ => 0 };
 
-        ShowFreeSpace();
-        UsageText.Text = cacheUsage();
+        ThresholdBox.Text = Math.Max(1, config.MinimumCopies).ToString();
+        ThumbsBox.IsChecked = config.GenerateThumbnails;
+        ShowUsage();
         ParallelismBox.Text = config.Parallelism.ToString();
         ListenBox.IsChecked = config.Listen;
         ListenPortBox.Text = config.ListenPort.ToString();
@@ -70,22 +89,6 @@ public partial class ProgramSettingsWindow : Window
     /// Zeigt, wieviel auf dem Laufwerk des Cache-Verzeichnisses frei ist. Das
     /// ist die Zahl, mit der das Mindestmass verglichen wird.
     /// </summary>
-    private void ShowFreeSpace()
-    {
-        var path = SharesRootBox.Text.Trim();
-        if (path.Length == 0)
-        {
-            FreeSpaceText.Text = "";
-            return;
-        }
-
-        var free = CacheBudget.FreeBytesOn(path);
-        FreeSpaceText.Text = free < 0
-            ? App.S("G.FreeUnknown")
-            : App.S("G.FreeOn", Path.GetPathRoot(Path.GetFullPath(path)), Format.Bytes(free));
-    }
-
-    private void OnSharesRootChanged(object sender, TextChangedEventArgs e) => ShowFreeSpace();
 
     /// <summary>
     /// Sprache und Farbschema wirken sofort. So ist die Auswahl unmittelbar zu
@@ -101,7 +104,6 @@ public partial class ProgramSettingsWindow : Window
 
     private void OnBrowseHome(object sender, RoutedEventArgs e) => Browse(HomeBox);
 
-    private void OnBrowseShares(object sender, RoutedEventArgs e) => Browse(SharesRootBox);
 
     private void Browse(TextBox box)
     {
@@ -118,7 +120,59 @@ public partial class ProgramSettingsWindow : Window
     /// zugleich der Platz der Freigaben. Nur der Inhalt wird wieder zum
     /// Platzhalter.
     /// </summary>
-    private async void OnClearCache(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Fuellt die Zeilen je Datentraeger und die Zeile der Vorschaubilder.
+    /// </summary>
+    /// <remarks>
+    /// Neben dem Belegten steht, wie viel davon sich ueberhaupt freigeben
+    /// laesst. Ohne diese zweite Zahl sieht ein Knopf, der nichts bewirkt,
+    /// wie ein Fehler aus -- dabei liegt es meist daran, dass die
+    /// Platzhalter-Schwelle noch nicht erreicht ist.
+    /// </remarks>
+    private void ShowUsage()
+    {
+        _rows.Clear();
+
+        foreach (var volume in _volumes())
+        {
+            var frei = volume.FreeBytes < 0 ? App.S("G.FreeUnknown") : Format.Bytes(volume.FreeBytes);
+
+            _rows.Add(new VolumeRow(
+                App.S("M.VolumeLine",
+                    volume.Root, frei,
+                    Format.Bytes(volume.UsedBytes), Format.Count(volume.Files),
+                    Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
+                App.S("M.VolumeRelease",
+                    Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
+                volume.Root,
+                volume.EvictableFiles > 0));
+        }
+
+        var (dateien, bytes) = _thumbUsage();
+        ThumbUsageText.Text = App.S("M.ThumbUsage", Format.Count(dateien), Format.Bytes(bytes));
+        ClearButton.IsEnabled = dateien > 0;
+    }
+
+    private async void OnReleaseVolume(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string root }) return;
+
+        Hint.Text = App.S("G.Clearing");
+        try
+        {
+            Hint.Text = await _release(root);
+        }
+        catch (Exception ex)
+        {
+            Hint.Text = App.S("G.ClearFailed", ex.Message);
+        }
+        finally
+        {
+            ShowUsage();
+        }
+    }
+
+    private async void OnClearThumbnails(object sender, RoutedEventArgs e)
     {
         var answer = MessageBox.Show(this,
             App.S("G.ClearBody"), App.S("G.ClearTitle"),
@@ -132,8 +186,6 @@ public partial class ProgramSettingsWindow : Window
         try
         {
             Hint.Text = await _clearCache();
-            UsageText.Text = _cacheUsage();
-            ShowFreeSpace();
         }
         catch (Exception ex)
         {
@@ -141,7 +193,7 @@ public partial class ProgramSettingsWindow : Window
         }
         finally
         {
-            ClearButton.IsEnabled = true;
+            ShowUsage();
         }
     }
 
@@ -152,6 +204,12 @@ public partial class ProgramSettingsWindow : Window
         if (!long.TryParse(CacheBudgetBox.Text.Trim(), out var gigabytes) || gigabytes < 1)
         {
             Hint.Text = App.S("G.BudgetInvalid");
+            return;
+        }
+
+        if (!int.TryParse(ThresholdBox.Text.Trim(), out var schwelle) || schwelle < 1)
+        {
+            Hint.Text = App.S("G.ThresholdInvalid");
             return;
         }
 
@@ -189,14 +247,8 @@ public partial class ProgramSettingsWindow : Window
             HomeChanged = true;
         }
 
-        var root = SharesRootBox.Text.Trim();
-        var standard = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SyncT");
-
-        // Der Normalfall bleibt in der Datei leer. Aendert sich der
-        // Standardpfad spaeter, gilt dann der neue.
-        _config.SharesRoot = root.Length == 0 || PathsEqual(root, standard) ? "" : root;
-
+        _config.MinimumCopies = schwelle;
+        _config.GenerateThumbnails = ThumbsBox.IsChecked == true;
         _config.CacheMaxBytes = gigabytes * Gigabyte;
         _config.MinimumFreeBytes = freeGigabytes * Gigabyte;
         _config.Parallelism = parallelism;

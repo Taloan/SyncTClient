@@ -285,9 +285,9 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="M.PreviewShort">{0} images, {1}</s:String>
   <s:String x:Key="S.Share.KeepVersions">Keep replaced versions</s:String>
   <s:String x:Key="S.Share.VersionsHint">When a file is replaced by the remote version or deleted at its request, the version held here moves to the folder “.stversions” inside the share. That folder takes no part in synchronisation. Placeholders without content are not kept, because there is nothing to save.</s:String>
-  <s:String x:Key="S.Share.VersionDays">Keep for days</s:String>
+  <s:String x:Key="S.Share.VersionDays">Keep deleted files for … days (0 = delete at once)</s:String>
   <s:String x:Key="S.Share.VersionDaysHint">After this time a kept version is removed. Counting starts on the day it was put aside, not from its modification time.</s:String>
-  <s:String x:Key="S2.DaysInvalid">The retention time must be at least 1 day.</s:String>
+  <s:String x:Key="S2.DaysInvalid">The retention time must be 0 or greater.</s:String>
   <s:String x:Key="S.Share.LabelHint">Display only. The name in File Explorer follows at the next connect.</s:String>
   <s:String x:Key="M.Renamed">“{0}” is now “{1}”. The name in File Explorer follows at the next connect.</s:String>
   <s:String x:Key="S.Device.Name">Name of this device</s:String>
@@ -306,4 +306,25 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Main.SessionTip">Received and sent since the program started</s:String>
   <s:String x:Key="S.Main.Overall">TOTAL</s:String>
   <s:String x:Key="M.OverallShort">{0} files · {1}</s:String>
+  <s:String x:Key="S.Settings.StorageGroup">STORAGE MANAGEMENT</s:String>
+  <s:String x:Key="S.Settings.SafetyGroup">SAFETY RULE</s:String>
+  <s:String x:Key="S.Settings.Threshold">Placeholder threshold</s:String>
+  <s:String x:Key="S.Settings.ThresholdHint">How many other nodes must hold a file completely before it may become a placeholder here. At least 1: otherwise nothing guarantees that a released file still exists anywhere.</s:String>
+  <s:String x:Key="S.Settings.Thumbs">Create thumbnails on demand</s:String>
+  <s:String x:Key="S.Settings.ThumbsHint">When the file manager asks for a preview, the client fetches the file head — a single 128 KiB block — and extracts the embedded image. The file itself stays a placeholder.</s:String>
+  <s:String x:Key="S.Settings.LimitsGroup">STORAGE LIMITS</s:String>
+  <s:String x:Key="S.Settings.LimitsLead">Whichever limit is reached first applies.</s:String>
+  <s:String x:Key="S.Settings.PerVolume">Limit per drive (GB)</s:String>
+  <s:String x:Key="S.Settings.PerVolumeHint">How much space the on-demand files of all shares may occupy on each drive. When the limit is reached, the least recently opened files are turned back into placeholders — once they meet the placeholder threshold.</s:String>
+  <s:String x:Key="S.Settings.KeepFree">Keep free on drive (GB) — 0 = no limit</s:String>
+  <s:String x:Key="S.Settings.KeepFreeHint">How much space must stay free on each drive. When the limit is reached, the least recently opened on-demand files on that drive are turned back into placeholders — once they meet the placeholder threshold. Needed because other programs can fill the disk while the shares stay within their own limit.</s:String>
+  <s:String x:Key="S.Settings.NowGroup">STORAGE NOW</s:String>
+  <s:String x:Key="S.Settings.NowLead">Space used by on-demand files, per drive:</s:String>
+  <s:String x:Key="S.Settings.ClearThumbs">Delete thumbnails now …</s:String>
+  <s:String x:Key="G.ThresholdInvalid">The placeholder threshold must be at least 1.</s:String>
+  <s:String x:Key="M.VolumeLine">Drive {0} ({1} free)   {2} in {3} files   |   {4} files ({5}) meet the placeholder threshold</s:String>
+  <s:String x:Key="M.VolumeRelease">Turn {0} files ({1}) into placeholders now …</s:String>
+  <s:String x:Key="M.ThumbUsage">Global thumbnail cache: {0} files ({1})</s:String>
+  <s:String x:Key="M.ReleasedVolume">{0} released {1} files, {2} reclaimed.</s:String>
+  <s:String x:Key="S.Share.ModeNew">Mode for new files</s:String>
 </ResourceDictionary>

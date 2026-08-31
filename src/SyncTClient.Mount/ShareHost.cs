@@ -235,7 +235,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     private bool MayEvict(string relativePath)
     {
-        var wanted = _config.MinimumCopies;
+        var wanted = _app.MinimumCopies;
         return wanted <= 0 || HoldersOf(relativePath) >= wanted;
     }
 
@@ -522,7 +522,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     private void RegisterThumbnailProvider()
     {
-        if (!_config.GenerateThumbnails || _syncRootId is null || _thumbnails is null) return;
+        if (!_app.GenerateThumbnails || _syncRootId is null || _thumbnails is null) return;
 
         try
         {
@@ -642,7 +642,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private bool Produce(string localFilePath)
     {
         if (_thumbnails is null || _index is null || _connection is null) return false;
-        if (!_config.GenerateThumbnails) return false;
+        if (!_app.GenerateThumbnails) return false;
         if (_thumbnails.KnownWithout(localFilePath)) return false;
 
         return Await(FetchThumbnailAsync(RelativeOf(localFilePath), CancellationToken.None));
@@ -759,7 +759,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         // Erst pruefen, ob der Platz ueberhaupt reicht. Wird erst geladen und
         // danach aufgeraeumt, ist die Uebertragung bereits gelaufen.
-        var limit = _cache is null ? CacheBudget.Limit.None : _app.Cache.CanHold(totalLength);
+        var limit = _cache is null ? CacheBudget.Limit.None : _app.Cache.CanHold(totalLength, _config.LocalPath);
         if (limit != CacheBudget.Limit.None)
         {
             var hit = new CacheLimitHit(
