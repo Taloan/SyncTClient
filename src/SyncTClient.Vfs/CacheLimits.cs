@@ -194,7 +194,7 @@ public sealed class CacheLimits
             var limit = LimitFor(volume);
             if (limit == long.MaxValue || volume.UsedBytes <= limit) continue;
 
-            await ShrinkToAsync(volume.Root, limit, "freigegeben").ConfigureAwait(false);
+            await ShrinkToAsync(volume.Root, limit, "Limit erreicht").ConfigureAwait(false);
         }
     }
 
@@ -215,7 +215,7 @@ public sealed class CacheLimits
         {
             if (root is not null && !volume.Root.Equals(root, StringComparison.OrdinalIgnoreCase)) continue;
 
-            var (files, bytes) = await ShrinkToAsync(volume.Root, 0, "freigegeben").ConfigureAwait(false);
+            var (files, bytes) = await ShrinkToAsync(volume.Root, 0, "auf Anforderung").ConfigureAwait(false);
             summe = (summe.Files + files, summe.Bytes + bytes);
         }
 
@@ -266,12 +266,14 @@ public sealed class CacheLimits
             if (anzahl > 0)
             {
                 foreach (var cache in caches) cache.Persist();
-                Log?.Invoke($"{root} {anzahl} Dateien {reason}, {frei / (1024.0 * 1024.0):0.0} MB frei " +
+                Log?.Invoke($"{root} {anzahl} Dateien in Platzhalter umgewandelt ({reason}), " +
+                            $"{frei / (1024.0 * 1024.0):0.0} MB frei " +
                             $"({(belegt - frei) / (1024.0 * 1024.0):0.0} MB belegt).");
             }
             else
             {
-                Log?.Invoke($"{root} nichts {reason} ({belegt / (1024.0 * 1024.0):0.0} MB belegt) -- " +
+                Log?.Invoke($"{root} nichts umgewandelt, {reason} " +
+                            $"({belegt / (1024.0 * 1024.0):0.0} MB belegt) -- " +
                             "angeheftet, in Benutzung, oder die Platzhalter-Schwelle ist nicht erreicht.");
             }
 

@@ -581,6 +581,39 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         State = ShareState.Pausiert;
     }
 
+    /// <summary>
+    /// Nimmt die Leitung weg, ohne den Ordner aufzugeben.
+    /// </summary>
+    /// <remarks>
+    /// Der Unterschied zu <see cref="StopAsync"/>: der Sync-Root bleibt
+    /// eingehaengt, der Cache angemeldet und der Hintergrundlauf am Leben.
+    /// Lokal wird also weiter indexiert -- das kostet nichts auf der Leitung
+    /// und erspart beim Fortsetzen einen vollstaendigen Durchgang.
+    /// </remarks>
+    public void DropConnection() => _connection = null;
+
+    /// <summary>
+    /// Nimmt eine neue Leitung an, ohne den Ordner neu aufzubauen.
+    /// </summary>
+    /// <remarks>
+    /// Nach dem Fortsetzen steht der Ordner noch genauso da wie vorher. Ihn
+    /// erneut anzulegen hiesse, Sync-Root und Platzhalter ein zweites Mal
+    /// aufzubauen, waehrend die ersten noch stehen.
+    ///
+    /// Zurueckgesetzt wird nur, was zur Sitzung gehoert: eine neue Leitung
+    /// beginnt mit einem vollstaendigen Index, und Nachtraege brauchen die
+    /// Nummer ihres Vorgaengers.
+    /// </remarks>
+    public void Rebind(BepConnection connection)
+    {
+        _connection = connection;
+        _indexSent = false;
+        _lastSentSequence = 0;
+
+        if (State == ShareState.Gestoppt) return;
+        if (!IsPaused) State = ShareState.Bereit;
+    }
+
     public void Resume()
     {
         if (State != ShareState.Pausiert) return;

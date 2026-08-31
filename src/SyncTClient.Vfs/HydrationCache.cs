@@ -10,7 +10,7 @@ namespace SyncTClient.Vfs;
 
 /// <summary>
 /// Der selbstverwaltete lokale Cache: hydrierte Dateien bis zu einem Limit.
-/// Wird das Limit ueberschritten, wird verdraengt, worauf am laengsten nicht
+/// Wird das Limit ueberschritten, gibt den Platz ab, worauf am laengsten nicht
 /// zugegriffen wurde.
 /// </summary>
 /// <remarks>
@@ -60,7 +60,7 @@ public sealed class HydrationCache
         limits?.Register(this);
     }
 
-    /// <summary>Null oder kleiner bedeutet: kein Limit, nichts wird verdraengt.</summary>
+    /// <summary>Null oder kleiner bedeutet: kein Limit, nichts gibt Platz ab.</summary>
     public long MaxBytes => _limits?.LimitsFor(RootPath).MaxBytes ?? 0;
 
     /// <summary>
@@ -69,7 +69,7 @@ public sealed class HydrationCache
     public void LeaveLimits() => _limits?.Forget(this);
 
     /// <summary>
-    /// Zusaetzliche Pruefung, bevor eine Datei verdraengt wird.
+    /// Zusaetzliche Pruefung, bevor eine Datei ihren Platz abgibt.
     /// </summary>
     /// <remarks>
     /// Der Cache speichert nur Groesse und Zugriffszeit. Ob eine Datei die
@@ -78,7 +78,7 @@ public sealed class HydrationCache
     /// geloescht. Das ist nur zulaessig, wenn sie sich erneut beschaffen
     /// lassen.
     ///
-    /// Ist kein Rueckruf gesetzt, wird ohne diese Pruefung verdraengt.
+    /// Ist kein Rueckruf gesetzt, wird ohne diese Pruefung freigegeben.
     /// </remarks>
     public Func<string, bool>? MayEvict { get; set; }
 
@@ -156,7 +156,7 @@ public sealed class HydrationCache
     /// </summary>
     public Task EnforceLimitsAsync() => _limits?.EnforceAsync() ?? Task.CompletedTask;
 
-    /// <summary>Die Dateien, die hier verdraengt werden duerfen.</summary>
+    /// <summary>Die Dateien, die hier ihren Platz abgeben duerfen.</summary>
     internal IEnumerable<(string Path, long Bytes, DateTimeOffset LastAccess)> EvictionCandidates()
         => _entries
             .Where(e => !IsPinned(e.Key))
@@ -167,7 +167,11 @@ public sealed class HydrationCache
     internal bool Evict(string relativePath)
     {
         if (!_entries.ContainsKey(relativePath)) return false;
-        if (!Dehydrate(relativePath, "verdraengt")) return false;
+        // "Verdraengt" waere das falsche Wort. Nichts hat diese Datei
+        // fortgedraengt; sie ist an ihrem Platz geblieben und hat nur ihren
+        // Speicherplatz abgegeben, weil das Limit des Datentraegers erreicht
+        // war.
+        if (!Dehydrate(relativePath, "Limit erreicht")) return false;
 
         _entries.TryRemove(relativePath, out _);
         return true;
