@@ -261,18 +261,14 @@
                                 SortMemberPath="Percent" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <!-- Der Text steht neben dem Balken und nicht darauf. Auf dem
-                   Balken wechselt der Untergrund staendig, und eine Schrift,
-                   die mal auf Fuellung und mal auf Rest liegt, ist mal
-                   lesbar und mal nicht. Ohne eigene Farbe erbt sie die der
-                   Zeile und stimmt damit auch bei Auswahl. -->
+              <!-- Der Text liegt auf dem Balken. Damit er auf der Fuellung
+                   wie auf dem Rest lesbar bleibt, steht er weiss mit einem
+                   dunklen Saum: eine feste Schriftfarbe allein waere immer
+                   nur auf einer der beiden Haelften richtig. Dasselbe
+                   Verfahren wie bei Untertiteln in einem Film, aus dem
+                   gleichen Grund. -->
               <Grid VerticalAlignment="Center" Margin="4,0">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="*" />
-                  <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <ProgressBar Grid.Column="0" Height="12" Minimum="0" Maximum="100"
+                <ProgressBar Height="15" Minimum="0" Maximum="100"
                              Value="{Binding Percent, Mode=OneWay}"
                              IsIndeterminate="{Binding Indeterminate, Mode=OneWay}">
                   <ProgressBar.Style>
@@ -286,17 +282,24 @@
                     </Style>
                   </ProgressBar.Style>
                 </ProgressBar>
-                <TextBlock Grid.Column="1" Text="{Binding ProgressText}" FontSize="10"
-                           VerticalAlignment="Center" Margin="6,0,0,0">
+
+                <TextBlock Text="{Binding ProgressText}" FontSize="10"
+                           HorizontalAlignment="Center" VerticalAlignment="Center">
                   <TextBlock.Style>
                     <Style TargetType="TextBlock">
+                      <Setter Property="Foreground" Value="{DynamicResource Sekundaer}" />
                       <Style.Triggers>
-                        <!-- Ohne Balken hat der Text die Zelle fuer sich. -->
-                        <DataTrigger Binding="{Binding Busy}" Value="False">
-                          <Setter Property="Grid.Column" Value="0" />
-                          <Setter Property="Grid.ColumnSpan" Value="2" />
-                          <Setter Property="HorizontalAlignment" Value="Center" />
-                          <Setter Property="Margin" Value="0" />
+                        <!-- Nur wo ein Balken liegt, braucht es den Saum. Ohne
+                             ihn traegt die Zeile die Farbe. -->
+                        <DataTrigger Binding="{Binding Busy}" Value="True">
+                          <Setter Property="Foreground" Value="White" />
+                          <Setter Property="FontWeight" Value="SemiBold" />
+                          <Setter Property="Effect">
+                            <Setter.Value>
+                              <DropShadowEffect Color="Black" ShadowDepth="0"
+                                                BlurRadius="5" Opacity="1" />
+                            </Setter.Value>
+                          </Setter>
                         </DataTrigger>
                       </Style.Triggers>
                     </Style>
