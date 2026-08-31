@@ -103,6 +103,11 @@ public sealed partial class ShareHost
         // waere. Der erste Index geht in den Lauf, der die Platzhalter anlegt.
         if (_mount is null || _incoming.IsEmpty) return;
 
+        // Angehalten heisst: kein fremder Stand ueberschreibt hier etwas. Die
+        // Namen bleiben in der Schlange und werden beim Fortsetzen
+        // abgearbeitet -- verloren geht nichts.
+        if (IsPaused) return;
+
         var bilanz = new Bilanz();
 
         foreach (var name in _incoming.Keys.ToArray())
