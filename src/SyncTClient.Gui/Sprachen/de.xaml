@@ -18,7 +18,7 @@
   <s:String x:Key="S.Col.Status">Status</s:String>
   <s:String x:Key="S.Col.Nodes">Knoten online</s:String>
   <s:String x:Key="S.Col.Progress">Fortschritt</s:String>
-  <s:String x:Key="S.Col.Copies">Vollständige Kopien</s:String>
+  <s:String x:Key="S.Col.Copies">Quellen</s:String>
   <s:String x:Key="S.Col.Received">Empfangen</s:String>
   <s:String x:Key="S.Col.Size">Größe</s:String>
   <s:String x:Key="S.Col.LocalFiles">Lokale Dateien</s:String>
@@ -92,9 +92,9 @@
   <s:String x:Key="S.Share.LocalPath">Lokaler Pfad</s:String>
   <s:String x:Key="S.Mode.OnDemand">Bei Bedarf herunterladen (Platzhalter)</s:String>
   <s:String x:Key="S.Mode.Always">Vollständig lokal bereithalten</s:String>
-  <s:String x:Key="S.Share.MinCopies">Erst verdrängen ab … Kopien</s:String>
+  <s:String x:Key="S.Share.MinCopies">Platzhalter-Schwelle</s:String>
   <s:String x:Key="S.Share.Thumbs">Vorschaubilder bei Bedarf erzeugen</s:String>
-  <s:String x:Key="S.Share.CopiesHint">Beim Verdrängen werden die lokalen Daten gelöscht. Eine Datei wird erst verdrängt, wenn so viele andere Knoten sie vollständig führen. Bei einem einzelnen Server ist 1 sinnvoll, bei mehreren Knoten 2. 0 schaltet die Prüfung ab.</s:String>
+  <s:String x:Key="S.Share.CopiesHint">Wird der Speicherplatz freigegeben, verschwindet der lokale Inhalt und die Datei wird wieder zum Platzhalter. Das geschieht erst, wenn so viele andere Knoten die Datei vollständig führen. Bei einem einzelnen Server ist 1 richtig, bei mehreren Knoten 2. Weniger als 1 ist nicht möglich: dann könnte der letzte Inhalt im Netz verschwinden.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">Was soll angezeigt werden?</s:String>
   <s:String x:Key="S.Share.SaveHint">Änderungen werden wirksam, wenn der Share neu gestartet wird.</s:String>
   <s:String x:Key="S.Accept.Title">Share verbinden</s:String>
@@ -106,10 +106,10 @@
   <s:String x:Key="S.Settings.Title">Einstellungen</s:String>
   <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
   <s:String x:Key="S.Settings.CacheDir">Cache-Verzeichnis</s:String>
-  <s:String x:Key="S.Settings.CacheDirHint">In diesem Verzeichnis liegen die Shares selbst. Windows füllt die Platzhalter an Ort und Stelle; beim Verdrängen werden sie wieder geleert. Nicht alles darin ist Cache: angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalten. Neue Shares werden hier angelegt, bereits übernommene bleiben an ihrem bisherigen Ort (Share-Einstellungen).</s:String>
+  <s:String x:Key="S.Settings.CacheDirHint">In diesem Verzeichnis liegen die Shares selbst. Windows füllt die Platzhalter an Ort und Stelle; wird der Speicherplatz wieder freigegeben, bleibt der Platzhalter zurück. Nicht alles darin ist Cache: angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalten. Neue Shares werden hier angelegt, bereits verbundene bleiben, wo sie sind.</s:String>
   <s:String x:Key="S.Settings.Budget">Cache-Budget (GB)</s:String>
   <s:String x:Key="S.Settings.MinFree">Mindestens frei lassen (GB)</s:String>
-  <s:String x:Key="S.Settings.LimitsHint">Es gelten zwei Grenzen; wirksam wird die, die zuerst erreicht wird. Wird eine Grenze überschritten, wird über alle Shares hinweg verdrängt, was am längsten nicht geöffnet wurde. Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalten. Der Wert 0 beim freien Platz schaltet diese Grenze ab.</s:String>
+  <s:String x:Key="S.Settings.LimitsHint">Es gelten zwei Grenzen; wirksam wird die, die zuerst erreicht wird. Wird eine Grenze überschritten, wird der Speicherplatz der Dateien freigegeben, die am längsten nicht geöffnet wurden — über alle Shares hinweg. Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalten. Beim freien Platz bedeutet 0, dass keine Grenze gilt.</s:String>
   <s:String x:Key="S.Settings.ClearCache">Cache jetzt leeren …</s:String>
   <s:String x:Key="S.Settings.DataGroup">DATEN</s:String>
   <s:String x:Key="S.Settings.DataDir">Datenverzeichnis</s:String>
@@ -149,15 +149,15 @@ Diesen Ordner trotzdem verwenden?</s:String>
   <s:String x:Key="M.FreeUnknown">freier Platz unbekannt</s:String>
   <s:String x:Key="M.FreeShould">{0}
 {1} sollen frei bleiben</s:String>
-  <s:String x:Key="M.Free">{0} frei</s:String>
-  <s:String x:Key="M.CacheOf">{0} von {1}</s:String>
-  <s:String x:Key="M.CacheNoBudget">{0} (kein Budget)</s:String>
+  <s:String x:Key="M.Free">{0} frei auf {1}</s:String>
+  <s:String x:Key="M.CacheOf">{0} von {1} belegt</s:String>
+  <s:String x:Key="M.CacheNoBudget">{0} belegt, kein Budget gesetzt</s:String>
   <s:String x:Key="M.Previews">{0} Vorschaubilder ({1})</s:String>
   <s:String x:Key="M.UsedUnknown">Belegt: unbekannt, da gerade kein Share aktiv ist. Dazu {0}.</s:String>
   <s:String x:Key="M.Used">Belegt: {0} in {1} Dateien, dazu {2}.</s:String>
-  <s:String x:Key="M.NothingLocal">Nichts zu leeren. Es liegen keine verdrängbaren Dateien lokal vor.</s:String>
+  <s:String x:Key="M.NothingLocal">Nichts zu leeren. Es liegt kein freigebbarer Inhalt lokal vor.</s:String>
   <s:String x:Key="M.NothingRunning">Nichts zu leeren. Es ist gerade kein Share aktiv.</s:String>
-  <s:String x:Key="M.Cleared">{0} Dateien verdrängt ({1}), {2} Vorschaubilder verworfen ({3}).</s:String>
+  <s:String x:Key="M.Cleared">Speicherplatz von {0} Dateien freigegeben ({1}), {2} Vorschaubilder verworfen ({3}).</s:String>
   <s:String x:Key="M.WantsToConnect">„{0}“ möchte sich verbinden.</s:String>
   <s:String x:Key="M.WantsToConnectBody">„{0}“ möchte sich verbinden.
 
@@ -219,9 +219,9 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="N.NotConnected">Angeboten, aber nicht verbunden.</s:String>
   <s:String x:Key="N.Running">läuft …</s:String>
   <s:String x:Key="S2.NoIndex">Noch kein Index vorhanden. Starte den Share einmal.</s:String>
-  <s:String x:Key="S2.CacheOnDemand">Das Cache-Budget gilt programmweit und wird unter „Einstellungen …“ festgelegt. Ist es überschritten, wird über alle Shares hinweg verdrängt, was am längsten nicht geöffnet wurde. Angeheftete Dateien bleiben erhalten.</s:String>
+  <s:String x:Key="S2.CacheOnDemand">Das Cache-Budget gilt programmweit und wird unter „Einstellungen …“ festgelegt. Ist es überschritten, wird der Speicherplatz der Dateien freigegeben, die am längsten nicht geöffnet wurden — über alle Shares hinweg. Angeheftete Dateien bleiben erhalten.</s:String>
   <s:String x:Key="S2.CacheAlways">In diesem Modus werden alle Inhalte lokal vorgehalten. Das programmweite Budget gilt für diesen Share nicht.</s:String>
-  <s:String x:Key="S2.CopiesInvalid">Die Anzahl der Kopien muss 0 oder größer sein.</s:String>
+  <s:String x:Key="S2.CopiesInvalid">Die Anzahl der Kopien muss mindestens 1 sein.</s:String>
   <s:String x:Key="S2.Summary">{0} Dateien, {1} insgesamt</s:String>
   <s:String x:Key="R.Ready">bereit</s:String>
   <s:String x:Key="R.Paused">angehalten</s:String>
@@ -234,7 +234,7 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="R.PhaseContent">Inhalte werden geholt</s:String>
   <s:String x:Key="R.PhaseWaiting">wartet</s:String>
   <s:String x:Key="R.NotConnectedHint">Noch nicht verbunden.</s:String>
-  <s:String x:Key="R.CopiesNone">Kein erreichbarer Knoten führt diesen Share. Platzhalter lassen sich gerade nicht öffnen. Ob verdrängt werden darf, richtet sich weiterhin nach der zuletzt empfangenen Ankündigung und nicht nach der Erreichbarkeit.</s:String>
+  <s:String x:Key="R.CopiesNone">Kein erreichbarer Knoten führt diesen Share. Platzhalter lassen sich gerade nicht öffnen. Ob Speicherplatz freigegeben werden darf, richtet sich weiterhin nach der zuletzt empfangenen Ankündigung, nicht nach der Erreichbarkeit.</s:String>
   <s:String x:Key="R.CopiesSome">Erreichbare Knoten mit dem Inhalt: {0}. Über nicht verbundene Knoten liegen keine Angaben vor, die Zahl ist daher eine Untergrenze.</s:String>
   <s:String x:Key="R.ModeAlways">vollständig lokal</s:String>
   <s:String x:Key="R.ModeOnDemand">bei Bedarf</s:String>
@@ -254,7 +254,7 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
 Sie werden neu erzeugt, sobald die Ordner wieder geöffnet werden. Dafür wird jeweils erneut ein Block übertragen.
 
 Trotzdem verwerfen?</s:String>
-  <s:String x:Key="M.ClearedCache">{0} Dateien verdrängt ({1}).</s:String>
+  <s:String x:Key="M.ClearedCache">Speicherplatz von {0} Dateien freigegeben ({1}).</s:String>
   <s:String x:Key="M.ClearedThumbs">{0} Vorschaubilder verworfen ({1}).</s:String>
   <s:String x:Key="M.NothingThumbs">Es lagen keine Vorschaubilder vor.</s:String>
 
@@ -266,4 +266,18 @@ Erhöhe das Budget in den Einstellungen oder stelle den Share auf „vollständi
 
 Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:String>
 
+  <s:String x:Key="S.Share.Conflict">Bei Konflikten</s:String>
+  <s:String x:Key="S.Conflict.KeepBoth">Beide behalten, unterlegene umbenennen</s:String>
+  <s:String x:Key="S.Conflict.Newer">Neuere Datei gewinnt</s:String>
+  <s:String x:Key="S.Conflict.Older">Ältere Datei gewinnt</s:String>
+  <s:String x:Key="S.Conflict.Local">Lokale Datei gewinnt</s:String>
+  <s:String x:Key="S.Conflict.Remote">Datei der Gegenstelle gewinnt</s:String>
+  <s:String x:Key="S.Share.ConflictHint">Ein Konflikt entsteht, wenn beide Seiten dieselbe Datei geändert haben. Beim Umbenennen bleiben beide Fassungen erhalten; die unterlegene heißt dann name.sync-conflict-20260302-193044-YWS4CCA.jpg, wie bei Syncthing. Bei allen anderen Einstellungen wird die unterlegene Fassung gelöscht.</s:String>
+
+  <s:String x:Key="M.PreviewShort">{0} Bilder, {1}</s:String>
+  <s:String x:Key="S.Share.KeepVersions">Ersetzte Fassungen aufheben</s:String>
+  <s:String x:Key="S.Share.VersionsHint">Wird eine Datei durch die Fassung der Gegenstelle ersetzt oder auf deren Wunsch gelöscht, wandert die hier liegende Fassung in den Ordner „.stversions“ innerhalb der Freigabe. Dieser Ordner nimmt am Abgleich nicht teil. Platzhalter ohne Inhalt werden nicht aufgehoben — bei ihnen gibt es nichts zu sichern.</s:String>
+  <s:String x:Key="S.Share.VersionDays">Haltedauer in Tagen</s:String>
+  <s:String x:Key="S.Share.VersionDaysHint">Nach dieser Zeit wird eine aufgehobene Fassung entfernt. Gezählt wird ab dem Tag, an dem sie abgelegt wurde, nicht ab ihrer Änderungszeit.</s:String>
+  <s:String x:Key="S2.DaysInvalid">Die Haltedauer muss mindestens 1 Tag betragen.</s:String>
 </ResourceDictionary>

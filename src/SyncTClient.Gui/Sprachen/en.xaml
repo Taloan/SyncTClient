@@ -19,7 +19,7 @@
   <s:String x:Key="S.Col.Status">Status</s:String>
   <s:String x:Key="S.Col.Nodes">Nodes online</s:String>
   <s:String x:Key="S.Col.Progress">Progress</s:String>
-  <s:String x:Key="S.Col.Copies">Complete copies</s:String>
+  <s:String x:Key="S.Col.Copies">Sources</s:String>
   <s:String x:Key="S.Col.Received">Received</s:String>
   <s:String x:Key="S.Col.Size">Size</s:String>
   <s:String x:Key="S.Col.LocalFiles">Local files</s:String>
@@ -98,9 +98,9 @@
   <s:String x:Key="S.Share.LocalPath">Local path</s:String>
   <s:String x:Key="S.Mode.OnDemand">Download on demand (placeholders)</s:String>
   <s:String x:Key="S.Mode.Always">Keep fully local</s:String>
-  <s:String x:Key="S.Share.MinCopies">Evict only at … copies</s:String>
+  <s:String x:Key="S.Share.MinCopies">Placeholder threshold</s:String>
   <s:String x:Key="S.Share.Thumbs">Create thumbnails on demand</s:String>
-  <s:String x:Key="S.Share.CopiesHint">Evicting deletes the local data. A file is evicted only once this many other nodes carry it completely. With a single server, 1 is appropriate; with several nodes, use 2. 0 turns the check off.</s:String>
+  <s:String x:Key="S.Share.CopiesHint">When the space is freed, the local content is gone and the file becomes a placeholder again. This happens only once this many other nodes carry the file completely. With a single server, 1 is right, with several nodes 2. Less than 1 is not allowed, because the last content in the network could then disappear.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">What should be shown?</s:String>
   <s:String x:Key="S.Share.SaveHint">Changes take effect when the share is restarted.</s:String>
 
@@ -114,10 +114,10 @@
   <s:String x:Key="S.Settings.Title">Settings</s:String>
   <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
   <s:String x:Key="S.Settings.CacheDir">Cache directory</s:String>
-  <s:String x:Key="S.Settings.CacheDirHint">This directory holds the shares themselves. Windows fills the placeholders in place, and evicting empties them again. Not everything in here is cache: pinned files and shares in “keep fully local” mode are kept. New shares are created here; shares that are already connected stay where they are (share settings).</s:String>
+  <s:String x:Key="S.Settings.CacheDirHint">This directory holds the shares themselves. Windows fills the placeholders in place; when the space is freed again, the placeholder remains. Not everything in here is cache: pinned files and shares in “keep fully local” mode are kept. New shares are created here, ones already connected stay where they are.</s:String>
   <s:String x:Key="S.Settings.Budget">Cache budget (GB)</s:String>
   <s:String x:Key="S.Settings.MinFree">Minimum free space (GB)</s:String>
-  <s:String x:Key="S.Settings.LimitsHint">Two limits apply; whichever is reached first takes effect. When a limit is exceeded, whatever has gone unopened longest is evicted, across all shares. Pinned files and shares in “keep fully local” mode are kept. For free space, 0 turns that limit off.</s:String>
+  <s:String x:Key="S.Settings.LimitsHint">Two limits apply; whichever is reached first takes effect. When a limit is exceeded, the space of the files that went unopened longest is freed — across all shares. Pinned files and shares in “keep fully local” mode are kept. For free space, 0 means no limit.</s:String>
   <s:String x:Key="S.Settings.ClearCache">Clear cache now …</s:String>
   <s:String x:Key="S.Settings.DataGroup">DATA</s:String>
   <s:String x:Key="S.Settings.DataDir">Data directory</s:String>
@@ -157,15 +157,15 @@ Use this folder anyway?</s:String>
   <s:String x:Key="M.FreeUnknown">free space unknown</s:String>
   <s:String x:Key="M.FreeShould">{0}
 {1} should stay free</s:String>
-  <s:String x:Key="M.Free">{0} free</s:String>
-  <s:String x:Key="M.CacheOf">{0} of {1}</s:String>
-  <s:String x:Key="M.CacheNoBudget">{0} (no budget)</s:String>
+  <s:String x:Key="M.Free">{0} free on {1}</s:String>
+  <s:String x:Key="M.CacheOf">{0} of {1} used</s:String>
+  <s:String x:Key="M.CacheNoBudget">{0} used, no budget set</s:String>
   <s:String x:Key="M.Previews">{0} thumbnails ({1})</s:String>
   <s:String x:Key="M.UsedUnknown">In use: unknown, because no share is active. Plus {0}.</s:String>
   <s:String x:Key="M.Used">In use: {0} in {1} files, plus {2}.</s:String>
-  <s:String x:Key="M.NothingLocal">Nothing to clear. No evictable files are held locally.</s:String>
+  <s:String x:Key="M.NothingLocal">Nothing to clear. No releasable content is held locally.</s:String>
   <s:String x:Key="M.NothingRunning">Nothing to clear. No share is active.</s:String>
-  <s:String x:Key="M.Cleared">{0} files evicted ({1}), {2} thumbnails discarded ({3}).</s:String>
+  <s:String x:Key="M.Cleared">Freed the space of {0} files ({1}), discarded {2} thumbnails ({3}).</s:String>
   <s:String x:Key="M.WantsToConnect">“{0}” wants to connect.</s:String>
   <s:String x:Key="M.WantsToConnectBody">“{0}” wants to connect.
 
@@ -227,9 +227,9 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="N.NotConnected">Offered, but not connected.</s:String>
   <s:String x:Key="N.Running">running …</s:String>
   <s:String x:Key="S2.NoIndex">No index yet. Start the share once.</s:String>
-  <s:String x:Key="S2.CacheOnDemand">The cache budget is program-wide and is set under “Settings …”. When it is exceeded, whatever has gone unopened longest is evicted, across all shares. Pinned files are kept.</s:String>
+  <s:String x:Key="S2.CacheOnDemand">The cache budget is program-wide and set under “Settings …”. When it is exceeded, the space of the files that went unopened longest is freed — across all shares. Pinned files are kept.</s:String>
   <s:String x:Key="S2.CacheAlways">In this mode all contents are kept locally. The program-wide budget does not apply to this share.</s:String>
-  <s:String x:Key="S2.CopiesInvalid">The number of copies must be 0 or more.</s:String>
+  <s:String x:Key="S2.CopiesInvalid">The number of copies must be at least 1.</s:String>
   <s:String x:Key="S2.Summary">{0} files, {1} in total</s:String>
   <s:String x:Key="R.Ready">ready</s:String>
   <s:String x:Key="R.Paused">paused</s:String>
@@ -242,7 +242,7 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="R.PhaseContent">fetching contents</s:String>
   <s:String x:Key="R.PhaseWaiting">waiting</s:String>
   <s:String x:Key="R.NotConnectedHint">Not connected yet.</s:String>
-  <s:String x:Key="R.CopiesNone">No reachable node carries this share. Placeholders cannot be opened right now. Whether eviction is allowed still follows the last announcement received, not reachability.</s:String>
+  <s:String x:Key="R.CopiesNone">No reachable node carries this share. Placeholders cannot be opened right now. Whether space may be freed still follows the last announcement received, not reachability.</s:String>
   <s:String x:Key="R.CopiesSome">Reachable nodes carrying the content: {0}. No information is available about nodes that are not connected, so this number is a lower bound.</s:String>
   <s:String x:Key="R.ModeAlways">fully local</s:String>
   <s:String x:Key="R.ModeOnDemand">on demand</s:String>
@@ -262,7 +262,7 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
 They are created again as soon as the folders are opened. Each one requires transferring a block again.
 
 Discard anyway?</s:String>
-  <s:String x:Key="M.ClearedCache">{0} files evicted ({1}).</s:String>
+  <s:String x:Key="M.ClearedCache">Freed the space of {0} files ({1}).</s:String>
   <s:String x:Key="M.ClearedThumbs">{0} thumbnails discarded ({1}).</s:String>
   <s:String x:Key="M.NothingThumbs">There were no thumbnails.</s:String>
 
@@ -274,4 +274,18 @@ Raise the budget in the settings, or set the share to “keep fully local”. Th
 
 Lower the limit in the settings, or make room on the drive.</s:String>
 
+  <s:String x:Key="S.Share.Conflict">On conflicts</s:String>
+  <s:String x:Key="S.Conflict.KeepBoth">Keep both, rename the losing one</s:String>
+  <s:String x:Key="S.Conflict.Newer">Newer file wins</s:String>
+  <s:String x:Key="S.Conflict.Older">Older file wins</s:String>
+  <s:String x:Key="S.Conflict.Local">Local file wins</s:String>
+  <s:String x:Key="S.Conflict.Remote">Remote file wins</s:String>
+  <s:String x:Key="S.Share.ConflictHint">A conflict arises when both sides have changed the same file. With renaming, both versions are kept; the losing one is named name.sync-conflict-20260302-193044-YWS4CCA.jpg, as in Syncthing. With every other setting the losing version is deleted.</s:String>
+
+  <s:String x:Key="M.PreviewShort">{0} images, {1}</s:String>
+  <s:String x:Key="S.Share.KeepVersions">Keep replaced versions</s:String>
+  <s:String x:Key="S.Share.VersionsHint">When a file is replaced by the remote version or deleted at its request, the version held here moves to the folder “.stversions” inside the share. That folder takes no part in synchronisation. Placeholders without content are not kept, because there is nothing to save.</s:String>
+  <s:String x:Key="S.Share.VersionDays">Keep for days</s:String>
+  <s:String x:Key="S.Share.VersionDaysHint">After this time a kept version is removed. Counting starts on the day it was put aside, not from its modification time.</s:String>
+  <s:String x:Key="S2.DaysInvalid">The retention time must be at least 1 day.</s:String>
 </ResourceDictionary>

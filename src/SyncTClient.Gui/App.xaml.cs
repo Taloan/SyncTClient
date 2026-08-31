@@ -85,7 +85,36 @@ public partial class App : Application
             (Control.PaddingProperty, new Thickness(0, 4, 0, 2)),
             (Control.FontWeightProperty, FontWeights.SemiBold));
 
+        DeriveTree();
         DeriveSelection();
+    }
+
+    /// <summary>
+    /// Schrift- und Grundfarbe im Auswahlbaum.
+    /// </summary>
+    /// <remarks>
+    /// Fluent faerbt den Baum nicht mit dem uebrigen Fenster. Die Eintraege
+    /// blieben dunkel, und im dunklen Schema stand damit schwarze Schrift auf
+    /// dunklem Grund. Beide Farben kommen aus demselben Woerterbuch wie alles
+    /// andere und wechseln mit dem Schema.
+    /// </remarks>
+    private static void DeriveTree()
+    {
+        if (Current.TryFindResource("Text") is not Brush schrift) return;
+
+        // Die Schrift der Eintraege erben die TextBlocks darin.
+        Derive(typeof(TreeViewItem), (Control.ForegroundProperty, schrift));
+
+        if (Current.TryFindResource("Feld") is Brush grund)
+        {
+            Derive(typeof(TreeView),
+                (Control.ForegroundProperty, schrift),
+                (Control.BackgroundProperty, grund));
+        }
+        else
+        {
+            Derive(typeof(TreeView), (Control.ForegroundProperty, schrift));
+        }
     }
 
     /// <summary>
