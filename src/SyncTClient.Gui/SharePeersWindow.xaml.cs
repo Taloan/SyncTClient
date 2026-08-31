@@ -8,15 +8,35 @@ public partial class SharePeersWindow : Window
 {
     private sealed record Zeile(string Activity, string Name, string Address, string Outstanding);
 
+    private readonly ShareRow _row;
+
+    /// <summary>
+    /// Zieht die Zeile nach, solange das Fenster offen ist.
+    /// </summary>
+    /// <remarks>
+    /// Der Rueckstand aendert sich waehrend des Abgleichs. Eine Momentaufnahme
+    /// waere nach wenigen Sekunden falsch, und man saehe ihr das nicht an.
+    /// </remarks>
+    private readonly System.Windows.Threading.DispatcherTimer _takt =
+        new() { Interval = TimeSpan.FromSeconds(1) };
+
     public SharePeersWindow(ShareRow row)
     {
         InitializeComponent();
 
+        _row = row;
+
         TitleText.Text = $"Knoten – {row.Name}";
         SubtitleText.Text = row.Accepted ? row.PathText : App.S("N.NotConnected");
 
-        Grid.ItemsSource = new[] { Beschreibe(row) };
+        Zeigen();
+
+        _takt.Tick += (_, _) => Zeigen();
+        _takt.Start();
+        Closed += (_, _) => _takt.Stop();
     }
+
+    private void Zeigen() => Grid.ItemsSource = new[] { Beschreibe(_row) };
 
     private static Zeile Beschreibe(ShareRow row)
     {
@@ -40,25 +60,27 @@ public partial class SharePeersWindow : Window
     /// Was gegenüber dieser Gegenstelle noch aussteht.
     /// </summary>
     /// <remarks>
-    /// Bei „on-demand“ steht nichts aus: die Platzhalter sind vollständig,
-    /// die Inhalte werden absichtlich erst beim Zugriff geholt. Nur bei
-    /// „vollständig lokal“ gibt es einen Rückstand. Er ist die Differenz
-    /// zwischen Index und dem, was lokal liegt.
+    /// Dieselbe Zahl, die auch der Balken in der Übersicht zeigt: die
+    /// Differenz zwischen beiden Ständen, in beide Richtungen gerechnet. Sie
+    /// steht in Bytes, denn 443 Dateien können vier Minuten sein oder vier
+    /// Stunden.
+    ///
+    /// Ein Platzhalter zählt nicht als Rückstand. Er ist bei „on-demand“ der
+    /// erwünschte Zustand, und sein Inhalt gehört absichtlich nicht hierher.
     /// </remarks>
     private static string Offen(ShareRow row)
     {
         var share = row.Share;
         if (share is null) return "—";
 
-        if (share.Phase is not (SyncPhase.Fertig or SyncPhase.Ruht))
-            return share.PhaseTotal > 0
-                ? $"{share.PhaseDone:N0} von {share.PhaseTotal:N0}"
+        if (share.Outstanding <= 0)
+            return share.Phase is SyncPhase.Fertig or SyncPhase.Ruht
+                ? App.S("N.Nothing")
                 : App.S("N.Running");
 
-        if (share.Config.Mode != ShareMode.AlwaysLocal)
-            return "nichts – Inhalte kommen on-demand";
-
-        var fehlend = share.IndexCount - share.CacheFileCount;
-        return fehlend <= 0 ? "nichts" : $"{fehlend:N0} Dateien";
+        return App.S("N.Outstanding",
+            Format.Bytes(share.OutstandingBytes),
+            Format.Bytes(share.SyncTotalBytes),
+            Format.Count(share.Outstanding));
     }
 }
