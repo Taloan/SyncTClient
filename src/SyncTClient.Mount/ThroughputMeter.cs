@@ -1,4 +1,4 @@
-namespace SyncTClient.Mount;
+﻿namespace SyncTClient.Mount;
 
 /// <summary>Ein Messpunkt: gelesene und gesendete Bytes je Sekunde.</summary>
 public readonly record struct ThroughputPoint(double Read, double Written);
@@ -82,27 +82,37 @@ public sealed class ThroughputMeter : IDisposable
     /// </summary>
     public ThroughputPoint[] Series(TimeSpan window, int buckets)
     {
-        var wanted = Math.Clamp((int)window.TotalSeconds, buckets, Capacity);
         var result = new ThroughputPoint[buckets];
+        var jeKorb = Math.Max(1, (int)Math.Round(window.TotalSeconds / buckets));
 
         lock (_gate)
         {
-            var perBucket = (double)wanted / buckets;
+            // An absoluten Sekunden ausgerichtet, nicht an "jetzt".
+            //
+            // Vorher wurden die Koerbe rueckwaerts von der aktuellen Sekunde
+            // aus abgeteilt. Bei jedem Takt verschob sich damit jede
+            // Korbgrenze um eine Sekunde, und dieselben Messwerte fielen in
+            // andere Koerbe -- das Bild sah jede Sekunde anders aus, obwohl
+            // sich an den Daten kaum etwas geaendert hatte.
+            //
+            // Mit fester Ausrichtung bleibt der Inhalt eines Korbes stehen.
+            // Das Diagramm rueckt nur dann um eine Saeule weiter, wenn eine
+            // Korbgrenze ueberschritten wird.
+            var letzterKorb = _seconds / jeKorb;
 
             for (var b = 0; b < buckets; b++)
             {
-                // Gerechnet wird rueckwaerts von jetzt. Korb 0 liegt am
-                // weitesten zurueck.
-                var fromEnd = (int)Math.Round((buckets - b) * perBucket);
-                var toEnd = (int)Math.Round((buckets - b - 1) * perBucket);
+                var korb = letzterKorb - (buckets - 1 - b);
+                if (korb < 0) continue;
 
                 double read = 0, written = 0;
                 var n = 0;
 
-                for (var offset = fromEnd; offset > toEnd; offset--)
+                for (var k = 0; k < jeKorb; k++)
                 {
-                    var index = _seconds - offset;
-                    if (index < 0 || _seconds - index > Capacity) continue;
+                    var index = korb * jeKorb + k;
+                    if (index < 0 || index >= _seconds) continue;
+                    if (_seconds - index > Capacity) continue;
 
                     var slot = (int)(index % Capacity);
                     read += _read[slot];
@@ -110,9 +120,7 @@ public sealed class ThroughputMeter : IDisposable
                     n++;
                 }
 
-                result[b] = n == 0
-                    ? new ThroughputPoint(0, 0)
-                    : new ThroughputPoint(read / n, written / n);
+                if (n > 0) result[b] = new ThroughputPoint(read / n, written / n);
             }
         }
 
