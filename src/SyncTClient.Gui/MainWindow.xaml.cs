@@ -379,6 +379,34 @@ public partial class MainWindow : Window
     {
         RefreshRows();
         UpdateThroughput();
+        _tray?.Show(Zustand());
+    }
+
+    /// <summary>
+    /// Was das Zeichen im Infobereich melden soll.
+    /// </summary>
+    /// <remarks>
+    /// Die Reihenfolge ist die Rangfolge. Ein Fehler ueberdeckt alles andere,
+    /// denn er verlangt eine Entscheidung. Eine fehlende Verbindung kommt als
+    /// naechstes: ohne sie sagt jeder weitere Zustand nichts aus.
+    ///
+    /// "Angehalten" gilt nur, wenn wirklich alles angehaelt. Laeuft daneben
+    /// noch eine Freigabe, ist deren Fortschritt die nuetzlichere Auskunft.
+    /// </remarks>
+    private TrayStatus Zustand()
+    {
+        var uebernommen = _rows.Where(r => r.Share is not null).ToList();
+
+        if (uebernommen.Any(r => r.Share!.State == ShareState.Fehler)) return TrayStatus.Fehler;
+        if (!_peers.Any(p => p.Host.State == PeerState.Verbunden)) return TrayStatus.Getrennt;
+
+        if (uebernommen.Count > 0 && uebernommen.All(r => r.Share!.State == ShareState.Pausiert))
+            return TrayStatus.Pausiert;
+
+        if (uebernommen.Any(r => r.Busy) || _transfers.Any(t => t.State == TransferState.Laeuft))
+            return TrayStatus.Synchronisiert;
+
+        return TrayStatus.Erledigt;
     }
 
     private (long Read, long Written) CollectWire()

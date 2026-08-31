@@ -292,4 +292,9 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="M.Renamed">“{0}” is now “{1}”. The name in File Explorer follows at the next connect.</s:String>
   <s:String x:Key="S.Device.Name">Name of this device</s:String>
   <s:String x:Key="S.Device.NameHint">How this device appears to its peers. It is sent when connecting; an existing connection picks it up next time.</s:String>
+  <s:String x:Key="S.Tray.Syncing">SyncTClient – syncing</s:String>
+  <s:String x:Key="S.Tray.Done">SyncTClient – up to date</s:String>
+  <s:String x:Key="S.Tray.Paused">SyncTClient – paused</s:String>
+  <s:String x:Key="S.Tray.Failed">SyncTClient – error</s:String>
+  <s:String x:Key="S.Tray.Offline">SyncTClient – not connected</s:String>
 </ResourceDictionary>

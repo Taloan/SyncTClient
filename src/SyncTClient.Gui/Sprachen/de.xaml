@@ -284,4 +284,9 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="M.Renamed">„{0}“ heißt jetzt „{1}“. Der Name im Explorer folgt beim nächsten Verbinden.</s:String>
   <s:String x:Key="S.Device.Name">Name dieses Geräts</s:String>
   <s:String x:Key="S.Device.NameHint">So erscheint dieses Gerät bei den Gegenstellen. Er wird beim Verbinden mitgeteilt; eine bestehende Verbindung übernimmt ihn beim nächsten Mal.</s:String>
+  <s:String x:Key="S.Tray.Syncing">SyncTClient – gleicht ab</s:String>
+  <s:String x:Key="S.Tray.Done">SyncTClient – alles abgeglichen</s:String>
+  <s:String x:Key="S.Tray.Paused">SyncTClient – angehalten</s:String>
+  <s:String x:Key="S.Tray.Failed">SyncTClient – Fehler</s:String>
+  <s:String x:Key="S.Tray.Offline">SyncTClient – keine Verbindung</s:String>
 </ResourceDictionary>
