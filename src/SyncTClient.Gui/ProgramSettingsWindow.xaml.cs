@@ -43,6 +43,7 @@ public partial class ProgramSettingsWindow : Window
     private sealed class VolumeRow
     {
         public string Text { get; init; } = "";
+        public string EvictText { get; init; } = "";
         public string ButtonText { get; init; } = "";
         public string Root { get; init; } = "";
         public bool CanRelease { get; init; }
@@ -78,8 +79,6 @@ public partial class ProgramSettingsWindow : Window
         _loading = true;
 
         HomeBox.Text = _home;
-        CacheBudgetBox.Text = Math.Max(1, config.CacheMaxBytes / Gigabyte).ToString();
-        MinimumFreeBox.Text = (config.MinimumFreeBytes / Gigabyte).ToString();
         LanguageBox.SelectedIndex = config.Language switch { "de" => 1, "en" => 2, _ => 0 };
         ThemeBox.SelectedIndex = config.Theme switch { "Hell" => 1, "Dunkel" => 2, _ => 0 };
 
@@ -153,8 +152,9 @@ public partial class ProgramSettingsWindow : Window
             _rows.Add(new VolumeRow
             {
                 Text = App.S("M.VolumeLine",
-                    volume.Root, frei,
-                    Format.Bytes(volume.UsedBytes), Format.Count(volume.Files),
+                    volume.Root, Format.Bytes(volume.UsedBytes),
+                    Format.Count(volume.Files), frei),
+                EvictText = App.S("M.VolumeEvictable",
                     Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
                 ButtonText = App.S("M.VolumeRelease",
                     Format.Count(volume.EvictableFiles), Format.Bytes(volume.EvictableBytes)),
@@ -219,11 +219,6 @@ public partial class ProgramSettingsWindow : Window
     {
         // Keine 0: unbegrenzt bedeutet, dass nie etwas verdraengt wird. Aus
         // "bei Bedarf" wuerde nach ein paar Monaten eine Vollkopie.
-        if (!long.TryParse(CacheBudgetBox.Text.Trim(), out var gigabytes) || gigabytes < 1)
-        {
-            Hint.Text = App.S("G.BudgetInvalid");
-            return;
-        }
 
         if (!int.TryParse(ThresholdBox.Text.Trim(), out var schwelle) || schwelle < 1)
         {
@@ -231,11 +226,6 @@ public partial class ProgramSettingsWindow : Window
             return;
         }
 
-        if (!long.TryParse(MinimumFreeBox.Text.Trim(), out var freeGigabytes) || freeGigabytes < 0)
-        {
-            Hint.Text = App.S("G.FreeInvalid");
-            return;
-        }
 
         // Erst pruefen, dann setzen: eine halb uebernommene Liste waere
         // schlimmer als eine abgelehnte.
@@ -283,18 +273,8 @@ public partial class ProgramSettingsWindow : Window
 
         _config.MinimumCopies = schwelle;
         _config.GenerateThumbnails = ThumbsBox.IsChecked == true;
-        _config.CacheMaxBytes = gigabytes * Gigabyte;
-        _config.MinimumFreeBytes = freeGigabytes * Gigabyte;
-
-        // Nur was von der Vorgabe abweicht, kommt in die Datei. Sonst stuende
-        // dort nach dem ersten Speichern jedes Laufwerk, das gerade sichtbar
-        // war -- und eine spaeter geaenderte Vorgabe wuerde nirgends mehr
-        // wirken.
         foreach (var (root, max, free) in grenzen)
-            if (max == _config.CacheMaxBytes && free == _config.MinimumFreeBytes)
-                _config.VolumeLimits.RemoveAll(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase));
-            else
-                _config.SetLimits(root, max, free);
+            _config.SetLimits(root, max, free);
         _config.Parallelism = parallelism;
         _config.Listen = ListenBox.IsChecked == true;
         _config.ListenPort = listenPort;

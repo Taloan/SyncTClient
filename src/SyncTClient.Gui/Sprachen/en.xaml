@@ -307,27 +307,25 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Main.Overall">TOTAL</s:String>
   <s:String x:Key="M.OverallShort">{0} files · {1}</s:String>
   <s:String x:Key="S.Settings.StorageGroup">STORAGE MANAGEMENT</s:String>
-  <s:String x:Key="S.Settings.SafetyGroup">SAFETY RULE</s:String>
   <s:String x:Key="S.Settings.Threshold">Placeholder threshold</s:String>
   <s:String x:Key="S.Settings.ThresholdHint">The value determines on how many other nodes a file must be present in full before it can become a placeholder locally.</s:String>
   <s:String x:Key="S.Settings.Thumbs">Create thumbnails on demand</s:String>
   <s:String x:Key="S.Settings.ThumbsHint">When the file manager asks for a preview, the client fetches the file head — a single 128 KiB block — and extracts the embedded image. The file itself stays a placeholder.</s:String>
   <s:String x:Key="S.Settings.ClearThumbs">Clear thumbnail cache now …</s:String>
   <s:String x:Key="G.ThresholdInvalid">The placeholder threshold must be at least 1.</s:String>
-  <s:String x:Key="M.VolumeLine">Drive {0} ({1} free)   {2} in {3} files   |   {4} files ({5}) have reached the placeholder threshold</s:String>
+  <s:String x:Key="M.VolumeLine">Drive {0}   {1} in {2} files   |   {3} free</s:String>
   <s:String x:Key="M.VolumeRelease">Turn {0} files ({1}) into placeholders now …</s:String>
   <s:String x:Key="M.ThumbUsage">Global thumbnail cache {0} files ({1})</s:String>
   <s:String x:Key="M.ReleasedVolume">{0} released {1} files, {2} reclaimed.</s:String>
   <s:String x:Key="S.Share.ModeNew">Mode for new files</s:String>
   <s:String x:Key="S.Settings.ThumbGroup">THUMBNAILS</s:String>
-  <s:String x:Key="S.Settings.KeepFreeShort">Volume free space (GB)</s:String>
   <s:String x:Key="G.VolumeInvalid">Limit and free space for {0} must be whole numbers, the limit at least 1.</s:String>
-  <s:String x:Key="S.Settings.LimitsGroup">STORAGE LIMITS</s:String>
   <s:String x:Key="S.Settings.LimitsLead">Whichever limit is reached first applies.</s:String>
-  <s:String x:Key="S.Settings.PerVolume">Limit per volume (GB)</s:String>
-  <s:String x:Key="S.Settings.PerVolumeHint">The value determines how much disk space the “on demand” files of all shares may occupy at most on the respective volume. When the limit on that volume is reached, the oldest files are turned into placeholders, once the “placeholder threshold” has been reached.</s:String>
-  <s:String x:Key="S.Settings.KeepFree">Volume free space (GB) (0=no limit)</s:String>
-  <s:String x:Key="S.Settings.KeepFreeHint">The value determines how much space must remain free on each volume. When the limit on a volume is reached, the oldest “on demand” files on that volume are turned into placeholders, once the “placeholder threshold” has been reached.</s:String>
-  <s:String x:Key="S.Settings.NowGroup">STORAGE NOW</s:String>
-  <s:String x:Key="S.Settings.NowLead">Space used by “on demand” files on the volumes:</s:String>
+  <s:String x:Key="S.Settings.VolumeGroup">STORAGE PER VOLUME</s:String>
+  <s:String x:Key="S.Settings.UseLimit">Usage limit (GB)</s:String>
+  <s:String x:Key="S.Settings.UseLimitNote">(at most this much for “on demand” files)</s:String>
+  <s:String x:Key="S.Settings.KeepLimit">Keep-free limit (GB)</s:String>
+  <s:String x:Key="S.Settings.KeepLimitNote">(this much space stays free on the drive)</s:String>
+  <s:String x:Key="S.Settings.VolumeDefaults">New drives start with default values (2 GB / 10 % at the time of the first share).</s:String>
+  <s:String x:Key="M.VolumeEvictable">{0} files ({1}) have reached the placeholder threshold</s:String>
 </ResourceDictionary>

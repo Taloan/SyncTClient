@@ -284,15 +284,56 @@ public sealed class AppConfig
     /// <summary>Was auf einzelnen Datentraegern abweichend gilt.</summary>
     public List<VolumeLimitConfig> VolumeLimits { get; set; } = [];
 
-    /// <summary>Die Grenzen einer Laufwerkswurzel, sonst die Vorgabe.</summary>
+    /// <summary>Die Grenzen einer Laufwerkswurzel, sonst die Vorgabewerte.</summary>
     public VolumeLimits LimitsFor(string root)
     {
         var eigen = VolumeLimits.FirstOrDefault(
             v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase));
 
         return eigen is null
-            ? new VolumeLimits(CacheMaxBytes, MinimumFreeBytes)
+            ? DefaultLimitsFor(root)
             : new VolumeLimits(eigen.MaxBytes, eigen.MinimumFreeBytes);
+    }
+
+    /// <summary>
+    /// Womit ein Datentraeger anfaengt, auf dem zum ersten Mal eine Freigabe
+    /// entsteht.
+    /// </summary>
+    /// <remarks>
+    /// Der freizuhaltende Platz ist ein Anteil und keine feste Zahl. Zehn
+    /// Gigabyte sind auf einer 8-TB-Platte nichts und auf einem kleinen
+    /// Datentraeger die halbe Miete; zehn Prozent passen auf beiden.
+    ///
+    /// Gerechnet wird einmal, beim ersten Mal. Danach steht die Zahl in der
+    /// Datei und aendert sich nicht mehr von selbst -- ein Wert, der beim
+    /// naechsten Start ein anderer waere, liesse sich nicht einstellen.
+    /// </remarks>
+    public VolumeLimits DefaultLimitsFor(string root)
+    {
+        long gesamt = 0;
+        try { gesamt = new DriveInfo(root).TotalSize; } catch (Exception) { }
+
+        return new VolumeLimits(CacheMaxBytes, gesamt > 0 ? gesamt / 10 : MinimumFreeBytes);
+    }
+
+    /// <summary>
+    /// Sorgt dafuer, dass der Datentraeger dieses Pfades eigene Werte hat.
+    /// </summary>
+    /// <param name="seed">
+    /// Womit angefangen wird, wenn es noch keinen Eintrag gibt. Ohne Angabe
+    /// die Vorgabewerte.
+    /// </param>
+    public void EnsureLimits(string path, VolumeLimits? seed = null)
+    {
+        string root;
+        try { root = Path.GetPathRoot(Path.GetFullPath(path)) ?? ""; }
+        catch (Exception) { return; }
+
+        if (root.Length == 0) return;
+        if (VolumeLimits.Any(v => v.Root.Equals(root, StringComparison.OrdinalIgnoreCase))) return;
+
+        seed ??= DefaultLimitsFor(root);
+        SetLimits(root, seed.MaxBytes, seed.MinimumFreeBytes);
     }
 
     /// <summary>Legt die Grenzen eines Datentraegers fest.</summary>
@@ -575,6 +616,13 @@ public sealed class AppConfig
         // einer Datei im Netz verschwinden. Der Wert wird angehoben.
         foreach (var share in Shares.Where(s => s.MinimumCopies < 1))
             share.MinimumCopies = 1;
+
+        // Frueher galten die beiden Zahlen fuer jeden Datentraeger gleich.
+        // Bestehende Einstellungen bleiben damit erhalten; erst Laufwerke, die
+        // spaeter dazukommen, fangen mit den Vorgabewerten an.
+        var alt = new VolumeLimits(CacheMaxBytes, MinimumFreeBytes);
+        foreach (var share in Shares.Where(s => !string.IsNullOrWhiteSpace(s.LocalPath)))
+            EnsureLimits(share.LocalPath, alt);
 
         var fallback = Peers.FirstOrDefault()?.DeviceId ?? "";
         foreach (var share in Shares)
