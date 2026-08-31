@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace SyncTClient.Mount;
@@ -42,6 +42,30 @@ public sealed class ThumbnailStore(string directory)
 
     public bool Has(string localFilePath) => File.Exists(PathFor(localFilePath));
 
+    /// <summary>
+    /// Wo vermerkt ist, dass eine Datei keine eingebettete Vorschau hat.
+    /// </summary>
+    /// <remarks>
+    /// Ohne diesen Vermerk holten wir den Kopf jeder vorschaulosen Datei
+    /// wieder und wieder: der Explorer fragt bei jedem Blick in den Ordner
+    /// erneut, und ein Fehlschlag sieht fuer ihn aus wie "noch nicht da".
+    /// </remarks>
+    private static string MarkerFor(string directory, string localFilePath)
+        => Path.ChangeExtension(PathFor(directory, localFilePath), ".leer");
+
+    public bool KnownWithout(string localFilePath) => File.Exists(MarkerFor(Directory, localFilePath));
+
+    public void MarkWithout(string localFilePath)
+    {
+        var path = MarkerFor(Directory, localFilePath);
+        try
+        {
+            System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, []);
+        }
+        catch (IOException) { /* dann fragen wir eben noch einmal */ }
+    }
+
     public void Save(string localFilePath, byte[] jpeg)
     {
         var path = PathFor(localFilePath);
@@ -56,8 +80,13 @@ public sealed class ThumbnailStore(string directory)
 
     public void Remove(string localFilePath)
     {
-        try { File.Delete(PathFor(localFilePath)); }
-        catch (IOException) { /* beim naechsten Mal */ }
+        // Auch den Vermerk loeschen: hat sich die Datei geaendert, kann
+        // diesmal sehr wohl eine Vorschau darin stecken.
+        foreach (var path in new[] { PathFor(localFilePath), MarkerFor(Directory, localFilePath) })
+        {
+            try { File.Delete(path); }
+            catch (IOException) { /* beim naechsten Mal */ }
+        }
     }
 
     public (int Count, long Bytes) Usage()

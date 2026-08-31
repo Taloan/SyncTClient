@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -113,8 +113,8 @@ public partial class MainWindow : Window
         share.TransferStarted += t => Dispatcher.Invoke(() => AddTransfer(t));
         share.TransferFinished += _ => Dispatcher.Invoke(TrimTransfers);
         share.CacheChanged += () => Dispatcher.Invoke(RefreshStatus);
-        share.ThumbnailProgress += (done, total) => Dispatcher.Invoke(() =>
-            Status($"[{share.FolderId}] Vorschaubilder: {done} von {total}"));
+        share.ThumbnailProduced += made => Dispatcher.Invoke(() =>
+            Status($"[{share.FolderId}] Vorschaubilder auf Zuruf: {made}"));
     });
 
     private async void OnLoaded(object sender, RoutedEventArgs e)

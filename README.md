@@ -89,9 +89,11 @@ blockweise geladen und verifiziert.
 - Eine Verbindung je Gegenstelle, die alle ihre Ordner trägt
 - Oberfläche als Sync-Dienst: Server verwalten, angebotene Ordner übernehmen,
   Bindungen lösen, Teilbaum-Auswahl, Übertragungen mit Fortschritt, Protokoll
-- Vorschaubilder aus dem Dateikopf gewinnen — ein Block je Bild, ohne Hydration
-- Vorschaubilder im Explorer, ohne die Dateien zu holen: 445 Dateien in einem
-  Ordner bedient, 1.032 MB logischer Inhalt, 0 Byte auf der Platte
+- Vorschaubilder auf Zuruf statt auf Vorrat: erst wenn der Dateimanager nach
+  einem Bild fragt, holt der Client dessen Kopf -- einen Block von 128 KiB --
+  und schneidet die eingebettete EXIF-Vorschau heraus. Gemessen: 42 ms im
+  Median fuer ein neues Bild, 2 ms fuer ein bekanntes, und der Platzhalter
+  bleibt dabei dehydriert
 - Messwerkzeuge für die Vorschaukette: `--providertest`, `--cachecheck`,
   `--shellprops`, `--pin`, `--register-thumbs`
 

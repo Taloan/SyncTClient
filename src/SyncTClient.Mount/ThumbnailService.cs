@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using SyncTClient.ThumbProvider;
 
@@ -22,6 +22,7 @@ namespace SyncTClient.Mount;
 public static class ThumbnailService
 {
     private static Thread? _thread;
+    private static readonly ManualResetEventSlim _stop = new(false);
     private static readonly Lock Gate = new();
 
     /// <summary>Meldet die Klasse an, falls das noch nicht geschehen ist.</summary>
@@ -31,15 +32,25 @@ public static class ThumbnailService
         {
             if (_thread is not null) return;
 
+            // Fehlende Vorschauen holt der Client selbst nach.
+            Store.Produce = ShareHost.ProduceThumbnail;
+
             _thread = new Thread(() => Serve(log))
             {
                 IsBackground = true,
                 Name = "Vorschau-Erzeuger"
             };
 
-            // Die Shell erwartet ein Einzelthread-Apartment; ohne Nachrichten-
-            // schleife bliebe jede Anfrage liegen.
-            _thread.SetApartmentState(ApartmentState.STA);
+            // Mehrthread-Apartment, nicht STA -- und das ist hier wesentlich.
+            //
+            // Im Einzelthread-Apartment reiht COM alle Aufrufe auf einem
+            // Thread auf. Solange die Vorschauen fertig auf der Platte lagen,
+            // fiel das nicht auf. Seit wir den Dateikopf bei Bedarf holen,
+            // wartet jeder Aufruf aufs Netz, und der naechste kommt erst
+            // danach an die Reihe: gemessen 69 Bilder in 45 Sekunden. Im MTA
+            // stellt COM die Aufrufe nebenlaeufig zu, und die Drossel weiter
+            // unten bestimmt das Tempo statt der Apartment-Grenze.
+            _thread.SetApartmentState(ApartmentState.MTA);
             _thread.Start();
         }
     }
@@ -68,11 +79,10 @@ public static class ThumbnailService
 
             try
             {
-                while (GetMessage(out var message, 0, 0, 0) > 0)
-                {
-                    TranslateMessage(in message);
-                    DispatchMessage(in message);
-                }
+                // Im MTA stellt COM die Aufrufe auf eigenen Threads zu; eine
+                // Nachrichtenschleife braucht es dafuer nicht. Dieser Thread
+                // haelt nur die Anmeldung am Leben.
+                _stop.Wait();
             }
             finally
             {
@@ -89,17 +99,6 @@ public static class ThumbnailService
     private const uint RegClsMultipleUse = 1;
     private const uint RegClsSuspended = 4;
 
-    [StructLayout(LayoutKind.Sequential)]
-    private struct NativeMessage
-    {
-        public nint Window;
-        public uint Message;
-        public nuint WParam;
-        public nint LParam;
-        public uint Time;
-        public int X, Y;
-    }
-
     [DllImport("ole32.dll")]
     private static extern int CoRegisterClassObject(
         in Guid classId, nint unknown, uint context, uint flags, out uint cookie);
@@ -109,13 +108,4 @@ public static class ThumbnailService
 
     [DllImport("ole32.dll")]
     private static extern int CoResumeClassObjects();
-
-    [DllImport("user32.dll")]
-    private static extern int GetMessage(out NativeMessage message, nint window, uint first, uint last);
-
-    [DllImport("user32.dll")]
-    private static extern bool TranslateMessage(in NativeMessage message);
-
-    [DllImport("user32.dll")]
-    private static extern nint DispatchMessage(in NativeMessage message);
 }
