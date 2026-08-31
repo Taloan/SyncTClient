@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using Microsoft.Win32.SafeHandles;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Windows.Win32;
 using Windows.Win32.Storage.CloudFilters;
@@ -242,20 +244,16 @@ public sealed class HydrationCache
                 return false;
             }
 
-            unsafe
-            {
-                // Laenge -1 bedeutet die ganze Datei.
-                var result = PInvoke.CfDehydratePlaceholder(
-                    handle, 0, -1, CF_DEHYDRATE_FLAGS.CF_DEHYDRATE_FLAG_NONE, null);
+            // Eine hineinkopierte Datei ist noch gar kein Platzhalter, und
+            // dehydrieren laesst sich nur ein Platzhalter. Sie muss erst
+            // umgewandelt werden -- beides in einem Zug, damit zwischen
+            // Umwandlung und Freigabe kein Zustand entsteht, in dem die Datei
+            // weder das eine noch das andere ist.
+            var erfolg = IsPlaceholder(handle)
+                ? Dehydrieren(handle, relativePath, reason)
+                : Umwandeln(handle, relativePath, reason);
 
-                if (result.Failed)
-                {
-                    _log?.Invoke($"  Dehydrieren von \"{relativePath}\" ({reason}) " +
-                                 $"schlug fehl: 0x{(uint)result.Value:X8}");
-                    return false;
-                }
-            }
-            return true;
+            return erfolg;
         }
         catch (IOException)
         {
@@ -296,6 +294,89 @@ public sealed class HydrationCache
         if ((state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER) == 0) return true;
 
         return (state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_IN_SYNC) != 0;
+    }
+
+    private unsafe bool Dehydrieren(SafeFileHandle handle, string relativePath, string reason)
+    {
+        // Laenge -1 bedeutet die ganze Datei.
+        var result = PInvoke.CfDehydratePlaceholder(
+            handle, 0, -1, CF_DEHYDRATE_FLAGS.CF_DEHYDRATE_FLAG_NONE, null);
+
+        if (result.Failed)
+        {
+            _log?.Invoke($"  Dehydrieren von \"{relativePath}\" ({reason}) " +
+                         $"schlug fehl: 0x{(uint)result.Value:X8}");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Macht aus einer gewoehnlichen Datei einen leeren Platzhalter.
+    /// </summary>
+    /// <remarks>
+    /// Der Fall entsteht, wenn jemand Dateien in den Ordner kopiert. Sie
+    /// liegen dann vollstaendig auf der Platte und tragen keinen
+    /// Reparse-Point; die Buchfuehrung zaehlt sie mit, aber freigeben liess
+    /// sich nichts, denn dehydrieren kann man nur einen Platzhalter.
+    ///
+    /// Umwandeln und Freigeben laufen in einem Zug (CF_CONVERT_FLAG_DEHYDRATE).
+    /// Zwei getrennte Schritte liessen zwischendurch eine Datei zurueck, die
+    /// weder gewoehnlich noch vollstaendig waere -- und ein Absturz dazwischen
+    /// haette genau diesen Zustand hinterlassen.
+    ///
+    /// MARK_IN_SYNC sagt Windows, dass der Inhalt dem der Gegenstelle
+    /// entspricht. Das ist hier zutreffend: freigegeben wird nur, was die
+    /// Gegenstelle nachweislich vollstaendig fuehrt.
+    /// </remarks>
+    private unsafe bool Umwandeln(SafeFileHandle handle, string relativePath, string reason)
+    {
+        // Die Kennung kommt im Rueckruf zurueck. Derselbe Aufbau wie beim
+        // Anlegen der Platzhalter: der volle relative Pfad.
+        var identity = Marshal.StringToHGlobalUni(relativePath);
+        try
+        {
+            var result = PInvoke.CfConvertToPlaceholder(
+                handle,
+                (void*)identity,
+                (uint)((relativePath.Length + 1) * sizeof(char)),
+                CF_CONVERT_FLAGS.CF_CONVERT_FLAG_MARK_IN_SYNC | CF_CONVERT_FLAGS.CF_CONVERT_FLAG_DEHYDRATE,
+                null,
+                null);
+
+            if (result.Failed)
+            {
+                _log?.Invoke($"  Umwandeln von \"{relativePath}\" in einen Platzhalter ({reason}) " +
+                             $"schlug fehl: 0x{(uint)result.Value:X8}");
+                return false;
+            }
+
+            _log?.Invoke($"  \"{relativePath}\" in einen Platzhalter umgewandelt ({reason}).");
+            return true;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(identity);
+        }
+    }
+
+    /// <summary>Ist die Datei ueberhaupt ein Platzhalter?</summary>
+    private unsafe bool IsPlaceholder(SafeFileHandle handle)
+    {
+        var info = new FILE_ATTRIBUTE_TAG_INFO();
+
+        if (!PInvoke.GetFileInformationByHandleEx(
+                handle, FILE_INFO_BY_HANDLE_CLASS.FileAttributeTagInfo,
+                &info, (uint)sizeof(FILE_ATTRIBUTE_TAG_INFO)))
+        {
+            return true;
+        }
+
+        var state = PInvoke.CfGetPlaceholderStateFromFileInfo(
+            &info, FILE_INFO_BY_HANDLE_CLASS.FileAttributeTagInfo);
+
+        return (state & CF_PLACEHOLDER_STATE.CF_PLACEHOLDER_STATE_PLACEHOLDER) != 0;
     }
 
     private bool IsPinned(string relativePath)

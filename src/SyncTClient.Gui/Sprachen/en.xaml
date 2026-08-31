@@ -304,4 +304,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="M.ResumedAll">Syncing has resumed.</s:String>
   <s:String x:Key="S.Col.Sent">Sent</s:String>
   <s:String x:Key="S.Main.SessionTip">Received and sent since the program started</s:String>
+  <s:String x:Key="S.Main.Overall">TOTAL</s:String>
+  <s:String x:Key="M.OverallShort">{0} files · {1}</s:String>
 </ResourceDictionary>
