@@ -16,10 +16,9 @@ namespace SyncTClient.Bep;
 /// die Blocklisten aller Dateien des Peers enthaelt, und fordert Inhalte erst
 /// bei Bedarf blockweise an. Darauf baut das Platzhalter-Verfahren auf.
 ///
-/// Wir kuendigen keine Datei mit Blockliste an, deshalb fordert auch niemand
-/// Daten bei uns an: Syncthing entfernt beim Setzen lokaler Flags die
-/// Blockliste und setzt die Groesse auf null (siehe setNoContent in
-/// bep_fileinfo.go).
+/// Angekuendigt wird nur, was ausdruecklich genannt ist. Zu einer Datei, die
+/// wir mit Blockliste angekuendigt haben, fordert die Gegenstelle Bloecke an;
+/// diese Anfragen beantwortet <see cref="Serve"/>.
 /// </remarks>
 public sealed class BepConnection : IAsyncDisposable
 {
@@ -320,6 +319,31 @@ public sealed class BepConnection : IAsyncDisposable
 
     public Task SendClusterConfigAsync(ClusterConfig config, CancellationToken ct = default)
         => SendAsync(MessageType.ClusterConfig, config, ct);
+
+    /// <summary>
+    /// Schickt einen Index: unseren vollstaendigen Bestand zu einem Ordner.
+    /// </summary>
+    /// <remarks>
+    /// Die Gegenstelle liest die Nachricht als vollstaendige Angabe und
+    /// verwirft, was sie sonst von uns zu diesem Ordner hat. Nachtraege
+    /// einzelner Aenderungen laufen ueber IndexUpdate.
+    /// </remarks>
+    public Task SendIndexAsync(Proto.Index index, CancellationToken ct = default)
+        => SendAsync(MessageType.Index, index, ct);
+
+    /// <summary>
+    /// Schickt einen Nachtrag: nur die Dateien, die sich seit der letzten
+    /// Nachricht geaendert haben.
+    /// </summary>
+    /// <remarks>
+    /// Der Unterschied zum Index liegt nicht im Inhalt, sondern in der
+    /// Auslegung: die Gegenstelle behaelt, was sie sonst von uns hat, und
+    /// traegt nur die genannten Dateien nach. <c>prev_sequence</c> nennt die
+    /// hoechste Nummer der vorigen Nachricht; passt sie nicht zu ihrem Stand,
+    /// erkennt die Gegenstelle daran eine Luecke.
+    /// </remarks>
+    public Task SendIndexUpdateAsync(IndexUpdate update, CancellationToken ct = default)
+        => SendAsync(MessageType.IndexUpdate, update, ct);
 
     /// <summary>
     /// Fordert genau einen Block an. Mehrere Aufrufe duerfen gleichzeitig

@@ -73,6 +73,19 @@ if (Arg("--cachecheck") is { } cacheTarget)
 // mit dem, was die Gegenstelle angekuendigt hat.
 if (args.Contains("--blockcheck")) return BlockCheck();
 
+// Kuendigt genau eine lokale Datei bei der Gegenstelle an und bedient danach
+// deren Blockanfragen. Der einzige Befehl, der etwas schreibt.
+if (args.Contains("--announce"))
+{
+    if (Arg("--folder") is not { } announceFolder || Arg("--file") is not { } announceFile)
+    {
+        Console.Error.WriteLine("--announce braucht --folder und --file.");
+        return 2;
+    }
+
+    return await AnnounceCommand.RunAsync(configPath, announceFolder, announceFile);
+}
+
 // Meldet die Vorschau-Erweiterung an, ohne den Client zu starten.
 if (Arg("--register-thumbs") is { } thumbStore)
 {
@@ -152,6 +165,8 @@ if (!File.Exists(configPath))
           --unregister <pfad>   Sync-Root nur abmelden
           --clean-winrt         verwaiste WinRT-Registrierungen abmelden
           --blockcheck          eigene Blocklisten gegen den Index pruefen
+          --announce --folder <ordner-id> --file <relativer/name>
+                                eine lokale Datei bei der Gegenstelle ankuendigen
         """);
     return 2;
 }

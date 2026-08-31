@@ -43,6 +43,14 @@ public readonly struct DeviceId : IEquatable<DeviceId>
         return Base32Encode(span[..8])[..7];
     }
 
+    /// <summary>Dieselben ersten 64 Bit als Zahl.</summary>
+    /// <remarks>
+    /// In <c>modified_by</c> und in den Zaehlern des Versionsvektors steht die
+    /// Geraete-ID nicht als Text, sondern als diese Zahl. Gelesen wird sie
+    /// big-endian, wie in <c>lib/protocol/deviceid.go</c>.
+    /// </remarks>
+    public ulong ShortId() => BinaryPrimitives.ReadUInt64BigEndian(Span[..8]);
+
     public override string ToString()
     {
         var span = Span;

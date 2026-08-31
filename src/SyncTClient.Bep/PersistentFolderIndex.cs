@@ -54,6 +54,20 @@ public sealed class PersistentFolderIndex : IDisposable
             );
 
             CREATE INDEX IF NOT EXISTS files_sequence ON files(sequence);
+
+            CREATE TABLE IF NOT EXISTS local_files (
+                name     TEXT PRIMARY KEY,
+                sequence INTEGER NOT NULL,
+                size     INTEGER NOT NULL,
+                modified INTEGER NOT NULL,
+                deleted  INTEGER NOT NULL,
+                state    INTEGER NOT NULL,
+                version  BLOB,
+                info     BLOB NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS local_sequence ON local_files(sequence);
+            CREATE INDEX IF NOT EXISTS local_state ON local_files(state);
             """);
     }
 
@@ -178,7 +192,8 @@ public sealed class PersistentFolderIndex : IDisposable
             var version = file.Version?.ToByteArray() ?? [];
 
             lookupName.Value = file.Name;
-            if (lookup.ExecuteScalar() is byte[] previous && !previous.AsSpan().SequenceEqual(version))
+            var previous = lookup.ExecuteScalar() as byte[];
+            if (previous is null || !previous.AsSpan().SequenceEqual(version))
                 changed.Add(file.Name);
 
             pName.Value = file.Name;
@@ -196,6 +211,130 @@ public sealed class PersistentFolderIndex : IDisposable
         return changed;
     }
 
+    // ------------------------------------------------------------ Eigener Bestand
+
+    /// <summary>
+    /// Die naechste eigene Sequenznummer. Sie wird sofort fortgeschrieben.
+    /// </summary>
+    /// <remarks>
+    /// Eine Nummer darf nicht zweimal vergeben werden. Wird sie vergeben und
+    /// die Ankuendigung scheitert danach, ist die Luecke unschaedlich: die
+    /// Gegenstelle prueft nur, ob Nummern wachsen, nicht ob sie lueckenlos
+    /// sind.
+    /// </remarks>
+    public long NextLocalSequence()
+    {
+        var next = LocalSequence + 1;
+        LocalSequence = next;
+        return next;
+    }
+
+    /// <summary>Unsere eigene Fassung dieser Datei, sofern wir eine kennen.</summary>
+    public bool TryGetLocal(string name, out BepFileInfo file)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT info FROM local_files WHERE name = $name";
+        command.Parameters.AddWithValue("$name", name);
+
+        if (command.ExecuteScalar() is byte[] blob)
+        {
+            file = BepFileInfo.Parser.ParseFrom(blob);
+            return true;
+        }
+
+        file = null!;
+        return false;
+    }
+
+    /// <summary>Schreibt unsere eigene Fassung fort.</summary>
+    /// <param name="state">
+    /// 0 sauber, 1 geaendert und noch nicht angekuendigt, 2 angekuendigt und
+    /// noch nicht von der Gegenstelle bestaetigt.
+    /// </param>
+    public void PutLocal(BepFileInfo file, int state)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            INSERT INTO local_files (name, sequence, size, modified, deleted, state, version, info)
+            VALUES ($name, $sequence, $size, $modified, $deleted, $state, $version, $info)
+            ON CONFLICT(name) DO UPDATE SET
+                sequence = excluded.sequence,
+                size     = excluded.size,
+                modified = excluded.modified,
+                deleted  = excluded.deleted,
+                state    = excluded.state,
+                version  = excluded.version,
+                info     = excluded.info
+            """;
+
+        command.Parameters.AddWithValue("$name", file.Name);
+        command.Parameters.AddWithValue("$sequence", file.Sequence);
+        command.Parameters.AddWithValue("$size", file.Size);
+        command.Parameters.AddWithValue("$modified", file.ModifiedS);
+        command.Parameters.AddWithValue("$deleted", file.Deleted ? 1 : 0);
+        command.Parameters.AddWithValue("$state", state);
+        command.Parameters.AddWithValue("$version", file.Version?.ToByteArray() ?? []);
+        command.Parameters.AddWithValue("$info", file.ToByteArray());
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Nimmt den eigenen Eintrag fort. Danach gilt fuer diesen Namen allein,
+    /// was die Gegenstelle fuehrt.
+    /// </summary>
+    public void ForgetLocal(string name)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = "DELETE FROM local_files WHERE name = $name";
+        command.Parameters.AddWithValue("$name", name);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Setzt den Zustand einer eigenen Datei, ohne sie neu zu schreiben.</summary>
+    public void SetLocalState(string name, int state)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = "UPDATE local_files SET state = $state WHERE name = $name";
+        command.Parameters.AddWithValue("$name", name);
+        command.Parameters.AddWithValue("$state", state);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Alle eigenen Dateien in diesem Zustand.</summary>
+    public IReadOnlyList<BepFileInfo> LocalInState(int state)
+    {
+        var found = new List<BepFileInfo>();
+
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT info FROM local_files WHERE state = $state ORDER BY sequence";
+        command.Parameters.AddWithValue("$state", state);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            found.Add(BepFileInfo.Parser.ParseFrom((byte[])reader["info"]));
+
+        return found;
+    }
+
+    /// <summary>Alles Eigene ab dieser Sequenznummer, aufsteigend.</summary>
+    public IReadOnlyList<BepFileInfo> LocalFrom(long sequence)
+    {
+        var found = new List<BepFileInfo>();
+
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT info FROM local_files WHERE sequence >= $sequence ORDER BY sequence";
+        command.Parameters.AddWithValue("$sequence", sequence);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            found.Add(BepFileInfo.Parser.ParseFrom((byte[])reader["info"]));
+
+        return found;
+    }
+
+    /// <summary>Wie viele eigene Dateien wir fuehren.</summary>
+    public int LocalCount => (int)(long)(Scalar("SELECT COUNT(*) FROM local_files") ?? 0L);
+
     public bool TryGet(string name, out BepFileInfo file)
     {
         using var command = _db.CreateCommand();
@@ -210,6 +349,24 @@ public sealed class PersistentFolderIndex : IDisposable
 
         file = null!;
         return false;
+    }
+
+    /// <summary>
+    /// Alle Namen, die die Gegenstelle fuehrt -- die geloeschten
+    /// eingeschlossen.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den Abgleich zwischen Index und Ordner. Ein geloeschter Eintrag
+    /// gehoert dazu, denn er ist der Grund, eine noch vorhandene Datei
+    /// fortzunehmen.
+    /// </remarks>
+    public IEnumerable<string> AllNames()
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT name FROM files WHERE name <> '' ORDER BY name";
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) yield return reader.GetString(0);
     }
 
     /// <summary>

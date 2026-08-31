@@ -39,3 +39,19 @@ CF_PROCESS_INFO
 CfSetPinState
 CF_PIN_STATE
 CF_SET_PIN_FLAGS
+
+// Melde-Rueckrufe: Schliessen, Loeschen, Umbenennen.
+CF_CALLBACK_CLOSE_COMPLETION_FLAGS
+CF_CALLBACK_DELETE_COMPLETION_FLAGS
+CF_CALLBACK_RENAME_COMPLETION_FLAGS
+
+// Wird gebraucht, sobald lokale Aenderungen zurueckgeschrieben werden:
+// eine gewoehnliche Datei zum Platzhalter machen, einen Platzhalter wieder
+// zur gewoehnlichen Datei machen, und den In-Sync-Zustand setzen.
+CfConvertToPlaceholder
+CF_CONVERT_FLAGS
+CfRevertPlaceholder
+CF_REVERT_FLAGS
+CfSetInSyncState
+CF_IN_SYNC_STATE
+CF_SET_IN_SYNC_FLAGS

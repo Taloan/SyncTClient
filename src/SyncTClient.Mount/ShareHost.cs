@@ -45,7 +45,7 @@ public enum SyncPhase
 /// gemeinsam genutzt. Syncthing macht es genauso: eine Verbindung je Geraet,
 /// nicht je Ordner.
 /// </remarks>
-public sealed class ShareHost : IAsyncDisposable, IContentSource
+public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 {
     /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS: der Inhalt liegt noch nicht lokal.</summary>
     private const uint RecallOnDataAccess = 0x0040_0000;
@@ -287,18 +287,19 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>Nimmt einen Stapel Index-Eintraege auf, den der PeerHost zugestellt hat.</summary>
     public void Absorb(IEnumerable<BepFileInfo> files)
     {
-        var changed = _index!.Absorb(files);
+        // Der Hintergrundlauf schreibt in dieselbe Datenbank. Sie haengt an
+        // einer einzigen Verbindung und vertraegt keine zwei Schreiber.
+        IReadOnlyList<string> changed;
+        lock (_indexGate) changed = _index!.Absorb(files);
+
         _indexArrived.Release();
 
         if (Phase == SyncPhase.Index) SetPhase(SyncPhase.Index, _index.Count);
 
-        // Geaenderte Dateien duerfen nicht mit alten Bytes im Cache bleiben.
-        // Das ist eine Frage der Korrektheit, nicht der Cache-Verwaltung.
-        if (changed.Count > 0 && _cache is not null && _cache.Invalidate(
-                changed.Where(_config.Includes).Select(LocalPathOf)) > 0)
-        {
-            CacheChanged?.Invoke();
-        }
+        // Der Index sagt nur, was die Gegenstelle fuehrt. Damit es auch im
+        // Ordner steht, muss jeder genannte Name angewendet werden: angelegt,
+        // ersetzt oder entfernt. Das geschieht im Hintergrundlauf, nicht hier.
+        QueueIncoming(changed);
     }
 
     // ------------------------------------------------------------ Start und Stopp
@@ -322,6 +323,11 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     {
         _connection = connection;
         State = ShareState.Wartet;
+
+        // Eine neue Sitzung beginnt mit einem Index. Erst danach sind
+        // Nachtraege moeglich, und die brauchen die Nummer ihres Vorgaengers.
+        _indexSent = false;
+        _lastSentSequence = 0;
 
         try
         {
@@ -387,6 +393,8 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     {
         if (State == ShareState.Gestoppt) return;
 
+        await StopLocalLoopAsync();
+
         _cache?.Save();
         _cache?.LeaveBudget();
         _mount?.Dispose();
@@ -451,14 +459,46 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
         _mount = new CloudFilterMount(_config.LocalPath, this, _log);
+
+        // Die Meldungen der Cloud-Files-Schicht sind der Ausloeser fuer die
+        // Erkennung lokaler Aenderungen. Sie melden nur das Ereignis; ob es
+        // eine Aenderung war, entscheidet Evaluate anhand des blocks_hash.
+        _mount.FileClosed += NoteLocalChange;
+        _mount.FileDeleted += NoteLocalDelete;
+        _mount.FileRenamed += (before, after) =>
+        {
+            // Ein Umbenennen ist fuer das Protokoll eine Loeschung und eine
+            // neue Datei. Liegt eine Seite ausserhalb der Freigabe, bleibt
+            // ihr Pfad leer und der Teil entfaellt.
+            if (before.Length > 0) NoteLocalDelete(before);
+            if (after.Length > 0) NoteLocalChange(after);
+        };
+
         _mount.Connect();
 
         SetPhase(SyncPhase.Platzhalter);
         _mount.ProjectPlaceholders((done, total) => SetPhase(SyncPhase.Platzhalter, done, total));
 
+        // Das Anlegen der Platzhalter deckt nur einen Teil ab: es legt an, was
+        // fehlt. Eine Datei, die die Gegenstelle inzwischen geloescht oder
+        // geaendert hat, bleibt dabei stehen wie sie ist. Deshalb wird der
+        // ganze Index einmal durchgesehen.
+        //
+        // Der Durchgang ist billig. Fuer einen Platzhalter, dessen Groesse und
+        // Zeit zum Index passen, endet er nach zwei Vergleichen; das ist der
+        // Normalfall fuer nahezu jeden Eintrag.
+        _incoming.Clear();
+        lock (_indexGate) QueueIncoming(_index!.AllNames().ToList());
+
         SetPhase(SyncPhase.Cache);
         _cache.ReconcileWithDisk();
         CacheChanged?.Invoke();
+
+        // Erst jetzt steht fest, was lokal liegt. Der Durchgang vergleicht den
+        // Bestand auf der Platte mit dem eigenen Index und merkt sich, was zu
+        // pruefen ist; gerechnet und gesendet wird im Hintergrund.
+        ScanLocal();
+        StartLocalLoop();
     }
 
     /// <summary>
@@ -719,14 +759,18 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _ranges[relativePath] = transfer;
         TransferStarted?.Invoke(transfer);
 
-        return new Range(this, relativePath, transfer);
+        // Solange der Bereich laeuft, schreiben wir selbst in diese Datei.
+        // Die Meldungen, die daraus entstehen, sind keine Aenderung von aussen.
+        return new Range(this, relativePath, transfer, HoldHydration(relativePath));
     }
 
     /// <summary>Schliesst den Bereich ab, sobald die Hydration ihn verlaesst.</summary>
-    private sealed class Range(ShareHost host, string path, TransferInfo transfer) : IDisposable
+    private sealed class Range(ShareHost host, string path, TransferInfo transfer, IDisposable hold) : IDisposable
     {
         public void Dispose()
         {
+            hold.Dispose();
+
             // Nur den eigenen Eintrag entfernen. Eine zweite, ueberlappende
             // Anfrage kann ihn inzwischen ersetzt haben.
             host._ranges.TryRemove(new KeyValuePair<string, TransferInfo>(path, transfer));
@@ -760,6 +804,10 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         if (!part) TransferStarted?.Invoke(transfer);
 
         var already = part ? transfer.DoneBytes : 0;
+
+        // Ein einzelnes Stueck kann auch ohne umschliessenden Bereich kommen.
+        // Auch dann schreiben wir selbst in die Datei.
+        using var hold = HoldHydration(relativePath);
 
         // Ab hier steht der Auftrag in der Warteschlange, bis ein Platz frei wird.
         await _hydrationGate.WaitAsync(ct).ConfigureAwait(false);
@@ -817,7 +865,7 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
     /// also im Kreis und kaemen als unsere Antwort zurueck. Deshalb wird in
     /// diesem Fall abgesagt und nicht hydriert.
     ///
-    /// Geprueft wird der Reihe nach: temporaere Datei, Index, Pfad,
+    /// Geprueft wird der Reihe nach: temporaere Datei, Bestand, Pfad,
     /// Materialisierung, Bereich, Hash. Jede Absage schreibt eine Zeile ins
     /// Protokoll, ein Erfolg keine. Sonst entstuenden hier tausende Zeilen.
     /// </remarks>
@@ -828,8 +876,10 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         if (request.FromTemporary)
             return Deny(request, ErrorCode.NoSuchFile, "nach der temporaeren Datei gefragt");
 
-        if (_index is null || !_index.TryGet(request.Name, out var known) || known.Deleted)
-            return Deny(request, ErrorCode.NoSuchFile, "nicht im Index");
+        // Gefragt wird beides: der Index der Gegenstelle und der eigene
+        // Bestand. Was wir selbst angekuendigt haben, steht nur im zweiten.
+        if (!KnownHere(request.Name))
+            return Deny(request, ErrorCode.NoSuchFile, "weder im Index noch im eigenen Bestand");
 
         // Der Name kommt von aussen. Ohne diese Pruefung waere ein "../" darin
         // ein Lesezugriff auf beliebige Dateien dieses Rechners.
@@ -965,5 +1015,6 @@ public sealed class ShareHost : IAsyncDisposable, IContentSource
         _index = null;
         _indexArrived.Dispose();
         _hydrationGate.Dispose();
+        _localWork.Dispose();
     }
 }
