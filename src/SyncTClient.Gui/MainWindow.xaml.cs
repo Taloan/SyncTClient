@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -54,6 +54,23 @@ public partial class MainWindow : Window
 
     private ContextMenu? _columnMenu;
 
+    // ------------------------------------------------------- Umbenennen
+
+    /// <summary>Wartezeit zwischen Klick und Eingabefeld.</summary>
+    private readonly DispatcherTimer _renameTimer = new();
+
+    /// <summary>Auf welche Zeile sich der wartende Klick bezog.</summary>
+    private ShareRow? _renameCandidate;
+
+    /// <summary>
+    /// Wir haben das Bearbeiten selbst ausgeloest.
+    /// </summary>
+    /// <remarks>
+    /// Ein Doppelklick auf eine Zelle wuerde sonst von sich aus in den
+    /// Bearbeitungsmodus gehen -- und der Doppelklick soll den Ordner oeffnen.
+    /// </remarks>
+    private bool _renameArmed;
+
     /// <summary>Welcher Menueintrag zu welcher Spalte gehoert.</summary>
     private readonly List<(DataGridColumn Column, MenuItem Item)> _columnItems = [];
 
@@ -86,6 +103,8 @@ public partial class MainWindow : Window
         // minimieren.
         if (_config.StartMinimized) WindowState = WindowState.Minimized;
         ApplyTray();
+
+        PrepareRenaming();
 
         _meter = new ThroughputMeter(CollectWire);
         _refresh.Tick += (_, _) => Tick();
@@ -141,6 +160,7 @@ public partial class MainWindow : Window
         _runtime = new AppConfig
         {
             HomeDirectory = HomeDirectory,
+            DeviceName = _config.DeviceName,
             SharesRoot = _config.SharesRoot,
             CacheMaxBytes = _config.CacheMaxBytes,
             MinimumFreeBytes = _config.MinimumFreeBytes,
@@ -219,12 +239,12 @@ public partial class MainWindow : Window
             foreach (var offer in peer.Host.Offered)
             {
                 seen.Add(offer.FolderId);
-                _rows.Add(new ShareRow(peer, offer.FolderId, offer.Label, peer.Host.ShareFor(offer.FolderId)));
+                _rows.Add(Wire(new ShareRow(peer, offer.FolderId, offer.Label, peer.Host.ShareFor(offer.FolderId))));
             }
 
             // Konfigurierte Ordner, die die Gegenstelle (noch) nicht nennt.
             foreach (var share in _config.SharesOf(peer.Config).Where(s => !seen.Contains(s.FolderId)))
-                _rows.Add(new ShareRow(peer, share.FolderId, share.Label, peer.Host.ShareFor(share.FolderId)));
+                _rows.Add(Wire(new ShareRow(peer, share.FolderId, share.Label, peer.Host.ShareFor(share.FolderId))));
         }
 
         ShareGrid.SelectedItem = _rows.FirstOrDefault(
@@ -232,6 +252,13 @@ public partial class MainWindow : Window
             ?? _rows.FirstOrDefault();
 
         RefreshRows();
+    }
+
+    /// <summary>Haengt sich an die Umbenennung, damit sie gespeichert wird.</summary>
+    private ShareRow Wire(ShareRow row)
+    {
+        row.Renamed += OnShareRenamed;
+        return row;
     }
 
     private void RefreshRows()
@@ -242,6 +269,105 @@ public partial class MainWindow : Window
         UpdateCache();
         UpdateThumbnails();
     }
+
+    /// <summary>
+    /// Richtet das Umbenennen in der Liste ein.
+    /// </summary>
+    /// <remarks>
+    /// Wie im Explorer: ein Klick waehlt aus, ein zweiter nach kurzer Pause
+    /// oeffnet das Eingabefeld, ein Doppelklick oeffnet den Ordner. Die Pause
+    /// ist die Doppelklickzeit des Systems -- eine erfundene Zahl waere fuer
+    /// den einen zu kurz und fuer den anderen zu lang.
+    ///
+    /// Bearbeitbar ist ausschliesslich die Namensspalte. Die Tabelle muss
+    /// dafuer als Ganzes bearbeitbar sein, weil eine schreibgeschuetzte
+    /// Tabelle jede einzelne Spalte uebersteuert; alle uebrigen Spalten
+    /// werden deshalb einzeln gesperrt.
+    /// </remarks>
+    private void PrepareRenaming()
+    {
+        foreach (var column in ShareGrid.Columns)
+            column.IsReadOnly = !ReferenceEquals(column, ColName);
+
+        ShareGrid.IsReadOnly = false;
+
+        _renameTimer.Interval = TimeSpan.FromMilliseconds(GetDoubleClickTime() + 150);
+        _renameTimer.Tick += (_, _) => BeginRename();
+
+        ShareGrid.PreviewMouseLeftButtonUp += OnGridLeftButtonUp;
+        ShareGrid.BeginningEdit += OnBeginningEdit;
+        ShareGrid.CellEditEnding += OnCellEditEnding;
+    }
+
+    private void OnGridLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _renameTimer.Stop();
+
+        if (e.ClickCount > 1) return;
+        if (FindCell(e.OriginalSource as DependencyObject) is not { } cell) return;
+        if (!ReferenceEquals(cell.Column, ColName) || cell.IsEditing) return;
+
+        // Erst auswaehlen, dann umbenennen. Der Klick, der eine andere Zeile
+        // auswaehlt, soll nichts weiter ausloesen.
+        if (cell.DataContext is not ShareRow row || !row.Accepted) return;
+        if (!ReferenceEquals(row, _row)) return;
+
+        _renameCandidate = row;
+        _renameTimer.Start();
+    }
+
+    private static DataGridCell? FindCell(DependencyObject? source)
+    {
+        while (source is not null and not DataGridCell)
+            source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+
+        return source as DataGridCell;
+    }
+
+    private void BeginRename()
+    {
+        _renameTimer.Stop();
+
+        if (_renameCandidate is null || !ReferenceEquals(_renameCandidate, _row)) return;
+
+        _renameCandidate.Editing = true;
+        _renameArmed = true;
+
+        ShareGrid.CurrentCell = new DataGridCellInfo(_renameCandidate, ColName);
+        ShareGrid.BeginEdit();
+
+        _renameArmed = false;
+    }
+
+    /// <summary>Nur die selbst ausgeloeste Bearbeitung ist erlaubt.</summary>
+    private void OnBeginningEdit(object? sender, DataGridBeginningEditEventArgs e)
+    {
+        if (!_renameArmed) e.Cancel = true;
+    }
+
+    private void OnCellEditEnding(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.Row.Item is ShareRow row) row.Editing = false;
+    }
+
+    /// <summary>Das Eingabefeld bekommt den Fokus und den ganzen Text markiert.</summary>
+    private void OnNameEditorLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+
+        box.Focus();
+        box.SelectAll();
+    }
+
+    /// <summary>Der neue Name gilt sofort und wird gespeichert.</summary>
+    private void OnShareRenamed(ShareRow row)
+    {
+        Persist();
+        Status(App.S("M.Renamed", row.FolderId, row.Name));
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 
     private void OnShareSelected(object sender, SelectionChangedEventArgs e)
     {
@@ -685,7 +811,7 @@ public partial class MainWindow : Window
 
         if (_identity is null || !_config.Listen) return;
 
-        var listener = new BepListener(_identity, "SyncTClient", AppendLog);
+        var listener = new BepListener(_identity, _config.DeviceName, AppendLog);
         listener.Incoming += OnIncoming;
 
         if (!listener.Start(_config.ListenPort))
@@ -1042,6 +1168,9 @@ public partial class MainWindow : Window
     /// </remarks>
     private void OnGridDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        // Ein zweiter Klick war es also doch. Nicht umbenennen, sondern oeffnen.
+        _renameTimer.Stop();
+
         if (_row is null) return;
 
         if (_row.Accepted) OnShowSettings(sender, e);

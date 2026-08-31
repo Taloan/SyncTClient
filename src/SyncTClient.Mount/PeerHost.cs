@@ -160,7 +160,8 @@ public sealed class PeerHost : IAsyncDisposable
             {
                 var (host, port) = SplitHostPort(Bare(candidate));
                 _log($"[{Display}] verbinde mit {host}:{port} ...");
-                return await BepConnection.ConnectAsync(host, port, _identity, expected, ct: ct);
+                return await BepConnection.ConnectAsync(
+                    host, port, _identity, expected, _app.DeviceName, ct);
             }
             catch (Exception ex)
             {

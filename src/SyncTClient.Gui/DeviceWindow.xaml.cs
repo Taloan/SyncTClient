@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using QRCoder;
@@ -29,6 +29,7 @@ public partial class DeviceWindow : Window
         _config = config;
         _save = save;
 
+        DeviceNameBox.Text = config.DeviceName;
         OwnIdBox.Text = deviceId;
         ConfigPathBox.Text = configPath;
         ShowQrCode(deviceId);
@@ -84,6 +85,32 @@ public partial class DeviceWindow : Window
             QrPanel.Visibility = Visibility.Collapsed;
             CopyHint.Text = App.S("D.QrFailed", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Der Name, unter dem uns die Gegenstellen sehen.
+    /// </summary>
+    /// <remarks>
+    /// Beim Verlassen des Feldes und nicht bei jedem Tastendruck: sonst
+    /// entstuende bei jedem Buchstaben eine geschriebene Konfiguration. Ein
+    /// leeres Feld faellt auf den Rechnernamen zurueck, damit die Gegenstelle
+    /// nie einen namenlosen Eintrag bekommt.
+    /// </remarks>
+    private void OnDeviceNameChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        var name = DeviceNameBox.Text.Trim();
+        if (name.Length == 0)
+        {
+            name = Environment.MachineName;
+            DeviceNameBox.Text = name;
+        }
+
+        if (name == _config.DeviceName) return;
+
+        _config.DeviceName = name;
+        _save();
     }
 
     private void OnCopyId(object sender, RoutedEventArgs e)

@@ -23,7 +23,49 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public bool Accepted => Share is not null;
 
-    public string Name => string.IsNullOrWhiteSpace(Label) ? FolderId : Label;
+    /// <summary>
+    /// Der Anzeigename. Schreibbar, damit er sich in der Liste umbenennen
+    /// laesst.
+    /// </summary>
+    /// <remarks>
+    /// Nur uebernommene Freigaben haben eine eigene Bezeichnung. Bei einem
+    /// Ordner, den die Gegenstelle blosz anbietet, kommt der Name von dort --
+    /// ihn hier zu aendern haette nichts, woran es haengen bleiben koennte.
+    ///
+    /// Ein leerer Name faellt auf die Ordner-Kennung zurueck. So bleibt die
+    /// Zeile in jedem Fall benennbar, auch wenn jemand das Feld leert.
+    /// </remarks>
+    public string Name
+    {
+        get => string.IsNullOrWhiteSpace(Label) ? FolderId : Label;
+        set
+        {
+            if (Share is null) return;
+
+            var neu = (value ?? "").Trim();
+            if (neu == FolderId) neu = "";
+            if (neu == Label) return;
+
+            Label = neu;
+            Share.Config.Label = neu;
+
+            Notify();
+            Renamed?.Invoke(this);
+        }
+    }
+
+    /// <summary>Meldet eine Umbenennung, damit sie gespeichert wird.</summary>
+    public event Action<ShareRow>? Renamed;
+
+    /// <summary>
+    /// Wird gerade in dieser Zeile getippt?
+    /// </summary>
+    /// <remarks>
+    /// Die Tabelle frischt im Sekundentakt auf. Ohne diese Sperre schriebe
+    /// eine Auffrischung mitten im Umbenennen den alten Namen in das
+    /// Eingabefeld zurueck.
+    /// </remarks>
+    public bool Editing { get; set; }
 
     // ---------------------------------------------------------------- Zustand
 
@@ -159,6 +201,8 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     public void Refresh()
     {
+        if (Editing) return;
+
         // Alles auf einmal melden. Die Zeile ist klein, und einzelne
         // Meldungen waeren mehr Aufwand als Ersparnis.
         foreach (var name in new[]

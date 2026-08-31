@@ -180,6 +180,17 @@ public sealed class ShareConfig
 
 public sealed class AppConfig
 {
+    /// <summary>
+    /// Wie sich dieses Geraet den Gegenstellen nennt.
+    /// </summary>
+    /// <remarks>
+    /// Der Name steht im Hello und ist das erste, was eine Gegenstelle von
+    /// uns sieht -- in Syncthings Oberflaeche steht er neben der Kennung.
+    /// Vorgabe ist der Rechnername, denn den kennt der Benutzer bereits, und
+    /// eine erfundene Bezeichnung waere auf der Gegenseite nur ein Raetsel.
+    /// </remarks>
+    public string DeviceName { get; set; } = Environment.MachineName;
+
     /// <summary>Verzeichnis fuer Geraetezertifikat, Index-Datenbanken und Cache-Zustand.</summary>
     public string HomeDirectory { get; set; } = "synct-home";
 
