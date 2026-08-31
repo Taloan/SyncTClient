@@ -53,6 +53,14 @@
          Ressource laesst sich die passende Groesse auswaehlen. Das Zeichen im
          Infobereich braucht 16 oder 32 Punkte, je nach Bildschirm. -->
     <Resource Include="SyncTClient.ico" />
+
+    <!-- Je Zustand ein gezeichnetes Symbol. Erzeugt von tools/make-icon.ps1
+         aus den stc2-*.png-Vorlagen. -->
+    <Resource Include="Status-Ok.ico" />
+    <Resource Include="Status-Work.ico" />
+    <Resource Include="Status-Pause.ico" />
+    <Resource Include="Status-Unknown.ico" />
+    <Resource Include="Status-Error.ico" />
   </ItemGroup>
 
   <Target Name="NurX64" BeforeTargets="Build"

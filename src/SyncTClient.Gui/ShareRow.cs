@@ -165,6 +165,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     // ------------------------------------------------------------- Zahlen
 
     public string ReceivedText => Share is null ? "—" : Format.Bytes(Share.BytesReceived);
+    public string SentText => Share is null ? "—" : Format.Bytes(Share.BytesSent);
     public string SizeText => Share is null ? "—" : Format.Bytes(Share.IndexBytes);
     public string LocalSizeText => Share is null ? "—" : Format.Bytes(Share.CacheUsedBytes);
     public string FilesText => Share is null ? "—" : Format.Count(Share.IndexCount);
@@ -182,6 +183,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     // Rohwerte zum Sortieren. Die Textspalten zeigen "9,4 MB" und "944 MB".
     // Alphabetisch sortiert stuende der kleinere Wert hinten.
     public long ReceivedValue => Share?.BytesReceived ?? -1;
+    public long SentValue => Share?.BytesSent ?? -1;
     public long SizeValue => Share?.IndexBytes ?? -1;
     public long LocalSizeValue => Share?.CacheUsedBytes ?? -1;
     public long FilesValue => Share?.IndexCount ?? -1;
@@ -211,10 +213,10 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                      nameof(PeersText), nameof(PeerOnline), nameof(PeerText),
                      nameof(Copies), nameof(CopiesText), nameof(CopiesAtRisk), nameof(CopiesHint),
                      nameof(Busy), nameof(Indeterminate), nameof(Percent), nameof(ProgressText),
-                     nameof(ReceivedText), nameof(SizeText), nameof(LocalSizeText),
+                     nameof(ReceivedText), nameof(SentText), nameof(SizeText), nameof(LocalSizeText),
                      nameof(FilesText), nameof(LocalFilesText), nameof(ThumbsText),
                      nameof(PathText), nameof(ModeText), nameof(BudgetText), nameof(LastTransferText),
-                     nameof(ReceivedValue), nameof(SizeValue), nameof(LocalSizeValue),
+                     nameof(ReceivedValue), nameof(SentValue), nameof(SizeValue), nameof(LocalSizeValue),
                      nameof(FilesValue), nameof(LocalFilesValue), nameof(ThumbsValue),
                      nameof(BudgetValue), nameof(LastTransferValue)
                  })

@@ -195,6 +195,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     public long BytesReceived => Interlocked.Read(ref _bytesReceived);
 
+    /// <summary>Was diese Freigabe seit dem Start ausgeliefert hat.</summary>
+    /// <remarks>
+    /// Solange der Client nur las, waere die Spalte dauerhaft null gewesen und
+    /// haette nichts gesagt. Seit er Bloecke beantwortet, ist sie die
+    /// Gegenprobe: sie zeigt, dass die andere Seite tatsaechlich bei uns holt.
+    /// </remarks>
+    public long BytesSent => Interlocked.Read(ref _bytesSent);
+
     /// <summary>Wann zuletzt etwas fuer diese Freigabe ankam.</summary>
     public DateTime? LastTransfer { get; private set; }
 
@@ -252,6 +260,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public int ReachableCopies => _connection is not null && (_index?.Count ?? 0) > 0 ? 1 : 0;
 
     private long _bytesReceived;
+    private long _bytesSent;
+
+    private void NoteSent(long bytes)
+    {
+        Interlocked.Add(ref _bytesSent, bytes);
+        LastTransfer = DateTime.Now;
+    }
 
     private void NoteReceived(long bytes)
     {
@@ -935,6 +950,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(data), request.Hash.Span))
             return Deny(request, ErrorCode.InvalidFile, "unsere Bytes ergeben einen anderen Hash");
 
+        NoteSent(data.Length);
         return (ErrorCode.NoError, data);
     }
 
