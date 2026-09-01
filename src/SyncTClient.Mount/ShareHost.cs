@@ -956,7 +956,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public IReadOnlyList<VirtualEntry> Enumerate()
         => _index!.EnumerateLight()
-            .Where(e => _config.Includes(e.Name))
+            .Where(e => _config.Includes(e.Name, e.IsDirectory))
             .Select(e => new VirtualEntry(
                 e.Name, e.Size, DateTimeOffset.FromUnixTimeSeconds(e.ModifiedS), e.IsDirectory))
             .ToList();

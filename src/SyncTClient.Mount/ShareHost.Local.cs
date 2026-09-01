@@ -632,7 +632,7 @@ public sealed partial class ShareHost
             {
                 LeereVerzeichnisse(pfad);
 
-                if (NameOf(pfad) is { } name && !_config.Includes(name)
+                if (NameOf(pfad) is { } name && !_config.Includes(name, isDirectory: true)
                     && !Directory.EnumerateFileSystemEntries(pfad).Any())
                     Directory.Delete(pfad);
             }
