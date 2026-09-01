@@ -721,6 +721,9 @@ public sealed partial class ShareHost
             // gesehen hat, weil zufaellig derselbe Name drueben liegt.
             if (!Angekuendigt(name, info)) continue;
 
+            // Und der Beweis dafuer, gerechnet und nicht geschaetzt.
+            if (!InhaltStimmt(name, info)) continue;
+
             // Und die dritte: eine eben erst angekuendigte Datei bleibt
             // liegen, bis die Gegenstelle Gelegenheit hatte, sie zu holen.
             //
@@ -794,6 +797,47 @@ public sealed partial class ShareHost
             return !eigene.Deleted
                    && eigene.Size == info.Length
                    && eigene.ModifiedS == new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds();
+        }
+    }
+
+    /// <summary>
+    /// Stimmt der Inhalt auf der Platte mit dem ueberein, was angekuendigt
+    /// wurde?
+    /// </summary>
+    /// <remarks>
+    /// Groesse und Zeit sind eine Heuristik. Fuer die Frage, ob eine Datei neu
+    /// zu bewerten ist, genuegt sie: irrt sie sich, wird einmal zu viel
+    /// gerechnet. Fuer die Frage, ob eine Datei geloescht werden darf, genuegt
+    /// sie nicht -- irrt sie sich, ist ein Inhalt fort, den niemand mehr hat.
+    ///
+    /// Also wird gelesen und gerechnet. Die Datei steht ohnehin vor dem
+    /// Loeschen; ein Lesen mehr ist der billigste Teil daran.
+    /// </remarks>
+    private bool InhaltStimmt(string name, System.IO.FileInfo info)
+    {
+        BepFileInfo? eigene;
+        lock (_indexGate)
+            eigene = _index is not null && _index.TryGetLocal(name, out var e) ? e : null;
+
+        if (eigene is null || eigene.Deleted || eigene.BlocksHash.IsEmpty) return false;
+
+        try
+        {
+            using var content = new FileStream(
+                info.FullName, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.SequentialScan);
+
+            // Ein Platzhalter wuerde beim Lesen aus dem Netz geholt. Er hat
+            // hier ohnehin nichts zu suchen: entfernt wird, was Inhalt haelt.
+            if (IsPlaceholder(info.FullName)) return false;
+
+            var (_, _, hash) = BlockList.For(content, info.Length);
+            return eigene.BlocksHash.Span.SequenceEqual(hash);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // In Benutzung. Dann bleibt sie liegen, und zwar mit Absicht.
+            return false;
         }
     }
 
