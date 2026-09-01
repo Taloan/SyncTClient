@@ -79,9 +79,15 @@ public static class BlockList
     /// <c>synctmount --blockcheck</c> gegen die Ankuendigungen einer
     /// Gegenstelle geprueft worden.
     ///
-    /// Eine leere Datei hat eine leere Blockliste. Der BlocksHash ist dann
-    /// SHA-256 ueber eine leere Eingabe (<c>e3b0c442...</c>) und nicht leer.
-    /// Das ergibt sich aus derselben Formel und ist kein Sonderfall.
+    /// Eine leere Datei bekommt genau einen Block der Laenge null. Das ist
+    /// kein Schoenheitsfehler, sondern Vorschrift: Syncthing lehnt eine
+    /// vorhandene Datei ohne Blockliste als Protokollverstoss ab und schliesst
+    /// die Verbindung -- "file with empty block list". Sein eigener Leser
+    /// liefert fuer eine leere Datei ebenfalls einen Block, dessen Hash der
+    /// SHA-256 der leeren Eingabe ist.
+    ///
+    /// Der BlocksHash ist dann SHA-256 ueber diesen einen Hash und nicht ueber
+    /// nichts.
     /// </remarks>
     /// <exception cref="EndOfStreamException">
     /// Der Strom endete vor <paramref name="size"/> Bytes.
@@ -123,6 +129,22 @@ public static class BlockList
                 });
 
                 offset += want;
+            }
+
+            // Eine leere Datei hat keinen Durchlauf und damit keinen Block.
+            // Ohne diesen einen bliebe die Liste leer, und die Gegenstelle
+            // wuerde die Ankuendigung zurueckweisen.
+            if (size == 0)
+            {
+                SHA256.HashData([], hash);
+                overAll.AppendData(hash);
+
+                blocks.Add(new BlockInfo
+                {
+                    Offset = 0,
+                    Size = 0,
+                    Hash = ByteString.CopyFrom(hash)
+                });
             }
         }
         finally
