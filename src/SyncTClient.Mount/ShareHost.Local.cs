@@ -2,6 +2,7 @@
 using System.Text;
 using Google.Protobuf;
 using SyncTClient.Bep;
+using SyncTClient.Vfs;
 using BlockInfo = SyncTClient.Bep.Proto.BlockInfo;
 using Counter = SyncTClient.Bep.Proto.Counter;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
@@ -542,15 +543,32 @@ public sealed partial class ShareHost
                     bytes += size;
                 }
 
-                // Die andere Richtung. Was hier liegt und die Gegenstelle
-                // nicht kennt, muss noch hinaus -- es ist genauso Rueckstand
-                // wie das, was hereinkommen muss.
+                // Die andere Richtung: was hier liegt und noch nicht
+                // angekuendigt ist.
+                //
+                // Massgeblich ist die eigene Ankuendigung, nicht der Index der
+                // Gegenstelle. Ob sie den Namen zurueckspiegelt, ist ihre
+                // Buchfuehrung; manche tun es nie. Wer darauf wartet, zeigt
+                // einen Rueckstand an, der nie kleiner wird -- ein Balken, der
+                // fuer immer bei 100 Prozent und ein paar offenen Bytes steht.
                 foreach (var (name, eintrag) in vorhanden)
                 {
                     if (bekannt.Contains(name)) continue;
 
                     vereint++;
                     vereintBytes += eintrag.Size;
+
+                    // Angekuendigt heisst: genau diese Version ist heraus.
+                    // Groesse und Zeit muessen dazu passen, sonst steht die
+                    // Aenderung noch aus.
+                    if (_index.TryGetLocal(name, out var eigene)
+                        && !eigene.Deleted
+                        && eigene.Size == eintrag.Size
+                        && eigene.ModifiedS == eintrag.ModifiedS)
+                    {
+                        continue;
+                    }
+
                     offen++;
                     bytes += eintrag.Size;
                 }
@@ -959,7 +977,13 @@ public sealed partial class ShareHost
         // worden. Dann kennen wir seine Bloecke, auch ohne sie zu haben.
         if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
         {
-            return _renamedFrom.TryRemove(name, out var vorher)
+            // Der Vermerk aus dem Rueckruf ist der schnelle Weg. Fehlt er --
+            // etwa weil das Verschieben in einer frueheren Sitzung geschah --,
+            // steht der urspruengliche Name in der Datei selbst.
+            if (!_renamedFrom.TryRemove(name, out var vorher))
+                vorher = CloudFilterMount.OriginalName(path);
+
+            return vorher is not null && vorher != name
                 ? EvaluateMoved(name, announced, vorher, info)
                 : Done(name);
         }

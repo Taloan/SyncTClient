@@ -55,3 +55,10 @@ CF_REVERT_FLAGS
 CfSetInSyncState
 CF_IN_SYNC_STATE
 CF_SET_IN_SYNC_FLAGS
+
+// Wird gebraucht, um den urspruenglichen Namen eines Platzhalters zu lesen.
+// Er steht in der FileIdentity, die beim Anlegen mitgegeben wurde, und
+// ueberlebt jedes Verschieben und jeden Neustart.
+CfGetPlaceholderInfo
+CF_PLACEHOLDER_INFO_CLASS
+CF_PLACEHOLDER_STANDARD_INFO

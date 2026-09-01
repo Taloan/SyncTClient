@@ -239,6 +239,60 @@ public sealed class CloudFilterMount : IDisposable
         return CreatePlaceholders(parent, [entry]) == 1;
     }
 
+    /// <summary>
+    /// Der Name, unter dem dieser Platzhalter angelegt wurde.
+    /// </summary>
+    /// <remarks>
+    /// Beim Anlegen bekommt jeder Platzhalter seinen relativen Pfad als
+    /// FileIdentity mit. Sie gehoert zur Datei und nicht zu ihrem Ort: sie
+    /// ueberlebt jedes Verschieben, jedes Umbenennen und jeden Neustart.
+    ///
+    /// Damit laesst sich ein verschobener Platzhalter noch Tage spaeter seiner
+    /// Blockliste zuordnen -- ohne ihn zu holen und ohne sich etwas merken zu
+    /// muessen.
+    ///
+    /// Liefert <c>null</c>, wenn die Datei kein Platzhalter ist oder sich
+    /// nicht lesen laesst.
+    /// </remarks>
+    public static unsafe string? OriginalName(string fullPath)
+    {
+        try
+        {
+            using var handle = File.OpenHandle(
+                fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+            // Der Puffer traegt die Struktur und dahinter die Identitaet. Ein
+            // Pfad ist kuerzer als tausend Zeichen; mehr gibt Windows nicht her.
+            var groesse = sizeof(CF_PLACEHOLDER_STANDARD_INFO) + 2048;
+            var puffer = new byte[groesse];
+
+            fixed (byte* zeiger = puffer)
+            {
+                uint gelesen;
+                var result = PInvoke.CfGetPlaceholderInfo(
+                    handle, CF_PLACEHOLDER_INFO_CLASS.CF_PLACEHOLDER_INFO_STANDARD,
+                    zeiger, (uint)groesse, &gelesen);
+
+                if (result.Failed) return null;
+
+                var info = (CF_PLACEHOLDER_STANDARD_INFO*)zeiger;
+                if (info->FileIdentityLength == 0) return null;
+
+                // Die Identitaet steht hinter der Struktur, als Feld
+                // veraenderlicher Laenge. Gebraucht wird ihre Adresse.
+                var name = Marshal.PtrToStringUni(
+                    (nint)Unsafe.AsPointer(ref info->FileIdentity[0]),
+                    (int)(info->FileIdentityLength / sizeof(char)));
+
+                return string.IsNullOrEmpty(name) ? null : name.TrimEnd('\0');
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     private unsafe int CreatePlaceholders(string directory, List<VirtualEntry> entries)
     {
         var baseDirectory = string.IsNullOrEmpty(directory)
