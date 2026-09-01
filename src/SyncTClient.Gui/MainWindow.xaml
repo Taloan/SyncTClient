@@ -66,11 +66,11 @@
          auf dem Rest lesbar bleibt: dasselbe Verfahren wie bei Untertiteln
          in einem Film, aus demselben Grund. -->
     <DataTemplate x:Key="Uebertragung">
-      <Grid Margin="0,1" Height="18" ToolTip="{Binding RelativePath}">
+      <Grid Margin="0,2" Height="24" ToolTip="{Binding RelativePath}">
         <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}" />
 
         <DockPanel Margin="6,0">
-          <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" FontSize="10"
+          <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" FontSize="11"
                      Margin="8,0,0,0" VerticalAlignment="Center" Foreground="White"
                      FontWeight="SemiBold">
             <TextBlock.Effect>
@@ -78,7 +78,7 @@
             </TextBlock.Effect>
           </TextBlock>
 
-          <TextBlock DockPanel.Dock="Right" Text="{Binding Progress}" FontSize="10"
+          <TextBlock DockPanel.Dock="Right" Text="{Binding Progress}" FontSize="11"
                      Margin="8,0,0,0" VerticalAlignment="Center" Foreground="White"
                      FontWeight="SemiBold">
             <TextBlock.Effect>
@@ -86,7 +86,7 @@
             </TextBlock.Effect>
           </TextBlock>
 
-          <TextBlock Text="{Binding Name}" FontSize="10" TextTrimming="CharacterEllipsis"
+          <TextBlock Text="{Binding Name}" FontSize="11" TextTrimming="CharacterEllipsis"
                      VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold">
             <TextBlock.Effect>
               <DropShadowEffect Color="Black" ShadowDepth="0" BlurRadius="5" Opacity="1" />
