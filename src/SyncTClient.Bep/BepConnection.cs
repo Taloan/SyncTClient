@@ -371,6 +371,9 @@ public sealed class BepConnection : IAsyncDisposable
     /// </remarks>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(2);
 
+    /// <summary>Nach dieser Zeit ohne Antwort wird es einmal gesagt.</summary>
+    private static readonly TimeSpan Nachfrist = TimeSpan.FromSeconds(10);
+
     public async Task<byte[]> RequestAsync(
         string folder, string name, long offset, int size, ByteString hash, int blockNo,
         CancellationToken ct = default)
@@ -391,6 +394,15 @@ public sealed class BepConnection : IAsyncDisposable
                 Hash = hash,
                 BlockNo = blockNo
             }, ct).ConfigureAwait(false);
+
+            // Ab hier ist die Anfrage auf der Leitung. Bleibt sie lange ohne
+            // Antwort, wird das gesagt -- sonst steht im Protokoll der Beginn
+            // einer Hydration und danach nichts, und man weiss nicht einmal,
+            // ob ueberhaupt gefragt wurde.
+            using var stille = new CancellationTokenSource(Nachfrist);
+            await using var gemeldet = stille.Token.Register(() => Log?.Invoke(
+                $"  noch keine Antwort auf Block {blockNo} von \"{name}\" " +
+                $"({Nachfrist.TotalSeconds:0} s, {size} B)."));
 
             await using var registration = ct.Register(() => waiter.TrySetCanceled(ct));
 
@@ -426,6 +438,9 @@ public sealed class BepConnection : IAsyncDisposable
 
     /// <summary>Die Gegenstelle laedt in diesem Ordner noch selbst.</summary>
     public event Action<string>? PeerBusyOn;
+
+    /// <summary>Wohin Auffaelligkeiten gemeldet werden.</summary>
+    public Action<string>? Log { get; set; }
 
     private async Task SendAsync(MessageType type, IMessage message, CancellationToken ct)
     {
