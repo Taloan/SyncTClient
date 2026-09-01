@@ -396,7 +396,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
-    /// Sieht den Ordner sofort durch, statt auf den naechsten Durchgang zu
+    /// Sucht sofort nach Aenderungen, statt auf den naechsten Durchgang zu
     /// warten.
     /// </summary>
     /// <remarks>
@@ -859,7 +859,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Das Anlegen der Platzhalter deckt nur einen Teil ab: es legt an, was
         // fehlt. Eine Datei, die die Gegenstelle inzwischen geloescht oder
         // geaendert hat, bleibt dabei stehen wie sie ist. Deshalb wird der
-        // ganze Index einmal durchgesehen.
+        // ganze Index einmal geprueft.
         //
         // Der Durchgang ist billig. Fuer einen Platzhalter, dessen Groesse und
         // Zeit zum Index passen, endet er nach zwei Vergleichen; das ist der

@@ -855,7 +855,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Sieht den Ordner sofort durch.
+    /// Sucht sofort nach Aenderungen im Ordner.
     /// </summary>
     /// <remarks>
     /// Der Durchgang laeuft ohnehin jede Minute, und der Beobachter meldet
