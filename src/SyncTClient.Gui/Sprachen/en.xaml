@@ -350,4 +350,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S2.Locked">Cannot be unchecked: not every file in this branch is held in full by the remote.</s:String>
   <s:String x:Key="S2.Refused">“{0}” stays selected: {1} files in it have not reached the placeholder threshold. Unchecking removes the branch, and those files would then exist nowhere.</s:String>
   <s:String x:Key="M.Pruned">Removed {0} files ({1}) outside the selection.</s:String>
+  <s:String x:Key="S2.LooseRoot">Files outside folders</s:String>
+  <s:String x:Key="S2.LooseIn">Files in {0}</s:String>
 </ResourceDictionary>

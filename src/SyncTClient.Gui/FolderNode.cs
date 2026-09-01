@@ -31,6 +31,22 @@ public sealed class FolderNode : INotifyPropertyChanged
 
     public ObservableCollection<FolderNode> Children { get; } = [];
 
+    /// <summary>
+    /// Wahr fuer den Knoten, der die losen Dateien eines Verzeichnisses
+    /// vertritt.
+    /// </summary>
+    /// <remarks>
+    /// Ohne ihn liesse sich ein Verzeichnis, von dem ein Unterordner
+    /// abgewaehlt ist, nicht mehr vollstaendig beschreiben: es ist dann
+    /// teilweise ausgewaehlt, und in der Auswahl stehen nur seine
+    /// ausgewaehlten Unterordner. Seine eigenen Dateien kaemen darin nicht
+    /// vor und fielen heraus, ohne dass jemand sie abgewaehlt haette.
+    ///
+    /// OneDrive loest es genauso: "Dateien ausserhalb von Ordnern" ganz oben
+    /// und "Dateien in X" in jedem Verzeichnis darunter.
+    /// </remarks>
+    public bool IsFileBucket { get; init; }
+
     public long TotalBytes { get; set; }
 
     public int FileCount { get; set; }
@@ -180,9 +196,10 @@ public sealed class FolderNode : INotifyPropertyChanged
 
             if (!entry.IsDirectory)
             {
-                // Groesse und Anzahl bis zur Wurzel hochzaehlen, damit jeder
-                // Knoten den Umfang seiner Auswahl anzeigen kann.
-                for (var walker = node; walker is not null; walker = walker.Parent)
+                // Die Datei gehoert in den Sammelknoten ihres Verzeichnisses.
+                // Groesse und Anzahl zaehlen von dort bis zur Wurzel hoch,
+                // damit jeder Knoten den Umfang seiner Auswahl anzeigt.
+                for (var walker = Bucket(node); walker is not null; walker = walker.Parent)
                 {
                     walker.FileCount++;
                     walker.TotalBytes += entry.Size;
@@ -203,6 +220,27 @@ public sealed class FolderNode : INotifyPropertyChanged
             lookup[path] = node;
             return node;
         }
+    }
+
+    /// <summary>Der Sammelknoten eines Verzeichnisses, angelegt beim ersten Bedarf.</summary>
+    private static FolderNode Bucket(FolderNode node)
+    {
+        var vorhanden = node.Children.FirstOrDefault(c => c.IsFileBucket);
+        if (vorhanden is not null) return vorhanden;
+
+        var name = node.Parent is null
+            ? App.S("S2.LooseRoot")
+            : App.S("S2.LooseIn", node.Name);
+
+        var bucket = new FolderNode(name, node.Path.Length == 0 ? "*" : node.Path + "/*", node)
+        {
+            IsFileBucket = true
+        };
+
+        // Ganz oben, wie bei OneDrive. Die Dateien eines Verzeichnisses stehen
+        // vor seinen Unterverzeichnissen.
+        node.Children.Insert(0, bucket);
+        return bucket;
     }
 
     private static string ParentOf(string path)
