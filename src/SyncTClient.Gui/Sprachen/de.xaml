@@ -111,14 +111,6 @@
   <s:String x:Key="S.Settings.MinFree">Mindestens frei lassen (GB)</s:String>
   <s:String x:Key="S.Settings.LimitsHint">Es gelten zwei Grenzen; wirksam wird die, die zuerst erreicht wird. Wird eine Grenze überschritten, wird der Speicherplatz der Dateien freigegeben, die am längsten nicht geöffnet wurden — über alle Shares hinweg. Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalten. Beim freien Platz bedeutet 0, dass keine Grenze gilt.</s:String>
   <s:String x:Key="S.Settings.ClearCache">Cache jetzt leeren …</s:String>
-  <s:String x:Key="S.Settings.RepairGroup">Liegengebliebene Platzhalter</s:String>
-  <s:String x:Key="S.Settings.RepairHint">Ein Ordner, dessen Bindung gelöst wurde, kann Platzhalter zurücklassen. Windows findet dann keinen Anbieter mehr für ihren Inhalt und nimmt sie weder zum Lesen noch zum Löschen an — „Die Clouddatei-Metadaten sind beschädigt und nicht lesbar“. Das Auflösen macht gewöhnliche Dateien daraus; gelöscht wird nichts.</s:String>
-  <s:String x:Key="S.Settings.Revert">Platzhalter in einem Ordner auflösen …</s:String>
-  <s:String x:Key="S.Settings.RevertAsk">Alle Platzhalter unterhalb von „{0}“ auflösen?&#10;&#10;Geholte Dateien behalten ihren Inhalt. Ein leerer Platzhalter wird eine leere Datei — seine Bytes lagen ohnehin nie hier. Gelöscht wird nichts.</s:String>
-  <s:String x:Key="S.Settings.RevertRunning">Wird aufgelöst …</s:String>
-  <s:String x:Key="S.Settings.RevertDone">{1} Platzhalter gefunden, {0} aufgelöst.</s:String>
-  <s:String x:Key="S.Settings.RevertFailed">Nicht alle ließen sich auflösen: {0}</s:String>
-  <s:String x:Key="S.Settings.RevertInUse">Dieser Ordner gehört zu einer eingerichteten Freigabe. Dort sind Platzhalter kein Rest, sondern der Betriebszustand.</s:String>
   <s:String x:Key="S.Settings.DataGroup">DATEN</s:String>
   <s:String x:Key="S.Settings.DataDir">Datenverzeichnis</s:String>
   <s:String x:Key="S.Settings.DataDirHint">Hier liegen Gerätezertifikat und Index; die Vorschaubilder liegen im Cache-Verzeichnis. Ein Wechsel gilt ab dem nächsten Start. Vorhandene Daten werden nicht mit verschoben, und ohne Zertifikat am neuen Ort wird eine neue Device-ID erzeugt.</s:String>
