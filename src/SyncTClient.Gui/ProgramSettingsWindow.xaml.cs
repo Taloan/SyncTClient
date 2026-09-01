@@ -305,7 +305,7 @@ public partial class ProgramSettingsWindow : Window
 
     private void OnSave(object sender, RoutedEventArgs e)
     {
-        // Keine 0: unbegrenzt bedeutet, dass nie etwas verdraengt wird. Aus
+        // Keine 0: unbegrenzt bedeutet, dass nie Speicherplatz freigegeben wird. Aus
         // "on-demand" wuerde nach ein paar Monaten eine Vollkopie.
 
         if (!int.TryParse(ThresholdBox.Text.Trim(), out var schwelle) || schwelle < 1)

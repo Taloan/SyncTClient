@@ -274,12 +274,12 @@ Raise the usage limit in the settings, or set the share to “keep fully local�
 Lower the limit in the settings, or make room on the drive.</s:String>
 
   <s:String x:Key="S.Share.Conflict">On conflicts</s:String>
-  <s:String x:Key="S.Conflict.KeepBoth">Keep both, rename the losing one</s:String>
-  <s:String x:Key="S.Conflict.Newer">Newer file wins</s:String>
-  <s:String x:Key="S.Conflict.Older">Older file wins</s:String>
-  <s:String x:Key="S.Conflict.Local">Local file wins</s:String>
-  <s:String x:Key="S.Conflict.Remote">Remote file wins</s:String>
-  <s:String x:Key="S.Share.ConflictHint">A conflict arises when both sides have changed the same file. With renaming, both versions are kept; the losing one is named name.sync-conflict-20260302-193044-YWS4CCA.jpg, as in Syncthing. With every other setting the losing version is deleted.</s:String>
+  <s:String x:Key="S.Conflict.KeepBoth">Keep both, rename the local version</s:String>
+  <s:String x:Key="S.Conflict.Newer">Take the version changed last</s:String>
+  <s:String x:Key="S.Conflict.Older">Take the version changed first</s:String>
+  <s:String x:Key="S.Conflict.Local">Always take the local version</s:String>
+  <s:String x:Key="S.Conflict.Remote">Always take the remote version</s:String>
+  <s:String x:Key="S.Share.ConflictHint">A conflict arises when both sides changed the same file without knowing about the other change. When renaming, both versions stay in the folder: the remote version keeps the name, the local one gets the modification time and the device name appended — photo.sync-conflict-20260901-101656-PC111.jpg. With the other settings, one version stays in the folder; the other is put under .stversions, provided that keeping replaced versions is switched on.</s:String>
 
   <s:String x:Key="M.PreviewShort">{0} images, {1}</s:String>
   <s:String x:Key="S.Share.KeepVersions">Keep replaced versions</s:String>
@@ -360,4 +360,5 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="C.Freed">{0} files ({1}) turned into placeholders.</s:String>
   <s:String x:Key="C.Hidden">{0} branches hidden.</s:String>
   <s:String x:Key="C.Blocked">Not possible: {0} files have not reached the placeholder threshold.</s:String>
+  <s:String x:Key="S.Share.TreeHint">Checked: kept here, as a placeholder or with content.&#10;Not checked: still transferred, then deleted here once the placeholder threshold is reached.</s:String>
 </ResourceDictionary>

@@ -27,10 +27,10 @@ namespace SyncTClient.Mount;
 /// </remarks>
 public sealed partial class ShareHost
 {
-    /// <summary>Der Ordner, in dem ersetzte und geloeschte Fassungen liegen.</summary>
+    /// <summary>Der Ordner, in dem ersetzte und geloeschte Versionen liegen.</summary>
     public const string VersionsFolder = ".stversions";
 
-    /// <summary>Namen, deren Fassung von der Gegenstelle noch anzuwenden ist.</summary>
+    /// <summary>Namen, deren Version von der Gegenstelle noch anzuwenden ist.</summary>
     private readonly ConcurrentDictionary<string, byte> _incoming = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -38,9 +38,9 @@ public sealed partial class ShareHost
     /// unveraendert sind.
     /// </summary>
     /// <remarks>
-    /// Der Vorfilter in <c>Evaluate</c> laesst eine Datei liegen, deren
+    /// Der Vorfilter in <c>Evaluate</c> uebergeht eine Datei, deren
     /// Groesse und Zeit zum eigenen Eintrag passen. Nach einem gewonnenen
-    /// Konflikt trifft das zu, und trotzdem muss die eigene Fassung heraus:
+    /// Konflikt trifft das zu, und trotzdem muss die eigene Version heraus:
     /// die Gegenstelle kennt sie nicht.
     /// </remarks>
     private readonly ConcurrentDictionary<string, byte> _force = new(StringComparer.Ordinal);
@@ -56,7 +56,7 @@ public sealed partial class ShareHost
     /// <summary>Nimmt Namen entgegen und meldet, wie viele neu dazukamen.</summary>
     /// <remarks>
     /// Gezaehlt wird, was wirklich Arbeit macht. Ausgeschlossene Namen und
-    /// alte Fassungen fallen heraus, und ein Name, der ohnehin schon in der
+    /// alte Versionen fallen heraus, und ein Name, der ohnehin schon in der
     /// Schlange steht, ist keine zusaetzliche Aufgabe -- sonst waere die
     /// Gesamtzahl groesser als die Menge, die je abgearbeitet wird.
     /// </remarks>
@@ -160,7 +160,7 @@ public sealed partial class ShareHost
         {
             switch (VersionVectors.Compare(mine.Version, theirs.Version))
             {
-                // Unsere Fassung enthaelt ihre. Sie geht hinaus, nicht herein.
+                // Unsere Version enthaelt ihre. Sie geht hinaus, nicht herein.
                 case VersionOrder.Neuer:
                     return;
 
@@ -192,7 +192,7 @@ public sealed partial class ShareHost
     }
 
     /// <summary>
-    /// Setzt den Platzhalter fuer die Fassung der Gegenstelle. Eine vorhandene
+    /// Setzt den Platzhalter fuer die Version der Gegenstelle. Eine vorhandene
     /// Datei weicht ihm.
     /// </summary>
     /// <remarks>
@@ -245,7 +245,7 @@ public sealed partial class ShareHost
         if (angeheftet) _mount.SetPinned(path, true);
 
         // Unser eigener Eintrag ist damit hinfaellig. Was hier liegt, ist ab
-        // jetzt die Fassung der Gegenstelle.
+        // jetzt die Version der Gegenstelle.
         lock (_indexGate) _index!.ForgetLocal(name);
 
         if (neu) bilanz.Angelegt++; else bilanz.Ersetzt++;
@@ -291,10 +291,10 @@ public sealed partial class ShareHost
     // ------------------------------------------------------------ Konflikt
 
     /// <summary>
-    /// Entscheidet, welche der beiden unabhaengig entstandenen Fassungen gilt.
+    /// Entscheidet, welche der beiden unabhaengig entstandenen Versionen gilt.
     /// </summary>
     /// <returns>
-    /// <c>true</c>, wenn die Fassung der Gegenstelle gesetzt werden soll.
+    /// <c>true</c>, wenn die Version der Gegenstelle gesetzt werden soll.
     /// <c>false</c>, wenn die eigene bleibt.
     /// </returns>
     private bool ResolveConflict(string name, string path, BepFileInfo mine, BepFileInfo theirs)
@@ -302,21 +302,21 @@ public sealed partial class ShareHost
         switch (_config.Conflict)
         {
             case ConflictResolution.Local:
-                return KeepMine(name, theirs, "die eigene Fassung hat Vorrang");
+                return KeepMine(name, theirs, "die eigene Version hat Vorrang");
 
             case ConflictResolution.Remote:
-                _log($"[{FolderId}] Konflikt bei \"{name}\": die Fassung der Gegenstelle hat Vorrang.");
+                _log($"[{FolderId}] Konflikt bei \"{name}\": die Version der Gegenstelle hat Vorrang.");
                 return true;
 
             case ConflictResolution.Newer:
                 return mine.ModifiedS > theirs.ModifiedS
-                    ? KeepMine(name, theirs, "die eigene Fassung ist neuer")
-                    : TakeTheirs(name, "die Fassung der Gegenstelle ist neuer");
+                    ? KeepMine(name, theirs, "die eigene Version ist neuer")
+                    : TakeTheirs(name, "die Version der Gegenstelle ist neuer");
 
             case ConflictResolution.Older:
                 return mine.ModifiedS < theirs.ModifiedS
-                    ? KeepMine(name, theirs, "die eigene Fassung ist aelter")
-                    : TakeTheirs(name, "die Fassung der Gegenstelle ist aelter");
+                    ? KeepMine(name, theirs, "die eigene Version ist aelter")
+                    : TakeTheirs(name, "die Version der Gegenstelle ist aelter");
 
             default:
                 // Beide bleiben. Die eigene wird zur Seite gelegt, die der
@@ -332,11 +332,11 @@ public sealed partial class ShareHost
     }
 
     /// <summary>
-    /// Behaelt die eigene Fassung und sorgt dafuer, dass sie auch hinausgeht.
+    /// Behaelt die eigene Version und sorgt dafuer, dass sie auch hinausgeht.
     /// </summary>
     /// <remarks>
     /// Die Zaehler der Gegenstelle werden dabei in den eigenen Vektor
-    /// uebernommen. Ohne das stuenden beide Fassungen weiter nebeneinander und
+    /// uebernommen. Ohne das stuenden beide Versionen weiter nebeneinander und
     /// der Konflikt kaeme mit jeder Ankuendigung zurueck.
     /// </remarks>
     private bool KeepMine(string name, BepFileInfo theirs, string grund)
@@ -350,7 +350,7 @@ public sealed partial class ShareHost
             }
         }
 
-        // Der Vorfilter wuerde die Datei liegen lassen: Groesse und Zeit haben
+        // Der Vorfilter wuerde die Datei uebergehen: Groesse und Zeit haben
         // sich nicht geaendert, nur die Zustaendigkeit.
         _force[name] = 0;
         _dirty[name] = 0;
@@ -382,36 +382,58 @@ public sealed partial class ShareHost
         return vector;
     }
 
-    /// <summary>Legt die eigene Fassung unter eigenem Namen daneben.</summary>
+    /// <summary>
+    /// Der Geraetename, so wie er in einem Dateinamen stehen kann.
+    /// </summary>
+    /// <remarks>
+    /// Syncthing setzt an diese Stelle die Kurzkennung des Geraets. Die ist
+    /// auf beiden Seiten dieselbe, sagt aber niemandem, an welchem Geraet die
+    /// Version entstand -- und genau das will man wissen, wenn man vor zwei
+    /// Dateien steht.
+    ///
+    /// Beschraenkt auf Buchstaben, Ziffern, Strich und Unterstrich: der Name
+    /// wird zum Bestandteil eines Dateinamens und geht ueber das Protokoll an
+    /// die Gegenstelle, deren Dateisystem andere Regeln haben kann als dieses.
+    /// </remarks>
+    private string Geraetekennung()
+    {
+        var sauber = new string([.. _app.DeviceName
+            .Where(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_')
+            .Take(24)]);
+
+        return sauber.Length > 0 ? sauber : "unbenannt";
+    }
+
+    /// <summary>Legt die eigene Version unter eigenem Namen daneben.</summary>
     private bool KeepBoth(string name, string path)
     {
         if (!File.Exists(path) || IsPlaceholder(path))
         {
             // Ohne Inhalt gibt es nichts zu behalten.
             _log($"[{FolderId}] Konflikt bei \"{name}\": hier liegt kein Inhalt, " +
-                 "die Fassung der Gegenstelle gilt.");
+                 "die Version der Gegenstelle gilt.");
             return true;
         }
 
         var stamp = File.GetLastWriteTimeUtc(path).ToString("yyyyMMdd-HHmmss");
         var extension = Path.GetExtension(name);
         var stem = name[..^extension.Length];
-        var target = $"{stem}.sync-conflict-{stamp}-{OwnDeviceId.ShortId():x16}{extension}";
+        var target = $"{stem}.sync-conflict-{stamp}-{Geraetekennung()}{extension}";
 
         try
         {
             File.Move(path, LocalPathOf(target), overwrite: false);
-            _log($"[{FolderId}] Konflikt bei \"{name}\": die eigene Fassung liegt jetzt " +
+            _log($"[{FolderId}] Konflikt bei \"{name}\": die eigene Version liegt jetzt " +
                  $"unter \"{target}\".");
 
-            // Die abgelegte Fassung ist eine neue Datei in der Freigabe und
+            // Die abgelegte Version ist eine neue Datei in der Freigabe und
             // wird als solche angekuendigt.
             _dirty[target] = 0;
             Wake();
         }
         catch (IOException ex)
         {
-            _log($"[{FolderId}] Konflikt bei \"{name}\": die eigene Fassung liess sich nicht " +
+            _log($"[{FolderId}] Konflikt bei \"{name}\": die eigene Version liess sich nicht " +
                  $"zur Seite legen ({ex.Message}). Die Gegenstelle gilt.");
         }
 
@@ -421,7 +443,7 @@ public sealed partial class ShareHost
     // ------------------------------------------------------------ Sicherung
 
     /// <summary>
-    /// Legt eine Fassung ab, bevor sie ersetzt oder geloescht wird.
+    /// Legt eine Version ab, bevor sie ersetzt oder geloescht wird.
     /// </summary>
     /// <returns>
     /// <c>true</c>, wenn die Datei verschoben wurde und an ihrem Platz nichts
@@ -455,7 +477,7 @@ public sealed partial class ShareHost
             File.Move(path, target);
 
             // Das Verschieben nimmt die urspruengliche Erstellzeit mit. Fuer
-            // die Haltedauer zaehlt aber, wann die Fassung hier abgelegt
+            // die Haltedauer zaehlt aber, wann die Version hier abgelegt
             // wurde, sonst faellt eine alte Datei sofort wieder fort.
             File.SetCreationTimeUtc(target, DateTime.UtcNow);
             return true;
@@ -485,7 +507,7 @@ public sealed partial class ShareHost
         {
             foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
             {
-                // Massgeblich ist, wann die Fassung abgelegt wurde. Die
+                // Massgeblich ist, wann die Version abgelegt wurde. Die
                 // Schreibzeit ist die der urspruenglichen Datei und kann weit
                 // zurueckliegen.
                 if (File.GetCreationTimeUtc(file) > grenze) continue;
@@ -515,6 +537,6 @@ public sealed partial class ShareHost
         }
 
         if (geloescht > 0)
-            _log($"[{FolderId}] {geloescht} Fassungen aelter als {_config.VersionDays} Tage entfernt.");
+            _log($"[{FolderId}] {geloescht} Versionen aelter als {_config.VersionDays} Tage entfernt.");
     }
 }

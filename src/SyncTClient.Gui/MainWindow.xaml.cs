@@ -625,7 +625,7 @@ public partial class MainWindow : Window
     /// Gezeigt wird der Datentraeger, der seiner Grenze am naechsten ist --
     /// also der, auf dem als naechstes etwas weichen muss. Eine Summe ueber
     /// alle Laufwerke waere die falsche Zahl: sie kann harmlos aussehen,
-    /// waehrend eine einzelne Platte schon verdraengt.
+    /// waehrend auf einer einzelnen Platte schon Speicherplatz freigegeben wird.
     ///
     /// Bei nur einem Laufwerk ist das dasselbe wie vorher, und die Zeile
     /// bleibt so knapp wie zuvor.
@@ -642,7 +642,7 @@ public partial class MainWindow : Window
     /// <remarks>
     /// Eine Summe ueber alle Laufwerke waere die falsche Zahl. Die Grenze gilt
     /// je Datentraeger; die Summe kann harmlos aussehen, waehrend ein
-    /// einzelnes Laufwerk schon verdraengt.
+    /// einzelnes Laufwerk die Grenze schon ueberschreitet.
     /// </remarks>
     private void UpdateCache()
     {
@@ -882,7 +882,7 @@ public partial class MainWindow : Window
                     || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var nummer)
                     || nummer < 0 || nummer >= ShareGrid.Columns.Count)
                 {
-                    // Eine Datei aus einer aelteren Fassung. Die Vorgabe bleibt.
+                    // Eine Datei aus einer aelteren Version. Die Vorgabe bleibt.
                     return;
                 }
 

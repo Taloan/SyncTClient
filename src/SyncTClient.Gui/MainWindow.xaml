@@ -573,7 +573,7 @@
             <!-- Eine Zeile je Laufwerk mit Freigabe. Eine Summe ueber alle
                  waere die falsche Zahl: das Limit gilt je Datentraeger, und
                  die Summe kann harmlos aussehen, waehrend ein einzelnes
-                 Laufwerk schon verdraengt. -->
+                 Laufwerk seine Grenze schon ueberschreitet. -->
             <ItemsControl x:Name="CacheList">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>

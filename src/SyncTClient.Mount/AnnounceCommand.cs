@@ -137,7 +137,7 @@ internal static class AnnounceCommand
         // Sicherheitspruefung. Ein neuer Name kann mit nichts zusammenstossen.
         // Ein bestehender loest bei der Gegenstelle einen Versionsvergleich
         // aus, und der ist hier noch nicht gebaut: die Ankuendigung koennte
-        // eine fremde, neuere Fassung verdraengen.
+        // eine fremde, neuere Version ueberschreiben.
         if (index.TryGet(announcedName, out _) ||
             (announcedName != protocolName && index.TryGet(protocolName, out _)))
         {
