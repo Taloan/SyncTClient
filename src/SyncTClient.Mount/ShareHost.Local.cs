@@ -18,7 +18,7 @@ namespace SyncTClient.Mount;
 /// <remarks>
 /// Bisher hat dieser Teil des Programms nur gelesen. Er nahm den Index
 /// entgegen, legte Platzhalter an und holte Bloecke. Ab hier schreibt er auch:
-/// eine geaenderte Datei bekommt eine neue Fassungsnummer und wird
+/// eine geaenderte Datei bekommt eine neue Versionsnummer und wird
 /// angekuendigt.
 ///
 /// Der Ablauf ist in drei Schritte zerlegt, weil die Rueckrufe von Windows
@@ -29,7 +29,7 @@ namespace SyncTClient.Mount;
 /// Die wichtigste Vorkehrung sitzt im zweiten Schritt: der Vergleich des
 /// gerechneten blocks_hash mit dem gespeicherten. Ohne ihn erzeugt jede eigene
 /// Hydration, jede Attributaenderung und jede zurueckgespiegelte Ankuendigung
-/// eine neue Fassung, die Gegenstelle spiegelt sie zurueck, und beide Seiten
+/// eine neue Version, die Gegenstelle spiegelt sie zurueck, und beide Seiten
 /// laufen mit voller Bandbreite im Kreis.
 /// </remarks>
 public sealed partial class ShareHost
@@ -72,7 +72,7 @@ public sealed partial class ShareHost
     /// </remarks>
     private const int MaximumDeletions = 100;
 
-    /// <summary>So lange bleibt ein Vermerk liegen, bevor er bewertet wird.</summary>
+    /// <summary>So lange wartet ein Vermerk, bevor er bewertet wird.</summary>
     /// <remarks>
     /// Ein Speichervorgang schreibt oft mehrmals hintereinander. Wer sofort
     /// rechnet, rechnet die Blockliste eines halb geschriebenen Standes und
@@ -146,7 +146,7 @@ public sealed partial class ShareHost
     /// Zaehler des Versionsvektors.
     /// </summary>
     /// <remarks>
-    /// Ohne sie laesst sich keine Fassung fortschreiben. Ist sie leer, wird
+    /// Ohne sie laesst sich keine Version fortschreiben. Ist sie leer, wird
     /// nichts angekuendigt. Gesetzt wird sie vom <see cref="PeerHost"/>, der
     /// das Geraetezertifikat haelt.
     /// </remarks>
@@ -168,10 +168,10 @@ public sealed partial class ShareHost
     {
         if (NameOf(relativePath) is not { } name) return;
 
-        // Was nicht zur Auswahl gehoert, wird nie angekuendigt. Ohne diese
-        // Pruefung wuerde das Entfernen eines ausgeschlossenen Zweiges der
-        // Gegenstelle als Loeschung gemeldet -- und dort ausgefuehrt.
-        if (!_config.Includes(name)) return;
+        // Die Auswahl wird hier nicht geprueft. Sie sagt, was auf diesem
+        // Geraet liegen soll, nicht was zur Freigabe gehoert -- eine Datei
+        // ausserhalb der Auswahl wird also ebenso angekuendigt und uebertragen.
+        // Entfernt wird sie erst danach, von PruneExcluded.
 
         // Was wir selbst gerade schreiben, ist keine Aenderung von aussen.
         if (IsHydrating(name)) return;
@@ -193,7 +193,18 @@ public sealed partial class ShareHost
     public void NoteLocalDelete(string relativePath)
     {
         if (NameOf(relativePath) is not { } name) return;
-        if (!_config.Includes(name)) return;
+
+        // Ausserhalb der Auswahl entfernen wir selbst, sobald die Gegenstelle
+        // die Datei fuehrt. Das ist keine Loeschung, sondern das Ende des
+        // Weges. Wuerde sie angekuendigt, loeschte die Gegenstelle die eben
+        // empfangene Datei sofort wieder.
+        //
+        // Die Bedingung trifft nur auf diesen Fall zu: eine Datei ausserhalb
+        // der Auswahl, die die Gegenstelle vollstaendig fuehrt, kann nur von
+        // uns dorthin gebracht worden sein.
+        if (!_config.Includes(name) && MayEvict(name)) return;
+
+        if (IsHydrating(name)) return;
 
         _dirty.TryRemove(name, out _);
         _removed[name] = 0;
@@ -368,7 +379,6 @@ public sealed partial class ShareHost
             foreach (var info in new DirectoryInfo(root).EnumerateFiles("*", options))
             {
                 if (NameOf(info.FullName) is not { } name) continue;
-                if (!_config.Includes(name)) continue;
 
                 vorhanden[name] = (
                     info.Length,
@@ -548,17 +558,23 @@ public sealed partial class ShareHost
     }
 
     /// <summary>
-    /// Entfernt, was nicht mehr zur Auswahl gehoert.
+    /// Entfernt, was hier nicht liegen soll, sobald es anderswo angekommen ist.
     /// </summary>
     /// <remarks>
-    /// Erlaubt ist das Abwaehlen nur, wenn jede Datei des Zweiges die
-    /// Platzhalter-Schwelle erreicht hat -- die Gegenstelle fuehrt sie also
-    /// vollstaendig. Erst dann ist Entfernen kein Verlust, sondern eine
-    /// Freigabe von Platz.
+    /// Ein abgewaehlter Zweig ist nicht vom Abgleich ausgenommen. Er sagt nur,
+    /// dass sein Inhalt auf diesem Geraet nicht liegen soll. Was dort ankommt,
+    /// wird angekuendigt und uebertragen wie jede andere Datei; erst wenn die
+    /// Platzhalter-Schwelle erreicht ist -- so viele andere Knoten fuehren sie
+    /// vollstaendig -- verschwindet sie hier. Nicht als Platzhalter, sondern
+    /// ganz, denn zu sehen sein soll sie ja gerade nicht.
     ///
-    /// Angekuendigt wird davon nichts. Ein ausgeschlossener Name kommt gar
-    /// nicht erst in die Vermerke; sonst wuerde aus dem Abwaehlen hier ein
-    /// Loeschen bei der Gegenstelle.
+    /// Angekuendigt wird das Entfernen nicht. Sonst loeschte die Gegenstelle
+    /// die eben empfangene Datei sofort wieder. Die Vorkehrung dafuer steht in
+    /// <see cref="NoteLocalDelete"/> und im Loeschdurchgang.
+    ///
+    /// Laeuft im Hintergrund mit, nicht nur beim Speichern der Auswahl. Eine
+    /// Datei, die erst nach dem Abwaehlen hineinkopiert wird, braucht denselben
+    /// Weg wie eine, die schon da war.
     /// </remarks>
     public (int Files, long Bytes) PruneExcluded()
     {
@@ -580,22 +596,22 @@ public sealed partial class ShareHost
             if (NameOf(info.FullName) is not { } name) continue;
             if (_config.Includes(name)) continue;
 
-            // Die zweite Sperre, unabhaengig von der Oberflaeche. Entfernt
-            // wird nur, was die Gegenstelle vollstaendig fuehrt. Ein Fehler
-            // in der Auswahl kostet dann Platzhalter und keine Daten -- und
-            // genau so ein Fehler hat einmal genuegt.
-            BepFileInfo eintrag;
-            bool bekannt;
-            lock (_indexGate) bekannt = _index is not null && _index.TryGet(name, out eintrag!);
-
-            if (!bekannt) continue;
-            lock (_indexGate) _index!.TryGet(name, out eintrag!);
-            if (!HasContent(eintrag)) continue;
+            // Die zweite Sperre, unabhaengig von der Oberflaeche: entfernt wird
+            // nur, was die Platzhalter-Schwelle erreicht hat. Ein Fehler in der
+            // Auswahl kostet dann Platz und keine Daten -- und genau so ein
+            // Fehler hat einmal genuegt.
+            if (!MayEvict(name)) continue;
 
             try
             {
                 var laenge = info.Length;
-                info.Delete();
+
+                // Die Sperre haelt die eigene Loeschung von der Erkennung fern.
+                // Der Beobachter meldet sie sonst als Aenderung von aussen.
+                using (HoldHydration(name)) info.Delete();
+
+                _removed.TryRemove(name, out _);
+                _dirty.TryRemove(name, out _);
 
                 _cache?.Forget(name);
                 lock (_indexGate) _index?.ForgetLocal(name);
@@ -609,11 +625,14 @@ public sealed partial class ShareHost
             }
         }
 
-        LeereVerzeichnisse(_config.LocalPath);
-
         if (anzahl > 0)
-            _log($"[{FolderId}] {anzahl} Dateien ausserhalb der Auswahl entfernt " +
-                 $"({bytes / (1024.0 * 1024.0):0.0} MB).");
+        {
+            LeereVerzeichnisse(_config.LocalPath);
+
+            _log($"[{FolderId}] {anzahl} Dateien uebertragen und hier entfernt " +
+                 $"({bytes / (1024.0 * 1024.0):0.0} MB) -- sie sollen auf diesem " +
+                 "Geraet nicht liegen.");
+        }
 
         return (anzahl, bytes);
     }
@@ -777,6 +796,10 @@ public sealed partial class ShareHost
                 {
                     _lastScan = DateTime.UtcNow;
                     ScanLocal(quiet: true);
+
+                    // Danach, nicht davor: erst wird angekuendigt, was hier
+                    // liegt, und dann entfernt, was inzwischen angekommen ist.
+                    PruneExcluded();
                 }
 
                 if (_dirty.IsEmpty && _removed.IsEmpty) continue;
@@ -809,7 +832,7 @@ public sealed partial class ShareHost
 
         // Ohne eigene Geraete-ID liesse sich kein Zaehler fortschreiben. Eine
         // Ankuendigung ohne eigenen Zaehler waere fuer die Gegenstelle
-        // dieselbe Fassung wie zuvor.
+        // dieselbe Version wie zuvor.
         if (OwnDeviceId == Bep.DeviceId.Empty) return;
 
         var batch = new List<BepFileInfo>();
@@ -861,8 +884,6 @@ public sealed partial class ShareHost
     /// </remarks>
     private BepFileInfo? Evaluate(string name)
     {
-        if (!_config.Includes(name)) return Done(name);
-
         var path = ResolveInside(name);
         if (path is null) return Done(name);
 
@@ -917,7 +938,7 @@ public sealed partial class ShareHost
                 FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.SequentialScan);
 
             // Zwischen der Pruefung oben und dem Lesen kann die Datei
-            // verdraengt worden sein. Das Oeffnen allein holt sie noch nicht,
+            // freigegeben worden sein. Das Oeffnen allein holt sie noch nicht,
             // das Lesen wuerde es.
             if (IsPlaceholder(path)) return Done(name);
 
@@ -938,7 +959,7 @@ public sealed partial class ShareHost
 
         var known = LocalCopy(announced);
 
-        // Die wichtigste Pruefung. Gleicher Inhalt heisst: keine neue Fassung,
+        // Die wichtigste Pruefung. Gleicher Inhalt heisst: keine neue Version,
         // keine Ankuendigung. Ohne sie erzeugt jede eigene Hydration und jede
         // zurueckgespiegelte Ankuendigung eine weitere Runde.
         //
@@ -958,7 +979,7 @@ public sealed partial class ShareHost
             var adopted = peer.Clone();
 
             // Die Sequenznummer der Gegenstelle gehoert nicht in die eigene
-            // Zaehlung. Angekuendigt haben wir diese Fassung nie.
+            // Zaehlung. Angekuendigt haben wir diese Version nie.
             adopted.Sequence = 0;
             Store(adopted, StateClean);
             return Done(name);
@@ -1025,7 +1046,7 @@ public sealed partial class ShareHost
     }
 
     /// <summary>
-    /// Schreibt die Fassung fort: nur der eigene Zaehler wird beruehrt.
+    /// Schreibt die Version fort: nur der eigene Zaehler wird beruehrt.
     /// </summary>
     /// <remarks>
     /// Fremde Zaehler bleiben stehen. Sie sind die Aussage anderer Geraete
@@ -1036,7 +1057,7 @@ public sealed partial class ShareHost
     ///
     /// Die Liste bleibt nach id sortiert. Die Reihenfolge gehoert zum
     /// Vergleich; dieselben Zaehler in anderer Reihenfolge waeren fuer die
-    /// Gegenstelle eine andere Fassung.
+    /// Gegenstelle eine andere Version.
     /// </remarks>
     private Vector NextVersion(Vector? previous)
     {
@@ -1119,9 +1140,9 @@ public sealed partial class ShareHost
         {
             _removed.TryRemove(name, out _);
 
-            // Dritte Sicherung: ausgeschlossene Zweige fehlen mit Absicht.
-            // Sie sind nicht geloescht, sie waren nie da.
-            if (!_config.Includes(name)) continue;
+            // Dritte Sicherung: was wir ausserhalb der Auswahl selbst
+            // entfernt haben, ist keine Loeschung. Siehe NoteLocalDelete.
+            if (!_config.Includes(name) && MayEvict(name)) continue;
 
             if (AnnouncedName(name) is not { } announced) continue;
             if (ResolveInside(name) is not { } path) continue;

@@ -32,7 +32,7 @@ public partial class ShareSettingsWindow : Window
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
         ConflictBox.SelectedIndex = (int)share.Conflict;
-        // 0 bedeutet: nicht aufheben. Ein Kaestchen daneben waere dieselbe
+        // 0 bedeutet: nicht sichern. Ein Kaestchen daneben waere dieselbe
         // Aussage ein zweites Mal.
         VersionDaysBox.Text = (share.KeepVersions ? share.VersionDays : 0).ToString();
         UpdateCacheEnabled();
@@ -110,7 +110,7 @@ public partial class ShareSettingsWindow : Window
 
     private void UpdateCacheEnabled()
     {
-        // Bei "vollstaendig lokal" wird nie verdraengt. Damit gibt es auch
+        // Bei "vollstaendig lokal" wird nie Speicherplatz freigegeben. Damit gibt es auch
         // nichts, wofuer eine Mindestzahl an Kopien gelten koennte.
         var onDemand = ModeBox.SelectedIndex == 0;
 
@@ -149,7 +149,7 @@ public partial class ShareSettingsWindow : Window
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.Conflict = (ConflictResolution)Math.Max(0, ConflictBox.SelectedIndex);
-        // Null Tage heisst: sofort loeschen, also gar nicht aufheben.
+        // Null Tage heisst: sofort loeschen, also gar nicht sichern.
         _share.KeepVersions = days > 0;
         _share.VersionDays = Math.Max(1, days);
 
