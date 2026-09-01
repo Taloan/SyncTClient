@@ -338,51 +338,6 @@ public sealed class CloudFilterMount : IDisposable
         return (geprueft, aufgeloest, fehler);
     }
 
-    /// <summary>
-    /// Loest die Platzhalter eines verwaisten Ordners auf, notfalls ueber eine
-    /// vorübergehend wieder angemeldete Wurzel.
-    /// </summary>
-    /// <remarks>
-    /// Ohne angemeldete Wurzel laesst Windows einen Platzhalter nicht einmal
-    /// oeffnen: CreateFile scheitert mit 0x0000016B, "Die Clouddatei-Metadaten
-    /// sind beschaedigt und nicht lesbar". Es fehlt der Eintrag, der sagt, wer
-    /// fuer diesen Pfad zustaendig ist -- nicht die Metadaten selbst.
-    ///
-    /// Also wird er kurz wieder gesetzt. Die Kennung einer Wurzel leitet sich
-    /// aus ihrem Pfad ab, es ist also dieselbe wie beim ersten Mal; Windows
-    /// findet seine Platzhalter wieder, gibt sie heraus und laesst sie
-    /// aufloesen. Danach wird die Wurzel abgemeldet, und diesmal bleibt
-    /// nichts zurueck, das sie noch braeuchte.
-    /// </remarks>
-    public static async Task<(int Geprueft, int Aufgeloest, string? Fehler)> RepairAsync(string root)
-    {
-        var ergebnis = RevertPlaceholdersIn(root);
-
-        // Nichts gefunden oder alles erledigt: der Umweg lohnt nicht.
-        if (ergebnis.Geprueft == 0 || ergebnis.Aufgeloest == ergebnis.Geprueft) return ergebnis;
-
-        string? id = null;
-
-        try
-        {
-            id = await WinRtSyncRoot.RegisterAsync(root, "SyncTClient", "1.0").ConfigureAwait(false);
-            var zweiter = RevertPlaceholdersIn(root);
-
-            // Der zweite Versuch zaehlt, aber nur wenn er etwas gebracht hat.
-            // Sonst stuende dort "0 von 0" und der Grund des ersten waere fort.
-            return zweiter.Aufgeloest > 0 ? zweiter : ergebnis;
-        }
-        catch (Exception ex)
-        {
-            return (ergebnis.Geprueft, ergebnis.Aufgeloest, ergebnis.Fehler ?? ex.Message);
-        }
-        finally
-        {
-            if (id is not null)
-                try { WinRtSyncRoot.Unregister(id); } catch (Exception) { /* schon weg */ }
-        }
-    }
-
     public void ProjectPlaceholders(Action<int, int>? progress = null)
     {
         var entries = _source.Enumerate();

@@ -137,17 +137,6 @@
     <Button x:Name="ClearButton" Content="{DynamicResource S.Settings.ClearThumbs}" Padding="10,3"
             HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnClearThumbnails" />
 
-    <!-- Ein seltener Handgriff, aber einer ohne Ersatz: einen Ordner, der
-         nach einer geloesten Bindung mit Platzhaltern liegenblieb, nimmt
-         Windows sonst weder zum Lesen noch zum Loeschen an. -->
-    <TextBlock Text="{DynamicResource S.Settings.RepairGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
-
-    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.RepairHint}" />
-    <Button x:Name="RevertButton" Content="{DynamicResource S.Settings.Revert}" Padding="10,3"
-            HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnRevertPlaceholders" />
-    <TextBlock x:Name="RevertText" Margin="0,6,0,0" TextWrapping="Wrap"
-               Foreground="{DynamicResource Gedaempft}" />
-
     <TextBlock Text="{DynamicResource S.Settings.DataGroup}" Style="{StaticResource Gruppe}" />
 
     <Label Content="{DynamicResource S.Settings.DataDir}" />
