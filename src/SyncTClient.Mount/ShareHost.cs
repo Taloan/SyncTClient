@@ -1055,7 +1055,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         var done = 0;
         SetPhase(SyncPhase.Inhalte, 0, pending.Count);
-        await Parallel.ForEachAsync(
+
+        // Ausdruecklich auf einen eigenen Faden, und nicht bloss "await".
+        //
+        // Der Aufruf kommt ueber das Verbinden aus der Oberflaeche. Ohne
+        // Task.Run erbt jede Fortsetzung dieser Schleife deren Zusammenhang:
+        // die Rueckkehr nach jedem Lesen wird dem Oberflaechen-Faden
+        // zugestellt und muss sich dort einreihen. Ein Lauf ueber tausend
+        // Dateien gehoert nicht in die Warteschlange des Fensters.
+        await Task.Run(() => Parallel.ForEachAsync(
             pending,
             new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
             async (path, token) =>
@@ -1064,9 +1072,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 {
                     // Ein einziges Byte genuegt: der Lesezugriff loest die
                     // Hydration der ganzen Datei aus.
-                    await using var stream = File.OpenRead(path);
+                    //
+                    // Ausdruecklich als asynchrone Datei geoeffnet. File.OpenRead
+                    // liefert einen Strom, der synchron liest -- das Warten auf
+                    // die Hydration haelt dann den Faden fest, statt ihn
+                    // freizugeben. Bei zwei Plaetzen genuegen zwei solche
+                    // Wartende, damit nichts mehr nachrueckt.
+                    //
+                    // Und geteilt geoeffnet: eine Datei, die ein anderes
+                    // Programm gerade haelt, soll nicht am Oeffnen scheitern.
+                    await using var stream = new FileStream(
+                        path, FileMode.Open, FileAccess.Read,
+                        FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.Asynchronous);
+
                     var probe = new byte[1];
-                    await stream.ReadExactlyAsync(probe, token);
+                    await stream.ReadExactlyAsync(probe, token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -1076,7 +1096,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 var fertig = Interlocked.Increment(ref done);
                 SetPhase(SyncPhase.Inhalte, fertig, pending.Count);
                 if (fertig % 50 == 0) _log($"[{FolderId}] {fertig}/{pending.Count} heruntergeladen.");
-            });
+            }), ct).ConfigureAwait(false);
 
         _log($"[{FolderId}] vollstaendig lokal.");
     }
