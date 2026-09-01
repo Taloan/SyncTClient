@@ -15,8 +15,13 @@ public partial class ShareSettingsWindow : Window
     private FolderNode? _tree;
     private bool _loading;
 
+    /// <param name="reportedName">
+    /// Wie sich eine Gegenstelle selbst nennt. Optional: ohne laufende
+    /// Verbindung ist nur die Kennung bekannt.
+    /// </param>
     public ShareSettingsWindow(
-        ShareConfig share, IReadOnlyList<PeerConfig> peers, string homeDirectory, string title)
+        ShareConfig share, IReadOnlyList<PeerConfig> peers, string homeDirectory, string title,
+        Func<string, string?>? reportedName = null)
     {
         InitializeComponent();
 
@@ -24,7 +29,7 @@ public partial class ShareSettingsWindow : Window
         _homeDirectory = homeDirectory;
         TitleText.Text = title;
 
-        LoadPeers(peers);
+        LoadPeers(peers, reportedName);
 
         // Das Label vergibt die Gegenstelle, und sie kann es aendern. Die
         // Kennung ist die Identitaet der Freigabe. Sie steht im Pfad, im
@@ -52,15 +57,25 @@ public partial class ShareSettingsWindow : Window
     /// Angekreuzt ist, was in der Freigabe steht. Eine Gegenstelle, die es
     /// noch nicht tut, steht ebenfalls in der Liste -- sonst muesste man zum
     /// Hinzufuegen erst woanders hin.
+    ///
+    /// Der Name kommt aus drei Quellen, in dieser Reihenfolge: der selbst
+    /// vergebene, der von der Gegenstelle gemeldete, und zuletzt die Kennung.
+    /// Ohne die mittlere stand hier zweimal dieselbe Zeichenfolge -- die
+    /// Kennung als Name und die Kennung als Kennung --, obwohl das Programm
+    /// an anderer Stelle "GEGENSTELLE" anzeigt.
     /// </remarks>
-    private void LoadPeers(IReadOnlyList<PeerConfig> peers)
+    private void LoadPeers(IReadOnlyList<PeerConfig> peers, Func<string, string?>? reportedName)
     {
         foreach (var peer in peers)
         {
             var geteilt = _share.PeerDeviceIds.Contains(peer.DeviceId, StringComparer.OrdinalIgnoreCase)
                           || peer.DeviceId.Equals(_share.PeerDeviceId, StringComparison.OrdinalIgnoreCase);
 
-            _peers.Add(new PeerChoice(peer.DeviceId, peer.Display, peer.ShortId, geteilt));
+            var name = peer.Name;
+            if (string.IsNullOrWhiteSpace(name)) name = reportedName?.Invoke(peer.DeviceId) ?? "";
+            if (string.IsNullOrWhiteSpace(name)) name = peer.ShortId;
+
+            _peers.Add(new PeerChoice(peer.DeviceId, name, peer.ShortId, geteilt));
         }
 
         PeerList.ItemsSource = _peers;
