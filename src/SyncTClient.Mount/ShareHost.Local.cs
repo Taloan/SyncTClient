@@ -299,7 +299,7 @@ public sealed partial class ShareHost
 
         // Die eigene Sicherung ist kein Teil der Freigabe. Sie wird weder
         // angekuendigt noch beim Durchgang betrachtet.
-        if (IsVersionsPath(name)) return null;
+        if (IsHousekeeping(name)) return null;
 
         // Und dasselbe fuer die Muster. Hier, weil jeder Weg von einem Pfad
         // zu einem Namen hier vorbeikommt: der Durchgang ueber den Ordner,
@@ -805,13 +805,16 @@ public sealed partial class ShareHost
     /// </remarks>
     public (int Entfernt, int Geblieben) PurgeIgnored()
     {
-        if (_config.Ignored.Count == 0) return (0, 0);
-
         List<string> namen;
         lock (_indexGate)
         {
             if (_index is null) return (0, 0);
-            namen = [.. _index.AllNames().Where(_config.IsIgnored)];
+
+            // Die Verwaltungsnamen ebenso. Sie kommen heute nicht mehr
+            // herein, standen aber im Index, solange sie es taten -- und ein
+            // Eintrag, den niemand mehr anwendet, zaehlt dort bis in alle
+            // Ewigkeit als Rueckstand.
+            namen = [.. _index.AllNames().Where(n => _config.IsIgnored(n) || IsHousekeeping(n))];
         }
 
         if (namen.Count == 0) return (0, 0);

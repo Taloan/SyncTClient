@@ -527,7 +527,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Ordnerkennzeichnung, ihre Sicherung, ihre Musterliste. Sie stand
         // bisher im Index, ohne dass je etwas daraus wurde: angewendet wurde
         // sie nicht, gezaehlt aber schon.
-        files = files.Where(f => !IsVersionsPath(f.Name));
+        files = files.Where(f => !IsHousekeeping(f.Name));
 
         if (_config.Ignored.Count > 0)
             files = files.Where(f => !_config.IsIgnored(f.Name));
@@ -739,6 +739,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         try
         {
+            // Vor dem Anlegen: was nicht mehr dazugehoert, soll auch keinen
+            // Platzhalter bekommen. Der Index kann Namen fuehren, die eine
+            // aeltere Fassung hereingelassen hat.
+            PurgeIgnored();
+
             await ProjectAsync();
             State = ShareState.Bereit;
 
