@@ -167,6 +167,25 @@ public sealed class ShareConfig
 
         foreach (var prefix in Included)
         {
+            // "Dateien in X" -- gemeint ist, was unmittelbar in X liegt, ohne
+            // die Unterverzeichnisse. Ohne diese Form liesse sich ein Ordner,
+            // von dem ein Unterordner abgewaehlt ist, nur ganz oder gar nicht
+            // beschreiben, und seine losen Dateien fielen stillschweigend
+            // heraus.
+            if (prefix == "*" || prefix.EndsWith("/*", StringComparison.Ordinal))
+            {
+                var ordner = prefix == "*" ? "" : prefix[..^2];
+
+                if (ParentOf(relativePath).Equals(ordner, StringComparison.OrdinalIgnoreCase)) return true;
+
+                // Der Ordner selbst und alles darueber muss sichtbar bleiben,
+                // sonst ist das Ausgewaehlte im Explorer nicht erreichbar.
+                if (ordner.Equals(relativePath, StringComparison.OrdinalIgnoreCase)) return true;
+                if (ordner.StartsWith(relativePath + "/", StringComparison.OrdinalIgnoreCase)) return true;
+
+                continue;
+            }
+
             if (relativePath.Equals(prefix, StringComparison.OrdinalIgnoreCase)) return true;
             if (relativePath.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)) return true;
             // Elternverzeichnisse einer Auswahl muessen sichtbar bleiben.
@@ -175,6 +194,13 @@ public sealed class ShareConfig
         }
 
         return false;
+    }
+
+    /// <summary>Das Verzeichnis, in dem dieser Name liegt. Leer fuer die Wurzel.</summary>
+    private static string ParentOf(string relativePath)
+    {
+        var schnitt = relativePath.LastIndexOf('/');
+        return schnitt < 0 ? "" : relativePath[..schnitt];
     }
 }
 

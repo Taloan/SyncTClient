@@ -342,4 +342,6 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S2.Locked">Kann nicht abgewählt werden: nicht jede Datei in diesem Zweig liegt vollständig bei der Gegenstelle.</s:String>
   <s:String x:Key="S2.Refused">„{0}“ bleibt ausgewählt: {1} Dateien darin erreichen die Platzhalter-Schwelle noch nicht. Abwählen entfernt den Zweig, und diese Dateien gäbe es dann nirgends mehr.</s:String>
   <s:String x:Key="M.Pruned">{0} Dateien ({1}) ausserhalb der Auswahl entfernt.</s:String>
+  <s:String x:Key="S2.LooseRoot">Dateien außerhalb von Ordnern</s:String>
+  <s:String x:Key="S2.LooseIn">Dateien in {0}</s:String>
 </ResourceDictionary>

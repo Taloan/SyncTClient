@@ -555,6 +555,18 @@ public sealed partial class ShareHost
             if (NameOf(info.FullName) is not { } name) continue;
             if (_config.Includes(name)) continue;
 
+            // Die zweite Sperre, unabhaengig von der Oberflaeche. Entfernt
+            // wird nur, was die Gegenstelle vollstaendig fuehrt. Ein Fehler
+            // in der Auswahl kostet dann Platzhalter und keine Daten -- und
+            // genau so ein Fehler hat einmal genuegt.
+            BepFileInfo eintrag;
+            bool bekannt;
+            lock (_indexGate) bekannt = _index is not null && _index.TryGet(name, out eintrag!);
+
+            if (!bekannt) continue;
+            lock (_indexGate) _index!.TryGet(name, out eintrag!);
+            if (!HasContent(eintrag)) continue;
+
             try
             {
                 var laenge = info.Length;

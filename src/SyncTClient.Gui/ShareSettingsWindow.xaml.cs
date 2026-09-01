@@ -96,7 +96,9 @@ public partial class ShareSettingsWindow : Window
 
         void Apply(FolderNode node)
         {
-            node.InitializeChecked(everything || share.Includes(node.Path));
+            node.InitializeChecked(everything
+                || share.Included.Contains(node.Path, StringComparer.OrdinalIgnoreCase)
+                || share.Includes(node.Path));
             foreach (var child in node.Children) Apply(child);
         }
     }
