@@ -2069,6 +2069,19 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         await StopAsync();
 
+        // Erst die Platzhalter aufloesen, dann die Wurzel abmelden.
+        //
+        // Ein Platzhalter ohne angemeldete Wurzel ist fuer Windows kaputt: es
+        // findet den Anbieter nicht mehr, der seinen Inhalt liefern koennte.
+        // Der Ordner liess sich danach nicht einmal loeschen -- "Die
+        // Clouddatei-Metadaten sind beschaedigt und nicht lesbar"
+        // (0x8007016B).
+        //
+        // Aufgeloest, nicht geloescht: eine geholte Datei behaelt ihren
+        // Inhalt, ein leerer Platzhalter wird eine leere Datei. Was hier lag,
+        // bleibt liegen; es gehoert nur zu keiner Freigabe mehr.
+        try { _mount?.RevertPlaceholders(); } catch (Exception ex) { _log($"[{FolderId}] Platzhalter aufloesen: {ex.Message}"); }
+
         if (_syncRootId is not null)
         {
             lock (Laufende) Laufende.Remove(this);

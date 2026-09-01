@@ -100,8 +100,17 @@ public partial class AcceptShareWindow : Window
         if (Directory.Exists(start)) dialog.InitialDirectory = start;
         else if (Directory.Exists(Path.GetDirectoryName(start))) dialog.InitialDirectory = Path.GetDirectoryName(start);
 
-        if (dialog.ShowDialog(this) == true)
-            LocalPathBox.Text = Path.Combine(dialog.FolderName, _share.FolderId);
+        // Genau der gewaehlte Ordner, ohne Zusatz.
+        //
+        // Bisher wurde die Ordnerkennung angehaengt, in der Annahme, jemand
+        // waehle das uebergeordnete Verzeichnis und wolle darin einen neuen
+        // Ordner. Wer aber den Ordner waehlt, der die Freigabe schon enthaelt,
+        // bekam ein Unterverzeichnis darin -- und darin noch einmal alles,
+        // was daneben bereits lag.
+        //
+        // Fuer den anderen Fall hat der Dialog seinen eigenen Knopf: einen
+        // neuen Ordner anlegen und ihn waehlen.
+        if (dialog.ShowDialog(this) == true) LocalPathBox.Text = dialog.FolderName;
     }
 
     private void OnModeChanged(object sender, SelectionChangedEventArgs e)
