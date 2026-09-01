@@ -544,14 +544,17 @@ public sealed partial class ShareHost
         string name, long size, long modifiedS,
         Dictionary<string, (long Size, long ModifiedS)> vorhanden, bool fehlt)
     {
-        if (!fehlt) return $"{size} B, hier ohne Inhalt";
+        if (!fehlt) return "hier ohne Inhalt";
 
-        if (!vorhanden.TryGetValue(name, out var da)) return $"{size} B, liegt hier nicht";
+        if (!vorhanden.TryGetValue(name, out var da)) return "liegt hier nicht";
 
         if (da.Size != size) return $"hier {da.Size} B statt {size} B";
 
-        return $"{size} B, hier {Zeit(da.ModifiedS)} statt {Zeit(modifiedS)}";
+        return $"hier {Zeit(da.ModifiedS)} statt {Zeit(modifiedS)}";
     }
+
+    /// <summary>So viele offene Namen werden gemerkt.</summary>
+    private const int ListenGrenze = 2000;
 
     private static string Zeit(long unixSekunden)
         => DateTimeOffset.FromUnixTimeSeconds(unixSekunden).ToLocalTime().ToString("dd.MM. HH:mm:ss");
@@ -572,6 +575,11 @@ public sealed partial class ShareHost
         // nicht erkennen, welche zwei -- und wenn zwei Dateien dauerhaft
         // stehen bleiben, ist genau das die Frage.
         var offeneNamen = new List<string>();
+
+        // Und die vollstaendige Liste fuer das Fenster. Gedeckelt: bei einer
+        // frisch verbundenen Freigabe stehen alle Dateien offen, und
+        // hunderttausend Zeilen liest niemand.
+        var offeneListe = new List<OutstandingItem>();
         var gesamt = 0;
         long gesamtBytes = 0;
         var vereint = 0;
@@ -674,8 +682,10 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += size;
-                    if (offeneNamen.Count < 5)
-                        offeneNamen.Add($"{name} ({Grund(name, size, modifiedS, vorhanden, fehlt)})");
+                    var grund = Grund(name, size, modifiedS, vorhanden, fehlt);
+                    if (offeneNamen.Count < 5) offeneNamen.Add($"{name} ({size} B, {grund})");
+                    if (offeneListe.Count < ListenGrenze)
+                        offeneListe.Add(new OutstandingItem(name, size, grund));
                 }
 
                 // Die andere Richtung: was hier liegt und noch nicht
@@ -715,8 +725,11 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += eintrag.Size;
+                    const string nochNicht = "hier vorhanden, noch nicht angekündigt";
                     if (offeneNamen.Count < 5)
-                        offeneNamen.Add($"{name}, {eintrag.Size} B: hier vorhanden, aber noch nicht angekuendigt");
+                        offeneNamen.Add($"{name} ({eintrag.Size} B, {nochNicht})");
+                    if (offeneListe.Count < ListenGrenze)
+                        offeneListe.Add(new OutstandingItem(name, eintrag.Size, nochNicht));
                 }
             }
         }
@@ -755,6 +768,7 @@ public sealed partial class ShareHost
 
         Outstanding = offen;
         OutstandingBytes = bytes;
+        OutstandingItems = offeneListe;
         Awaiting = wartend;
         AwaitingBytes = wartendBytes;
         UpdateOutstandingPhase();

@@ -34,8 +34,44 @@
                             Binding="{Binding Name}" />
         <DataGridTextColumn Header="{DynamicResource S.Peer.Address}" Width="Auto" MinWidth="140"
                             Binding="{Binding Address}" />
-        <DataGridTextColumn Header="{DynamicResource S.Nodes.Open}" Width="Auto" MinWidth="150"
-                            Binding="{Binding Outstanding}" />
+        <!-- Anklickbar, sobald etwas aussteht. Die Zahl sagt, dass etwas
+             offen ist; welche Dateien es sind, steht dahinter. -->
+        <DataGridTemplateColumn Header="{DynamicResource S.Nodes.Open}" Width="Auto" MinWidth="150"
+                                SortMemberPath="Outstanding">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate>
+              <Grid VerticalAlignment="Center">
+                <TextBlock Text="{Binding Outstanding}" VerticalAlignment="Center">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasItems}" Value="True">
+                          <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+
+                <TextBlock VerticalAlignment="Center">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasItems}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                  <Hyperlink Click="OnShowOutstanding" ToolTip="{DynamicResource S.Open.Hint}">
+                    <Run Text="{Binding Outstanding, Mode=OneWay}" />
+                  </Hyperlink>
+                </TextBlock>
+              </Grid>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
       </DataGrid.Columns>
     </DataGrid>
   </DockPanel>
