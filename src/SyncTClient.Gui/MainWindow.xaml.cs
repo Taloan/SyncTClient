@@ -1411,6 +1411,12 @@ public partial class MainWindow : Window
         _ = Task.Run(() =>
         {
             var (files, bytes) = host.PruneExcluded();
+
+            // Und der Gegenweg: was wieder dazugehoert, muss auch wieder
+            // angelegt werden. Ohne diesen Anstoss bleibt ein Zweig fort, den
+            // jemand versehentlich abgewaehlt und gleich wieder angehakt hat.
+            host.RequeueAll();
+
             if (files == 0) return;
 
             Dispatcher.Invoke(() =>
@@ -1500,7 +1506,11 @@ public partial class MainWindow : Window
     {
         if (_config.CloseToTray)
         {
-            _tray ??= new TrayIcon(this, Quit, () => OnTogglePauseAll());
+            if (_tray is null)
+            {
+                _tray = new TrayIcon(this, Quit, () => OnTogglePauseAll());
+                _tray.ShowStatus = ZustandZeigen;
+            }
         }
         else
         {
@@ -1521,6 +1531,46 @@ public partial class MainWindow : Window
     {
         _exiting = true;
         Close();
+    }
+
+    private StatusWindow? _status;
+
+    /// <summary>
+    /// Zeigt den Zustand am Rand, ohne das Hauptfenster zu holen.
+    /// </summary>
+    /// <remarks>
+    /// Das Fenster wird einmal gebaut und danach nur noch gezeigt und
+    /// versteckt. Es haengt an denselben Sammlungen wie die Uebersicht; ein
+    /// neues Fenster je Klick muesste sie jedes Mal neu binden, und die
+    /// laufenden Uebertragungen faenden sich in der Anzeige nicht wieder.
+    /// </remarks>
+    private void ZustandZeigen()
+    {
+        _status ??= new StatusWindow(
+            _rows, _transfers,
+            () => App.S(Zustand() switch
+            {
+                TrayStatus.Synchronisiert => "S.Tray.Syncing",
+                TrayStatus.Erledigt => "S.Tray.Done",
+                TrayStatus.Pausiert => "S.Tray.Paused",
+                TrayStatus.Fehler => "S.Tray.Failed",
+                _ => "S.Tray.Offline"
+            }),
+            () => _config.Paused,
+            Restore,
+            () => OnShowProgramSettings(this, new RoutedEventArgs()),
+            () => OnTogglePauseAll());
+
+        if (_status.IsVisible) _status.Hide();
+        else _status.ZeigenAmRand();
+    }
+
+    /// <summary>Holt das Hauptfenster zurueck.</summary>
+    private void Restore()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
     }
 
     /// <summary>
