@@ -238,7 +238,7 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="R.PhaseIndex">reading the index</s:String>
   <s:String x:Key="R.PhasePlaceholders">creating placeholders</s:String>
   <s:String x:Key="R.PhaseCache">reconciling the cache</s:String>
-  <s:String x:Key="R.PhaseContent">fetching contents</s:String>
+  <s:String x:Key="R.PhaseContent">downloading contents</s:String>
   <s:String x:Key="R.PhaseWaiting">waiting</s:String>
   <s:String x:Key="R.NotConnectedHint">Not connected yet.</s:String>
   <s:String x:Key="R.CopiesNone">No reachable node carries this share. Placeholders cannot be opened right now. Whether space may be freed still follows the last announcement received, not reachability.</s:String>
@@ -309,7 +309,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Settings.Threshold">Placeholder threshold</s:String>
   <s:String x:Key="S.Settings.ThresholdHint">The value determines on how many other nodes a file must be present in full before it can become a placeholder locally.</s:String>
   <s:String x:Key="S.Settings.Thumbs">Create thumbnails on demand</s:String>
-  <s:String x:Key="S.Settings.ThumbsHint">When the file manager asks for a preview, the client fetches the file head — a single 128 KiB block — and extracts the embedded image. The file itself stays a placeholder.</s:String>
+  <s:String x:Key="S.Settings.ThumbsHint">When the file manager asks for a preview, the client downloads the file head — a single 128 KiB block — and extracts the embedded image. The file itself stays a placeholder.</s:String>
   <s:String x:Key="S.Settings.ClearThumbs">Clear thumbnail cache now …</s:String>
   <s:String x:Key="G.ThresholdInvalid">The placeholder threshold must be at least 1.</s:String>
   <s:String x:Key="M.VolumeLine">Drive {0}   {1} in {2} files   |   {3} free</s:String>
@@ -353,6 +353,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S2.LooseRoot">Files in the main folder</s:String>
   <s:String x:Key="S2.LooseIn">Files in {0}</s:String>
   <s:String x:Key="S.Tray.Pause">Pause syncing</s:String>
-  <s:String x:Key="S.Status.Recent">RECENTLY FETCHED</s:String>
-  <s:String x:Key="S.Status.Quiet">Nothing is being fetched right now.</s:String>
+  <s:String x:Key="S.Status.Recent">RECENTLY TRANSFERRED</s:String>
+  <s:String x:Key="S.Status.Quiet">Nothing is being transferred right now.</s:String>
 </ResourceDictionary>
