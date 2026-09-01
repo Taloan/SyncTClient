@@ -85,12 +85,16 @@ public sealed partial class ShareHost
            || IstArbeitsdatei(name);
 
     /// <summary>
-    /// Die Datei, in die Syncthing gerade schreibt.
+    /// Der eigene Namensraum von Syncthing.
     /// </summary>
     /// <remarks>
-    /// Zwei Schreibweisen: "~syncthing~name.tmp" bis Version 0.14 und
-    /// ".syncthing.name.tmp" danach. Beide sind Zwischenstaende, die
-    /// Syncthing selbst nie uebertraegt; nach dem Umbenennen sind sie fort.
+    /// Zwei Praefixe: "~syncthing~" bis Version 0.14 und ".syncthing."
+    /// danach. Syncthing selbst uebergeht damit jede Datei und jeden Ordner,
+    /// gleich wie der Name weitergeht -- nicht nur die Zwischenstaende auf
+    /// ".tmp". Wer nur auf die Endung sieht, laesst den Rest hindurch.
+    ///
+    /// Geprueft wird jeder Namensteil, nicht nur der letzte: trifft es einen
+    /// Ordner, gehoert alles darunter dazu.
     ///
     /// Anders als ".sync" von Resilio, das Inhalt dieses Ordners ist und
     /// ueber dessen Mitnahme niemand ausser dem Anwender entscheidet: diese
@@ -102,13 +106,12 @@ public sealed partial class ShareHost
     /// </remarks>
     private static bool IstArbeitsdatei(string name)
     {
-        var schnitt = name.LastIndexOf('/');
-        var letzter = schnitt < 0 ? name : name[(schnitt + 1)..];
+        foreach (var teil in name.Split('/'))
+            if (teil.StartsWith("~syncthing~", StringComparison.OrdinalIgnoreCase)
+                || teil.StartsWith(".syncthing.", StringComparison.OrdinalIgnoreCase))
+                return true;
 
-        if (!letzter.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return false;
-
-        return letzter.StartsWith("~syncthing~", StringComparison.OrdinalIgnoreCase)
-               || letzter.StartsWith(".syncthing.", StringComparison.OrdinalIgnoreCase);
+        return false;
     }
 
     /// <summary>Traegt der Name diesen Dateinamen, gleich in welcher Ebene?</summary>
