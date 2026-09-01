@@ -523,6 +523,31 @@ public sealed partial class ShareHost
     }
 
     /// <summary>
+    /// Nimmt den ganzen Index noch einmal vor.
+    /// </summary>
+    /// <remarks>
+    /// Nach einer geaenderten Auswahl. Das Ausschliessen entfernt, aber das
+    /// Wiederaufnehmen legte bisher nichts an: die Auswahl war ein Filter fuer
+    /// das, was hereinkam, und was nie wieder angekuendigt wird, kam auch nie
+    /// wieder. Ein Zweig, den jemand versehentlich abgewaehlt hatte, blieb
+    /// damit fort, obwohl das Haekchen wieder stand.
+    ///
+    /// Angelegt wird nur, was fehlt. Ein Platzhalter, der schon richtig
+    /// dasteht, wird nicht angefasst -- sonst ginge ein geholter Inhalt ohne
+    /// Not verloren.
+    /// </remarks>
+    public void RequeueAll()
+    {
+        lock (_indexGate)
+            if (_index is not null) QueueIncoming(_index.AllNames());
+
+        // Der naechste Durchgang soll neu messen und nicht erst in einer
+        // Minute: der Rueckstand hat sich gerade geaendert.
+        _lastScan = DateTime.MinValue;
+        Wake();
+    }
+
+    /// <summary>
     /// Entfernt, was nicht mehr zur Auswahl gehoert.
     /// </summary>
     /// <remarks>

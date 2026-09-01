@@ -353,4 +353,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S2.LooseRoot">Files in the main folder</s:String>
   <s:String x:Key="S2.LooseIn">Files in {0}</s:String>
   <s:String x:Key="S.Tray.Pause">Pause syncing</s:String>
+  <s:String x:Key="S.Status.Recent">RECENTLY FETCHED</s:String>
+  <s:String x:Key="S.Status.Quiet">Nothing is being fetched right now.</s:String>
 </ResourceDictionary>

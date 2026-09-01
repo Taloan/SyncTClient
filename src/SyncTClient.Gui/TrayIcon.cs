@@ -115,6 +115,9 @@ public sealed class TrayIcon : IDisposable
 
     private TrayStatus _status = TrayStatus.Getrennt;
 
+    /// <summary>Was ein einfacher Klick auf das Symbol zeigt.</summary>
+    public Action? ShowStatus { get; set; }
+
     /// <param name="window">Das Fenster, das gezeigt und geholt wird.</param>
     /// <param name="exit">Was "Beenden" ausloest. Diese Klasse beendet selbst nichts.</param>
     /// <param name="togglePause">Haelt den Abgleich an oder setzt ihn fort.</param>
@@ -142,6 +145,15 @@ public sealed class TrayIcon : IDisposable
 
         // Der Doppelklick ist die Geste, die Nutzer zuerst versuchen.
         _icon.DoubleClick += (_, _) => Restore();
+
+        // Der einfache Klick zeigt den Zustand, ohne das ganze Fenster zu
+        // oeffnen. Windows meldet ihn auch als ersten Teil eines
+        // Doppelklicks; das Zustandsfenster verschwindet dann von selbst,
+        // sobald das Hauptfenster den Fokus nimmt.
+        _icon.MouseClick += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Left) ShowStatus?.Invoke();
+        };
 
         Translate();
     }

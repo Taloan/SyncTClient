@@ -345,4 +345,6 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S2.LooseRoot">Dateien im Hauptverzeichnis</s:String>
   <s:String x:Key="S2.LooseIn">Dateien in {0}</s:String>
   <s:String x:Key="S.Tray.Pause">Abgleich anhalten</s:String>
+  <s:String x:Key="S.Status.Recent">ZULETZT GEHOLT</s:String>
+  <s:String x:Key="S.Status.Quiet">Zurzeit wird nichts geholt.</s:String>
 </ResourceDictionary>
