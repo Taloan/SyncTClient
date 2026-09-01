@@ -113,6 +113,12 @@ public partial class MainWindow : Window
         _meter = new ThroughputMeter(CollectWire);
         _refresh.Tick += (_, _) => Tick();
         _refresh.Start();
+
+        // Der Draht zum Kontextmenue im Explorer. Er steht, sobald das
+        // Programm laeuft -- ohne laufenden Client haben die Eintraege
+        // niemanden, der sie ausfuehrt, und zeigen das auch.
+        CommandService.Handle = OnCommand;
+        CommandService.EnsureStarted(AppendLog);
     }
 
     private string HomeDirectory
@@ -1531,6 +1537,90 @@ public partial class MainWindow : Window
     {
         _exiting = true;
         Close();
+    }
+
+    /// <summary>
+    /// Fuehrt aus, was aus dem Kontextmenue kommt.
+    /// </summary>
+    /// <remarks>
+    /// Die Erweiterung im Explorer schickt nur Pfade. Was daraus wird,
+    /// entscheidet sich hier: sie kennt weder die Auswahl einer Freigabe noch
+    /// die Platzhalter-Schwelle, und sie soll beides auch nicht kennen. Eine
+    /// Erweiterung, die im fremden Prozess laeuft, haelt man klein.
+    /// </remarks>
+    private string OnCommand(string befehl, IReadOnlyList<string> pfade)
+    {
+        return Dispatcher.Invoke(() =>
+        {
+            var host = pfade.Select(ShareHost.Owning).OfType<ShareHost>().FirstOrDefault();
+            if (host is null) return App.S("C.NoShare");
+
+            switch (befehl)
+            {
+                case "PIN":
+                {
+                    var (files, bytes) = host.SetLocal(pfade, keep: true);
+                    return App.S("C.Pinned", Format.Count(files), Format.Bytes(bytes));
+                }
+
+                case "FREE":
+                {
+                    var (files, bytes) = host.SetLocal(pfade, keep: false);
+                    return App.S("C.Freed", Format.Count(files), Format.Bytes(bytes));
+                }
+
+                case "HIDE":
+                    return Ausblenden(host, pfade);
+
+                default:
+                    return "";
+            }
+        });
+    }
+
+    /// <summary>
+    /// Nimmt einen Zweig aus der Auswahl, mit derselben Sperre wie im Dialog.
+    /// </summary>
+    /// <remarks>
+    /// Ausblenden entfernt. Erlaubt ist es nur, wenn die Gegenstelle jede
+    /// Datei des Zweiges vollstaendig fuehrt -- sonst waere es kein
+    /// Ausschliessen, sondern das Loeschen der letzten Kopie. Die Sperre sitzt
+    /// hier und nicht nur im Baum: ueber das Kontextmenue kommt man an ihm
+    /// vorbei.
+    /// </remarks>
+    private string Ausblenden(ShareHost host, IReadOnlyList<string> pfade)
+    {
+        var share = _config.Shares.FirstOrDefault(s => s.FolderId == host.FolderId);
+        if (share is null) return App.S("C.NoShare");
+
+        var namen = pfade.Select(host.RelativeNameOf).OfType<string>().ToList();
+        if (namen.Count == 0) return App.S("C.NoShare");
+
+        if (host.Blocking(namen) is var offen && offen > 0)
+            return App.S("C.Blocked", Format.Count(offen));
+
+        // Die Auswahl steht als Liste der eingeschlossenen Zweige. Fehlt sie
+        // ganz, ist alles eingeschlossen -- dann muss sie erst ausgeschrieben
+        // werden, bevor sich etwas herausnehmen laesst.
+        if (share.Included.Count == 0) share.Included = host.TopLevelNames();
+
+        foreach (var name in namen)
+            share.Included.RemoveAll(p =>
+                p.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                p.StartsWith(name + "/", StringComparison.OrdinalIgnoreCase));
+
+        Persist();
+
+        _ = Task.Run(() =>
+        {
+            var (files, bytes) = host.PruneExcluded();
+            host.RequeueAll();
+
+            Dispatcher.Invoke(() =>
+                Status(App.S("M.Pruned", Format.Count(files), Format.Bytes(bytes))));
+        });
+
+        return App.S("C.Hidden", Format.Count(namen.Count));
     }
 
     private StatusWindow? _status;

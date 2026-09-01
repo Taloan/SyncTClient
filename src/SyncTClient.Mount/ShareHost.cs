@@ -822,6 +822,149 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         return false;
     }
 
+    /// <summary>Die Freigabe, zu der dieser Pfad gehoert.</summary>
+    public static ShareHost? Owning(string localPath)
+    {
+        ShareHost[] shares;
+        lock (Laufende) shares = [.. Laufende];
+
+        return shares.FirstOrDefault(s => s.Owns(localPath));
+    }
+
+    /// <summary>
+    /// Haelt die genannten Pfade lokal oder gibt ihren Platz frei.
+    /// </summary>
+    /// <remarks>
+    /// Fuer das Kontextmenue. Windows kennt beide Befehle nur je Datei; bei
+    /// einem Ordner mit tausend Bildern ist das keine brauchbare Geste. Ein
+    /// Verzeichnis wird deshalb aufgeloest, und die Auswahl darf gemischt
+    /// sein.
+    ///
+    /// Beim Freigeben gilt dieselbe Sperre wie ueberall: eine Datei, die die
+    /// Platzhalter-Schwelle nicht erreicht hat, behaelt ihren Inhalt. Der
+    /// Befehl aus dem Menue ist eine Bitte, keine Vollmacht.
+    /// </remarks>
+    public (int Files, long Bytes) SetLocal(IEnumerable<string> paths, bool keep)
+    {
+        var anzahl = 0;
+        long bytes = 0;
+
+        foreach (var pfad in Dateien(paths))
+        {
+            if (NameOf(pfad) is not { } name) continue;
+
+            try
+            {
+                if (keep)
+                {
+                    _mount?.SetPinned(pfad, true);
+
+                    // Anheften allein holt nichts. Ein einziges gelesenes Byte
+                    // loest die Hydration der ganzen Datei aus -- derselbe Weg,
+                    // den auch "vollstaendig lokal" nimmt.
+                    if (IsPlaceholder(pfad))
+                    {
+                        using var strom = File.OpenRead(pfad);
+                        strom.ReadByte();
+                    }
+                }
+                else
+                {
+                    _mount?.SetPinned(pfad, false);
+                    if (!MayEvict(name) || _cache?.Evict(name) != true) continue;
+                }
+
+                anzahl++;
+                bytes += new FileInfo(pfad).Length;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log($"[{FolderId}] \"{name}\": {ex.Message}");
+            }
+        }
+
+        if (!keep) _cache?.Persist();
+        CacheChanged?.Invoke();
+
+        return (anzahl, bytes);
+    }
+
+    /// <summary>Der Name eines Pfades, wie das Protokoll ihn fuehrt.</summary>
+    public string? RelativeNameOf(string localPath) => Owns(localPath) ? NameOf(localPath) : null;
+
+    /// <summary>
+    /// Wie viele Dateien unter diesen Namen die Platzhalter-Schwelle noch
+    /// nicht erreicht haben.
+    /// </summary>
+    /// <remarks>
+    /// Dieselbe Frage, die der Auswahlbaum je Knoten beantwortet -- hier fuer
+    /// das Kontextmenue, das keinen Baum hat.
+    /// </remarks>
+    public int Blocking(IReadOnlyList<string> names)
+    {
+        if (_index is null) return 0;
+
+        var offen = 0;
+
+        lock (_indexGate)
+            foreach (var (name, _, _, isDirectory, hatInhalt) in _index.EnumerateLight())
+            {
+                if (isDirectory || hatInhalt) continue;
+
+                foreach (var zweig in names)
+                    if (name.Equals(zweig, StringComparison.OrdinalIgnoreCase)
+                        || name.StartsWith(zweig + "/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        offen++;
+                        break;
+                    }
+            }
+
+        return offen;
+    }
+
+    /// <summary>
+    /// Die oberste Ebene des Index: Verzeichnisse und lose Dateien.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den Uebergang von "alles ausgewaehlt" -- das steht als leere
+    /// Liste -- zu einer ausgeschriebenen Auswahl, aus der sich etwas
+    /// herausnehmen laesst. Die losen Dateien werden dabei durch ihren
+    /// Sammeleintrag vertreten, sonst stuenden sie einzeln in der Datei.
+    /// </remarks>
+    public List<string> TopLevelNames()
+    {
+        var namen = new List<string> { "*" };
+        if (_index is null) return namen;
+
+        lock (_indexGate)
+            foreach (var (name, _, _, isDirectory, _) in _index.EnumerateLight())
+                if (isDirectory && !name.Contains('/') && name.Length > 0)
+                    namen.Add(name);
+
+        return namen;
+    }
+
+    /// <summary>Loest Verzeichnisse in ihre Dateien auf, Auswahl bleibt Auswahl.</summary>
+    private static IEnumerable<string> Dateien(IEnumerable<string> paths)
+    {
+        foreach (var pfad in paths)
+        {
+            if (File.Exists(pfad)) { yield return pfad; continue; }
+            if (!Directory.Exists(pfad)) continue;
+
+            var options = new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = 0
+            };
+
+            foreach (var datei in Directory.EnumerateFiles(pfad, "*", options))
+                yield return datei;
+        }
+    }
+
     private bool Owns(string localFilePath)
     {
         var root = _config.LocalPath.TrimEnd(Path.DirectorySeparatorChar);

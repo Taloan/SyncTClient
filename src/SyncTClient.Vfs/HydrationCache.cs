@@ -164,7 +164,7 @@ public sealed class HydrationCache
             .Select(e => (e.Key, e.Value.Bytes, e.Value.LastAccess));
 
     /// <summary>Gibt die Bytes einer einzelnen Datei frei.</summary>
-    internal bool Evict(string relativePath)
+    public bool Evict(string relativePath)
     {
         if (!_entries.ContainsKey(relativePath)) return false;
         // "Verdraengt" waere das falsche Wort. Nichts hat diese Datei
@@ -180,7 +180,7 @@ public sealed class HydrationCache
     /// <summary>
     /// Schreibt die Buchfuehrung nach einer Verdraengungsrunde fort.
     /// </summary>
-    internal void Persist() => Save();
+    public void Persist() => Save();
 
     /// <summary>
     /// Gleicht die Buchfuehrung mit der Platte ab. Noetig beim Start, weil
