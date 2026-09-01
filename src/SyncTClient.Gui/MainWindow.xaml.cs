@@ -210,8 +210,8 @@ public partial class MainWindow : Window
         foreach (var peerConfig in _config.Peers)
         {
             var host = new PeerHost(peerConfig, _runtime, _identity!, AppendLog, _registry);
-            host.StateChanged += _ => Dispatcher.Invoke(RefreshRows);
-            host.OfferedChanged += () => Dispatcher.Invoke(RebuildRows);
+            host.StateChanged += _ => Dispatcher.BeginInvoke(RefreshRows);
+            host.OfferedChanged += () => Dispatcher.BeginInvoke(RebuildRows);
             host.ShareAdded += WireShare;
             _peers.Add(new PeerItem(host));
         }
@@ -225,12 +225,25 @@ public partial class MainWindow : Window
 
     private void WireShare(ShareHost share) => Dispatcher.Invoke(() =>
     {
-        share.StateChanged += _ => Dispatcher.Invoke(RefreshRows);
-        share.SyncProgressChanged += () => Dispatcher.Invoke(RefreshRows);
-        share.TransferStarted += t => Dispatcher.Invoke(() => AddTransfer(t));
-        share.TransferFinished += _ => Dispatcher.Invoke(TrimTransfers);
-        share.CacheChanged += () => Dispatcher.Invoke(RefreshRows);
-        share.LimitReached += hit => Dispatcher.Invoke(() => ShowLimit(hit));
+        // BeginInvoke und nicht Invoke: diese Meldungen kommen aus dem
+        // Rueckruf des Dateisystems, und der darf auf nichts warten.
+        //
+        // Invoke haelt den meldenden Faden an, bis die Oberflaeche ihn
+        // bedient. Steht die Oberflaeche selbst gerade in diesem Rueckruf --
+        // sie stoesst das Holen an und wartet darauf --, warten beide
+        // aufeinander. Windows bricht das nach zwei Minuten ab, der Rueckruf
+        // scheitert mit 0x8007017C, und die naechste Datei faengt von vorn
+        // an. Genau das war zu sehen: Bloecke vollstaendig empfangen, danach
+        // zwei Minuten nichts.
+        //
+        // Eine Anzeige, die eine Sekunde spaeter nachzieht, ist niemandem im
+        // Weg. Eine, die den Abgleich anhaelt, schon.
+        share.StateChanged += _ => Dispatcher.BeginInvoke(RefreshRows);
+        share.SyncProgressChanged += () => Dispatcher.BeginInvoke(RefreshRows);
+        share.TransferStarted += t => Dispatcher.BeginInvoke(() => AddTransfer(t));
+        share.TransferFinished += _ => Dispatcher.BeginInvoke(TrimTransfers);
+        share.CacheChanged += () => Dispatcher.BeginInvoke(RefreshRows);
+        share.LimitReached += hit => Dispatcher.BeginInvoke(() => ShowLimit(hit));
 
         // Die Tabelle enthaelt fuer diesen Ordner noch keine Zeile. Er wurde
         // gerade erst uebernommen oder verbunden.

@@ -442,13 +442,32 @@ public sealed class BepConnection : IAsyncDisposable
     /// <summary>Wohin Auffaelligkeiten gemeldet werden.</summary>
     public Action<string>? Log { get; set; }
 
+    /// <summary>Ab dieser Dauer wird ein Sendevorgang auffaellig.</summary>
+    /// <remarks>
+    /// Eine Nachricht auf eine bestehende Leitung zu schreiben dauert
+    /// Millisekunden. Dauert es Sekunden, wartet entweder die Leitung -- die
+    /// Gegenstelle liest nicht -- oder das Schloss: ein anderer Sendevorgang
+    /// ist noch nicht fertig. Beides sagt etwas, und beides war bisher
+    /// unsichtbar.
+    /// </remarks>
+    private static readonly TimeSpan SendeFrist = TimeSpan.FromSeconds(2);
+
     private async Task SendAsync(MessageType type, IMessage message, CancellationToken ct)
     {
+        var begonnen = Environment.TickCount64;
+
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
+        var amSchloss = Environment.TickCount64 - begonnen;
+
         try
         {
             await BepFraming.WriteMessageAsync(_wire, type, message, ct).ConfigureAwait(false);
             MessageSent?.Invoke(type, message.CalculateSize());
+
+            var gesamt = Environment.TickCount64 - begonnen;
+            if (gesamt > SendeFrist.TotalMilliseconds)
+                Log?.Invoke($"  {type} brauchte {gesamt} ms zum Senden " +
+                            $"(davon {amSchloss} ms am Schloss).");
         }
         finally
         {
