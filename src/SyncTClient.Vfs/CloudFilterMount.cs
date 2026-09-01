@@ -20,6 +20,8 @@ public sealed class CloudFilterMount : IDisposable
     /// </summary>
     private const int SectorSize = 4096;
 
+    private static bool _groessenGemeldet;
+
     /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS.</summary>
     private const uint FileAttributeRecallOnDataAccess = 0x0040_0000;
 
@@ -715,6 +717,21 @@ public sealed class CloudFilterMount : IDisposable
         parameters.Anonymous.TransferData.Length = length;
 
         var result = PInvoke.CfExecute(&operation, &parameters);
+
+        // Einmal je Sitzung: die Groessen, mit denen wir aufrufen. CfExecute
+        // meldet Erfolg und bewirkt nichts, wenn ParamSize nicht zu dem passt,
+        // was Windows erwartet -- ein Fehler, den kein Rueckgabewert nennt.
+        // Erwartet werden auf x64: ParamSize 48, StructSize 40.
+        if (!_groessenGemeldet)
+        {
+            _groessenGemeldet = true;
+            _log?.Invoke($"  CfExecute: ParamSize {parameters.ParamSize}, " +
+                         $"StructSize {operation.StructSize}, " +
+                         $"sizeof(CF_OPERATION_PARAMETERS) {sizeof(CF_OPERATION_PARAMETERS)}, " +
+                         $"Puffer 0x{(nint)buffer:X}, Offset {offset}, Laenge {length}, " +
+                         $"Ergebnis 0x{(uint)result.Value:X8}.");
+        }
+
         if (!result.Failed) return true;
 
         // 0x8007018E: die Anfrage wurde storniert, weil ein anderer Abruf den
