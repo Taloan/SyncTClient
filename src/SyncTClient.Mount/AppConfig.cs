@@ -293,7 +293,7 @@ public sealed class AppConfig
     /// <remarks>
     /// Ein Modus und keine einmalige Handlung: er gilt auch fuer Freigaben,
     /// die erst spaeter bereit werden, und er ueberlebt einen Neustart. Wer
-    /// anhaelt, weil die Leitung gebraucht wird, will nicht, dass das naechste
+    /// anhaelt, weil die Verbindung gebraucht wird, will nicht, dass das naechste
     /// Hochfahren die Entscheidung stillschweigend zuruecknimmt.
     ///
     /// Sichtbar bleibt er trotzdem: das Zeichen im Infobereich steht dann auf

@@ -14,7 +14,7 @@ namespace SyncTClient.Gui;
 /// mehr Abhaengigkeit als Nutzen.
 ///
 /// Die Hochachse skaliert selbst und rundet dabei nach oben. Eine feste
-/// Obergrenze waere bei einer schnellen Leitung nutzlos, und bei einer
+/// Obergrenze waere bei einer schnellen Verbindung nutzlos, und bei einer
 /// langsamen bliebe die Kurve ein flacher Strich.
 /// </remarks>
 public sealed class ThroughputChart : FrameworkElement

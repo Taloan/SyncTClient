@@ -576,7 +576,7 @@ public sealed class PersistentFolderIndex : IDisposable
 
     /// <summary>Welche Gegenstellen diese Datei vollstaendig fuehren.</summary>
     /// <remarks>
-    /// Fuer die Wahl der Leitung: geholt wird bei einer Gegenstelle, die den
+    /// Fuer die Wahl der Verbindung: geholt wird bei einer Gegenstelle, die den
     /// Inhalt hat, nicht bei irgendeiner.
     /// </remarks>
     public IReadOnlyList<string> HolderDevices(string name)
