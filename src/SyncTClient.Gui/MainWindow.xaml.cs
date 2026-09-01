@@ -270,7 +270,7 @@ public partial class MainWindow : Window
         foreach (var rest in await Task.Run(
                      () => SyncTClient.Vfs.WinRtSyncRoot.UnregisterStrays(pfade).ToList()))
         {
-            AppendLog($"Verwaiste Sync-Wurzel abgemeldet: {rest}");
+            AppendLog($"Sync-Wurzeln: {rest}");
         }
 
         AppendLog($"Sync-Wurzeln geprueft in {uhr.ElapsedMilliseconds} ms.");
