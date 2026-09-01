@@ -36,11 +36,14 @@ public partial class SharePeersWindow : Window
         Closed += (_, _) => _takt.Stop();
     }
 
-    private void Zeigen() => Grid.ItemsSource = new[] { Beschreibe(_row) };
+    // Je Teilnehmer eine Zeile. Vorher stand hier nur die erste Gegenstelle --
+    // aus einer Zeit, in der ein Ordner genau einer gehoerte.
+    private void Zeigen()
+        => Grid.ItemsSource = _row.Peers.Select(p => Beschreibe(_row, p)).ToList();
 
-    private static Zeile Beschreibe(ShareRow row)
+    private static Zeile Beschreibe(ShareRow row, PeerItem peer)
     {
-        var host = row.Peer.Host;
+        var host = peer.Host;
 
         var aktivitaet = !row.Accepted
             ? "Angeboten"

@@ -367,4 +367,12 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Share.SharedWith">Shared with these devices</s:String>
   <s:String x:Key="S.Share.SharedWithHint">Every device ticked carries the same folder. Unticking ends synchronisation with that device; the files stay here and there.</s:String>
   <s:String x:Key="S.Share.NoPeers">No remote devices configured. One can be added under “Remote devices …”.</s:String>
+  <s:String x:Key="S.Menu.Rescan">Scan now</s:String>
+  <s:String x:Key="S.Menu.Resync">Resynchronise …</s:String>
+  <s:String x:Key="M.Rescanning">“{0}” is being scanned.</s:String>
+  <s:String x:Key="M.Resyncing">“{0}” is being resynchronised: {1} remote device(s) asked.</s:String>
+  <s:String x:Key="S2.ResyncAsk">Discard everything known about this folder from the remote devices and ask again?&#10;&#10;Files are not touched. The index is rebuilt, and until it is complete the folder counts as not synchronised.</s:String>
+  <s:String x:Key="S.Peer.SharedFolders">Shared folders</s:String>
+  <s:String x:Key="S.Peer.SharedFoldersHint">Ticked is what this device takes part in. The same setting appears in the folder under “Sharing” — per device here, per folder there.</s:String>
+  <s:String x:Key="S.Peer.NoShares">No folders set up yet.</s:String>
 </ResourceDictionary>

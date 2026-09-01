@@ -11,13 +11,26 @@ public partial class PeerDialog : Window
 
     public PeerConfig Result { get; private set; } = new();
 
-    public PeerDialog() : this(null) { }
+    private readonly List<ShareChoice> _shares = [];
 
-    public PeerDialog(PeerConfig? existing)
+    /// <summary>
+    /// Die Ordner, an denen dieses Geraet teilnehmen soll.
+    /// </summary>
+    /// <remarks>
+    /// Der Dialog schreibt sie nicht selbst. Er kennt die Geraete-ID erst,
+    /// wenn er geschlossen wird, und bei einer neuen Gegenstelle gibt es sie
+    /// vorher gar nicht.
+    /// </remarks>
+    public IReadOnlyList<string> SharedFolders =>
+        [.. _shares.Where(s => s.Shared).Select(s => s.FolderId)];
+
+    public PeerDialog(PeerConfig? existing, IReadOnlyList<ShareConfig> shares)
     {
         InitializeComponent();
 
         _existing = existing;
+        LoadShares(existing, shares);
+
         if (existing is null) return;
 
         Title = App.S("S.Peer.TitleEdit");
@@ -29,6 +42,30 @@ public partial class PeerDialog : Window
         AutoBox.IsChecked = existing.AutoConnect;
         DiscoveryBox.IsChecked = existing.Discovery;
         RelayBox.IsChecked = existing.Relays;
+    }
+
+    /// <summary>
+    /// Fuellt die Liste der Ordner. Angekreuzt ist, woran das Geraet
+    /// teilnimmt.
+    /// </summary>
+    private void LoadShares(PeerConfig? existing, IReadOnlyList<ShareConfig> shares)
+    {
+        var id = existing?.DeviceId ?? "";
+
+        foreach (var share in shares)
+        {
+            var geteilt = id.Length > 0
+                          && (share.PeerDeviceIds.Contains(id, StringComparer.OrdinalIgnoreCase)
+                              || share.PeerDeviceId.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+            _shares.Add(new ShareChoice(
+                share.FolderId,
+                string.IsNullOrWhiteSpace(share.Label) ? share.FolderId : share.Label,
+                geteilt));
+        }
+
+        ShareList.ItemsSource = _shares;
+        NoSharesText.Visibility = _shares.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnAdd(object sender, RoutedEventArgs e)
@@ -58,4 +95,14 @@ public partial class PeerDialog : Window
 
         DialogResult = true;
     }
+}
+
+/// <summary>Ein Ordner in der Liste "Geteilte Ordner".</summary>
+public sealed class ShareChoice(string folderId, string name, bool shared)
+{
+    public string FolderId { get; } = folderId;
+    public string Name { get; } = name;
+
+    /// <summary>Schreibbar: das Kaestchen bindet darauf.</summary>
+    public bool Shared { get; set; } = shared;
 }

@@ -363,6 +363,16 @@ public sealed class PeerHost : IAsyncDisposable
     /// Kuendigt alle Ordner dieser Gegenstelle in einer einzigen Nachricht an
     /// und nennt je Ordner unseren Stand, damit nur Neueres kommt.
     /// </summary>
+    /// <summary>
+    /// Kuendigt die Ordner erneut an, ohne die Verbindung zu loesen.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den Neuabgleich: nach dem Verwerfen steht die Sequenz auf null,
+    /// und die Gegenstelle schickt daraufhin alles.
+    /// </remarks>
+    public Task RenegotiateAsync(CancellationToken ct = default)
+        => _connection is null ? Task.CompletedTask : NegotiateAsync(ct);
+
     private async Task NegotiateAsync(CancellationToken ct)
     {
         // Syncthing schickt seinen ClusterConfig sofort nach dem Hello. Kommt
