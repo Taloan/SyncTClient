@@ -771,7 +771,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             .ToList();
 
         if (pending.Count == 0) return;
-        _log($"[{FolderId}] Modus AlwaysLocal: hole {pending.Count} noch fehlende Dateien ...");
+        _log($"[{FolderId}] Modus AlwaysLocal: lade {pending.Count} noch fehlende Dateien herunter ...");
 
         var done = 0;
         SetPhase(SyncPhase.Inhalte, 0, pending.Count);
@@ -795,7 +795,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
                 var fertig = Interlocked.Increment(ref done);
                 SetPhase(SyncPhase.Inhalte, fertig, pending.Count);
-                if (fertig % 50 == 0) _log($"[{FolderId}] {fertig}/{pending.Count} geholt.");
+                if (fertig % 50 == 0) _log($"[{FolderId}] {fertig}/{pending.Count} heruntergeladen.");
             });
 
         _log($"[{FolderId}] vollstaendig lokal.");
