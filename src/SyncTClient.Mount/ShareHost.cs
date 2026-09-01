@@ -866,6 +866,20 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         _mount.Connect();
 
+        // Zuerst der eigene Bestand, dann der fremde.
+        //
+        // Der Konfliktweg verlangt einen eigenen Indexeintrag: nur wer weiss,
+        // was er selbst hat, kann feststellen, dass beide Seiten geaendert
+        // haben. Bei einem frisch uebernommenen Ordner gibt es diesen Eintrag
+        // fuer keine Datei. Wendet man in diesem Zustand den fremden Index an,
+        // gewinnt die Gegenstelle jede Abweichung stillschweigend -- der
+        // Ordner sieht danach richtig aus, und was hier stand, ist fort.
+        //
+        // Deshalb wird vorher gelesen und gerechnet. Danach hat jede
+        // vorhandene Datei ihre Blockliste, und der Vergleich ist ein
+        // Vergleich und kein Zugestaendnis.
+        await AdoptLocalAsync();
+
         SetPhase(SyncPhase.Platzhalter);
         _mount.ProjectPlaceholders((done, total) => SetPhase(SyncPhase.Platzhalter, done, total));
 
@@ -889,6 +903,43 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // pruefen ist; gerechnet und gesendet wird im Hintergrund.
         ScanLocal();
         StartLocalLoop();
+    }
+
+    /// <summary>
+    /// Nimmt auf, was schon im Ordner liegt.
+    /// </summary>
+    /// <remarks>
+    /// Der Durchgang findet die vorhandenen Dateien, die Bewertung rechnet
+    /// ihre Blocklisten. Was Byte fuer Byte dem entspricht, was die
+    /// Gegenstelle fuehrt, wird still uebernommen; alles andere wird
+    /// angekuendigt, denn es ist unsere Fassung und sie kennt sie nicht.
+    ///
+    /// Platzhalter bleiben aussen vor: der Durchgang uebergeht sie, und sie
+    /// haetten auch nichts zu rechnen. Beim ersten Mal gibt es ohnehin keine.
+    ///
+    /// Das kostet einmal Lesen ueber den ganzen Ordner. Es ist der Preis
+    /// dafuer, dass die Gegenstelle danach nichts gewinnt, was sie nicht
+    /// beweisen kann.
+    /// </remarks>
+    private async Task AdoptLocalAsync()
+    {
+        ScanLocal(quiet: true);
+        if (_dirty.IsEmpty) return;
+
+        var anzahl = _dirty.Count;
+        SetPhase(SyncPhase.Index, 0, anzahl);
+        _log($"[{FolderId}] {anzahl} vorhandene Dateien werden aufgenommen ...");
+
+        try
+        {
+            await PublishAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            // Eine Aufnahme, die scheitert, ist kein Grund, den Ordner nicht
+            // einzuhaengen. Der Hintergrundlauf holt sie nach.
+            _log($"[{FolderId}] Aufnahme des Bestands: {ex.Message}");
+        }
     }
 
     /// <summary>
