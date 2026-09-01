@@ -776,6 +776,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         await StopLocalLoopAsync();
 
+        FinishOutgoing();
+
         _cache?.Save();
         _cache?.LeaveLimits();
         _mount?.Dispose();
@@ -1699,6 +1701,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
 
         if (fertig) FinishOutgoing(relativePath, transfer);
+    }
+
+    /// <summary>
+    /// Beendet alle laufenden Auslieferungen.
+    /// </summary>
+    /// <remarks>
+    /// Beim Anhalten und beim Trennen. Ohne das bleiben sie in der Liste
+    /// stehen und behaupten "sendet", waehrend niemand mehr sendet: die
+    /// Freigabe wird beim naechsten Verbinden neu aufgebaut, ihre Buchfuehrung
+    /// faengt bei null an, und die alten Eintraege findet danach niemand mehr,
+    /// der sie abschliessen koennte.
+    /// </remarks>
+    public void FinishOutgoing()
+    {
+        foreach (var (name, transfer) in _outgoing) FinishOutgoing(name, transfer);
     }
 
     /// <summary>Beendet Auslieferungen, zu denen nichts mehr nachkommt.</summary>
