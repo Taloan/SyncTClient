@@ -102,7 +102,7 @@
   <s:String x:Key="S.Share.Thumbs">Create thumbnails on demand</s:String>
   <s:String x:Key="S.Share.CopiesHint">When the space is freed, the local content is gone and the file becomes a placeholder again. This happens only once this many other nodes carry the file completely. With a single server, 1 is right, with several nodes 2. Less than 1 is not allowed, because the last content in the network could then disappear.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">What should be shown?</s:String>
-  <s:String x:Key="S.Share.SaveHint">Changes take effect when the share is restarted.</s:String>
+  <s:String x:Key="S.Share.SaveHint">Unchecked branches are removed as soon as you save.</s:String>
 
   <s:String x:Key="S.Accept.Title">Connect share</s:String>
   <s:String x:Key="S.Accept.LocalFolder">Local folder</s:String>
@@ -348,4 +348,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="R.SyncPercent">{0} % · {1} pending</s:String>
   <s:String x:Key="N.Nothing">nothing</s:String>
   <s:String x:Key="N.Outstanding">{0} of {1}  ({2} files)</s:String>
+  <s:String x:Key="S2.Locked">Cannot be unchecked: not every file in this branch is held in full by the remote.</s:String>
+  <s:String x:Key="S2.Refused">“{0}” stays selected: {1} files in it have not reached the placeholder threshold. Unchecking removes the branch, and those files would then exist nowhere.</s:String>
+  <s:String x:Key="M.Pruned">Removed {0} files ({1}) outside the selection.</s:String>
 </ResourceDictionary>

@@ -96,7 +96,7 @@
   <s:String x:Key="S.Share.Thumbs">Vorschaubilder on-demand erzeugen</s:String>
   <s:String x:Key="S.Share.CopiesHint">Wird der Speicherplatz freigegeben, verschwindet der lokale Inhalt und die Datei wird wieder zum Platzhalter. Das geschieht erst, wenn so viele andere Knoten die Datei vollständig führen. Bei einem einzelnen Server ist 1 richtig, bei mehreren Knoten 2. Weniger als 1 ist nicht möglich: dann könnte der letzte Inhalt im Netz verschwinden.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">Was soll angezeigt werden?</s:String>
-  <s:String x:Key="S.Share.SaveHint">Änderungen werden wirksam, wenn der Share neu gestartet wird.</s:String>
+  <s:String x:Key="S.Share.SaveHint">Abgewählte Zweige werden entfernt, sobald du speicherst.</s:String>
   <s:String x:Key="S.Accept.Title">Share verbinden</s:String>
   <s:String x:Key="S.Accept.LocalFolder">Lokaler Ordner</s:String>
   <s:String x:Key="S.Accept.PathHint">Unter diesem Pfad erscheint der Share im Explorer. Das Verzeichnis wird angelegt, wenn es noch nicht besteht.</s:String>
@@ -340,4 +340,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="R.SyncPercent">{0} % · {1} offen</s:String>
   <s:String x:Key="N.Nothing">nichts</s:String>
   <s:String x:Key="N.Outstanding">{0} von {1}  ({2} Dateien)</s:String>
+  <s:String x:Key="S2.Locked">Kann nicht abgewählt werden: nicht jede Datei in diesem Zweig liegt vollständig bei der Gegenstelle.</s:String>
+  <s:String x:Key="S2.Refused">„{0}“ bleibt ausgewählt: {1} Dateien darin erreichen die Platzhalter-Schwelle noch nicht. Abwählen entfernt den Zweig, und diese Dateien gäbe es dann nirgends mehr.</s:String>
+  <s:String x:Key="M.Pruned">{0} Dateien ({1}) ausserhalb der Auswahl entfernt.</s:String>
 </ResourceDictionary>

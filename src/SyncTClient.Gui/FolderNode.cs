@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -35,6 +35,22 @@ public sealed class FolderNode : INotifyPropertyChanged
 
     public int FileCount { get; set; }
 
+    /// <summary>
+    /// Wie viele Dateien unter diesem Knoten die Platzhalter-Schwelle noch
+    /// nicht erreicht haben.
+    /// </summary>
+    /// <remarks>
+    /// Abwaehlen heisst entfernen. Das ist nur dann kein Verlust, wenn die
+    /// Gegenstelle jede Datei des Zweiges vollstaendig fuehrt. Solange auch
+    /// nur eine fehlt, bleibt das Kaestchen gesetzt.
+    /// </remarks>
+    public int Blocking { get; set; }
+
+    public bool Removable => Blocking == 0;
+
+    /// <summary>Wird gerufen, wenn ein Abwaehlen abgelehnt wurde.</summary>
+    public Action<FolderNode>? Refused { get; set; }
+
     public string Summary => FileCount == 0
         ? ""
         : $"{FileCount} Dateien, {TotalBytes / (1024.0 * 1024.0):0.#} MB";
@@ -48,7 +64,21 @@ public sealed class FolderNode : INotifyPropertyChanged
     public bool? IsChecked
     {
         get => _isChecked;
-        set => SetChecked(value ?? false, fromUser: true);
+        set
+        {
+            if (value == false && !Removable)
+            {
+                Refused?.Invoke(this);
+
+                // Das Kaestchen hat sich beim Klick schon umgestellt. Ohne
+                // diese Meldung bliebe es leer, waehrend die Auswahl
+                // unveraendert ist.
+                Notify(nameof(IsChecked));
+                return;
+            }
+
+            SetChecked(value ?? false, fromUser: true);
+        }
     }
 
     private void SetChecked(bool? value, bool fromUser)
@@ -132,7 +162,7 @@ public sealed class FolderNode : INotifyPropertyChanged
 
     /// <summary>Baut den Verzeichnisbaum aus den Eintraegen des Index.</summary>
     public static FolderNode Build(
-        IEnumerable<(string Name, long Size, bool IsDirectory)> entries)
+        IEnumerable<(string Name, long Size, bool IsDirectory, bool HasContent)> entries)
     {
         var root = new FolderNode("(alles)", "", null) { IsExpanded = true };
         var lookup = new Dictionary<string, FolderNode>(StringComparer.OrdinalIgnoreCase)
@@ -156,6 +186,7 @@ public sealed class FolderNode : INotifyPropertyChanged
                 {
                     walker.FileCount++;
                     walker.TotalBytes += entry.Size;
+                    if (!entry.HasContent) walker.Blocking++;
                 }
             }
         }
