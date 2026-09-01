@@ -659,28 +659,22 @@ public sealed class CloudFilterMount : IDisposable
     /// Reicht ein Stueck an Windows durch.
     /// </summary>
     /// <remarks>
-    /// Die Laenge wird auf die Sektorgroesse aufgerundet, auch am Dateiende.
-    /// Der Ueberhang ist mit Nullen gefuellt; Windows schneidet ihn an der
-    /// wirklichen Dateigroesse ab.
+    /// Der Puffer ist sektorausgerichtet, seine Laenge ist es nicht: das
+    /// letzte Stueck einer Datei endet fast nie auf einer Sektorgrenze, und
+    /// genau dafuer laesst die Vorschrift ein Teilstueck zu.
     ///
-    /// Ohne dieses Aufrunden galt die Uebergabe als unvollstaendig: die letzte
-    /// Datei endete mitten im Sektor, Windows wartete auf den Rest und gab
-    /// erst nach seiner Minutenfrist auf. Im Protokoll stand die Datei zweimal
-    /// als "durchgereicht", genau sechzig Sekunden auseinander -- einmal von
-    /// uns geliefert, einmal von Windows nachgefragt.
+    /// Aufgerundet wurde hier einmal, auf die Vermutung hin, Windows warte auf
+    /// den Rest des Sektors. Das war falsch und ausserdem gegen die
+    /// Vorschrift: die Laenge darf nicht ueber das Dateiende hinausreichen.
     /// </remarks>
     private unsafe bool TransferData(HydrationRequest request, byte[] data, long offset)
     {
-        var laenge = (data.Length + SectorSize - 1) & ~(SectorSize - 1);
-        var buffer = NativeMemory.AlignedAlloc((nuint)laenge, SectorSize);
+        var buffer = NativeMemory.AlignedAlloc((nuint)data.Length, SectorSize);
 
         try
         {
-            var ziel = new Span<byte>(buffer, laenge);
-            data.AsSpan().CopyTo(ziel);
-            ziel[data.Length..].Clear();
-
-            return Transfer(request, buffer, offset, laenge, ntStatus: 0);
+            data.AsSpan().CopyTo(new Span<byte>(buffer, data.Length));
+            return Transfer(request, buffer, offset, data.Length, ntStatus: 0);
         }
         finally
         {
@@ -755,14 +749,16 @@ public sealed class CloudFilterMount : IDisposable
     {
         // FIELD_OFFSET(CF_OPERATION_PARAMETERS, TransferData) ist die Groesse
         // von ParamSize, aufgerundet auf die Ausrichtung der Union: acht
-        // Bytes auf x64.
+        // Bytes auf x64. Dazu 32 Bytes fuer TransferData selbst -- Flags,
+        // Status, Puffer, Offset, Laenge. Macht 40.
         //
-        // Nicht ueber Zeigerarithmetik. Der Versatz der anonymen Union kam
-        // dort als 0 heraus, und damit stand in ParamSize 40 statt 48. Windows
-        // liest Puffer, Offset und Laenge dann acht Bytes zu frueh, findet
-        // Nullen -- und meldet Erfolg. Jede Uebergabe war wirkungslos, die
-        // Datei blieb ein leerer Platzhalter, und nach der Minutenfrist fragte
-        // Windows dieselbe Datei erneut an. Das war der Sechzig-Sekunden-Takt.
+        // Die 48, die sizeof(CF_OPERATION_PARAMETERS) nennt, sind nicht
+        // gemeint: die Union ist so gross wie ihr groesstes Mitglied, und das
+        // ist ein anderes.
+        //
+        // Nicht ueber Zeigerarithmetik, denn der Versatz der anonymen Union
+        // kam dort als 0 heraus. Das Ergebnis war zufaellig richtig; die
+        // Rechnung war es nicht.
         var offset = (uint)sizeof(nint);
         return offset + (uint)sizeof(CF_OPERATION_PARAMETERS._Anonymous_e__Union._TransferData_e__Struct);
     }
