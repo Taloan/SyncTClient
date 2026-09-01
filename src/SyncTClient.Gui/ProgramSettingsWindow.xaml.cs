@@ -195,8 +195,14 @@ public partial class ProgramSettingsWindow : Window
 
         try
         {
-            var anzahl = await Task.Run(() => CloudFilterMount.RevertPlaceholdersIn(ordner));
-            RevertText.Text = App.S("S.Settings.RevertDone", Format.Count(anzahl));
+            var (geprueft, aufgeloest, fehler) = await Task.Run(
+                () => CloudFilterMount.RevertPlaceholdersIn(ordner));
+
+            // Auch die Zahl der betrachteten Eintraege. "0 aufgeloest" allein
+            // laesst offen, ob nichts zu tun war oder ob nichts ging.
+            RevertText.Text = App.S("S.Settings.RevertDone",
+                                    Format.Count(aufgeloest), Format.Count(geprueft))
+                + (fehler is null ? "" : " " + App.S("S.Settings.RevertFailed", fehler));
         }
         catch (Exception ex)
         {
