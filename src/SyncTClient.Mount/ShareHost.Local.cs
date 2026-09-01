@@ -1564,7 +1564,14 @@ public sealed partial class ShareHost
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
             {
-                _log($"[{FolderId}] Ankuendigung an eine Gegenstelle scheiterte: {ex.Message}");
+                // Und die Leitung herausnehmen. Ein geschlossener Socket wird
+                // nicht dadurch besser, dass man ihn weiter beschreibt -- ohne
+                // dies scheiterte jede Ankuendigung von nun an, immer mit
+                // derselben Zeile. Der PeerHost haengt beim Verbinden eine
+                // neue ein.
+                DropConnection(device);
+
+                _log($"[{FolderId}] Ankuendigung scheiterte, Leitung herausgenommen: {ex.Message}");
             }
         }
 
