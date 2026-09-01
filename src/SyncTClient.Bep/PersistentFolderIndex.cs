@@ -430,6 +430,27 @@ public sealed class PersistentFolderIndex : IDisposable
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Nimmt einen Namen ganz fort -- den eigenen Eintrag und den jeder
+    /// Gegenstelle.
+    /// </summary>
+    /// <remarks>
+    /// Fuer Namen, die ein Muster aus dem Abgleich nimmt. Sie stehen sonst
+    /// weiter im Baum und zaehlen im Rueckstand, obwohl niemand mehr etwas
+    /// mit ihnen vorhat.
+    /// </remarks>
+    public void Forget(string name)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            DELETE FROM files WHERE name = $name;
+            DELETE FROM local_files WHERE name = $name;
+            """;
+        command.Parameters.AddWithValue("$name", name);
+        command.ExecuteNonQuery();
+    }
+
     /// <summary>Setzt den Zustand einer eigenen Datei, ohne sie neu zu schreiben.</summary>
     public void SetLocalState(string name, int state)
     {

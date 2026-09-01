@@ -44,6 +44,7 @@ public partial class ShareSettingsWindow : Window
         // 0 bedeutet: nicht sichern. Ein Kaestchen daneben waere dieselbe
         // Aussage ein zweites Mal.
         VersionDaysBox.Text = (share.KeepVersions ? share.VersionDays : 0).ToString();
+        IgnoreBox.Text = string.Join(Environment.NewLine, share.Ignored);
         UpdateCacheEnabled();
         _loading = false;
 
@@ -205,6 +206,15 @@ public partial class ShareSettingsWindow : Window
         {
             _share.PeerDeviceId = _share.PeerDeviceIds[0];
         }
+        // Leere Zeilen fallen heraus, der Rest bleibt wie getippt --
+        // einschliesslich der Kommentare und der Reihenfolge. Bei Mustern
+        // entscheidet das erste, das zutrifft; eine sortierte Liste waere
+        // eine andere Liste.
+        _share.Ignored = [.. IgnoreBox.Text
+            .Split('\n')
+            .Select(z => z.Trim())
+            .Where(z => z.Length > 0)];
+
         // Null Tage heisst: sofort loeschen, also gar nicht sichern.
         _share.KeepVersions = days > 0;
         _share.VersionDays = Math.Max(1, days);

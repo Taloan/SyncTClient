@@ -173,6 +173,50 @@ public sealed class ShareConfig
     public List<string> Included { get; set; } = [];
 
     /// <summary>
+    /// Muster, die vom Abgleich ausgenommen sind. Eines je Zeile.
+    /// </summary>
+    /// <remarks>
+    /// Etwas anderes als <see cref="Included"/>. Der Baum sagt, welche Zweige
+    /// auf diesem Geraet liegen sollen -- was er abwaehlt, wird trotzdem
+    /// uebertragen. Ein Muster nimmt den Namen ganz heraus: er wird nicht
+    /// angekuendigt, nicht geholt und nicht angelegt.
+    ///
+    /// Vorhandene Dateien werden davon nicht angefasst. Ein Muster sagt "das
+    /// gehoert nicht zum Abgleich", nicht "das darf weg".
+    ///
+    /// Die Schreibweise steht bei <see cref="IgnoreRules"/>.
+    /// </remarks>
+    public List<string> Ignored { get; set; } = [];
+
+    /// <summary>Die uebersetzten Muster, gemerkt bis sich die Liste aendert.</summary>
+    /// <remarks>
+    /// Uebersetzt wird einmal, gefragt wird je Datei und Durchgang. Beides in
+    /// einem Feld, damit ein Wechsel nicht halb sichtbar wird: die Muster von
+    /// eben mit dem Stand von jetzt waeren schlimmer als ein Umweg.
+    /// </remarks>
+    private sealed record Stand(string Quelle, IgnoreRules Regeln);
+
+    [JsonIgnore] private Stand? _stand;
+
+    [JsonIgnore]
+    public IgnoreRules Rules
+    {
+        get
+        {
+            var quelle = string.Join('\n', Ignored);
+            var stand = _stand;
+            if (stand is null || stand.Quelle != quelle)
+                _stand = stand = new Stand(quelle, IgnoreRules.Parse(Ignored));
+
+            return stand.Regeln;
+        }
+    }
+
+    /// <summary>Nimmt ein Muster diesen Namen aus dem Abgleich?</summary>
+    public bool IsIgnored(string relativePath)
+        => Ignored.Count > 0 && Rules.Matches(relativePath);
+
+    /// <summary>
     /// Vorschaubilder im Hintergrund vorbereiten. Das kostet je Bild einen
     /// Block von 128 KiB. Ohne Vorschaubilder zeigt der Explorer ein
     /// Ersatzsymbol.

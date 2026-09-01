@@ -55,6 +55,17 @@ public sealed partial class ShareHost
     /// </remarks>
     public const string MarkerFolder = ".stfolder";
 
+    /// <summary>Die Musterliste von Syncthing.</summary>
+    /// <remarks>
+    /// Sie gehoert demselben Geraet wie die Liste, die hier unter
+    /// "Ignorieren" steht: eine Aussage darueber, was dieses eine Geraet
+    /// nicht will. Sie zu uebertragen hiesse, diese Entscheidung allen
+    /// anderen aufzuzwingen -- und zwar in einer Datei, die selbst wieder
+    /// Gegenstand des Abgleichs waere und bei beidseitiger Aenderung einen
+    /// Konflikt ergaebe. Syncthing selbst uebertraegt sie ebenfalls nicht.
+    /// </remarks>
+    public const string IgnoreFile = ".stignore";
+
     /// <summary>
     /// Gehoert der Name zur Verwaltung und nicht zum Inhalt?
     /// </summary>
@@ -68,7 +79,17 @@ public sealed partial class ShareHost
     /// mitgenommen wird, entscheidet niemand ausser dem, dem er gehoert.
     /// </remarks>
     public static bool IsVersionsPath(string name)
-        => Unterhalb(name, VersionsFolder) || Unterhalb(name, MarkerFolder);
+        => Unterhalb(name, VersionsFolder)
+           || Unterhalb(name, MarkerFolder)
+           || Heisst(name, IgnoreFile);
+
+    /// <summary>Traegt der Name diesen Dateinamen, gleich in welcher Ebene?</summary>
+    private static bool Heisst(string name, string dateiname)
+    {
+        var schnitt = name.LastIndexOf('/');
+        var letzter = schnitt < 0 ? name : name[(schnitt + 1)..];
+        return letzter.Equals(dateiname, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool Unterhalb(string name, string ordner)
         => name.Equals(ordner, StringComparison.OrdinalIgnoreCase)
@@ -89,6 +110,7 @@ public sealed partial class ShareHost
         foreach (var name in names)
         {
             if (!_config.Includes(name) || IsVersionsPath(name)) continue;
+            if (_config.IsIgnored(name)) continue;
             if (_incoming.TryAdd(name, 0)) neu++;
         }
 
@@ -170,6 +192,10 @@ public sealed partial class ShareHost
         // bekannt, ob der Name ein Verzeichnis meint -- und "Dateien in X"
         // umfasst die losen Dateien von X, nicht seine Unterverzeichnisse.
         if (!_config.Includes(name, theirs.Type == FileInfoType.Directory)) return;
+
+        // Ein Muster kann nach dem Index dazugekommen sein. Angelegt wird
+        // dann nichts mehr; was schon dasteht, raeumt der Durchgang weg.
+        if (_config.IsIgnored(name)) return;
 
         var path = LocalPathOf(name);
 
