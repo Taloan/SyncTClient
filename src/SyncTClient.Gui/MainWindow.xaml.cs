@@ -259,6 +259,16 @@ public partial class MainWindow : Window
         // ruft die Anwendung selbst auf.
         if (_config.StartMinimized && _tray is not null) Hide();
 
+        // Was im Navigationsbereich steht und zu keiner eingerichteten
+        // Freigabe gehoert, wird abgemeldet. Ein solcher Rest ist von Hand
+        // nicht zu entfernen: der Ordner dazu ist fort, und ohne ihn bietet
+        // weder der Explorer noch dieses Programm eine Handhabe.
+        foreach (var rest in SyncTClient.Vfs.WinRtSyncRoot.UnregisterStrays(
+                     _config.Shares.Select(share => share.LocalPath)))
+        {
+            AppendLog($"Verwaiste Sync-Wurzel abgemeldet: {rest}");
+        }
+
         // Die Oberflaeche ist zugleich der Sync-Dienst. Wer sie oeffnet, will
         // in aller Regel, dass der Abgleich laeuft.
         // Angehalten heisst angehalten -- auch ueber einen Neustart hinweg.
