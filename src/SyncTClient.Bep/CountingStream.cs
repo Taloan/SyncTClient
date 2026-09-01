@@ -24,6 +24,7 @@ public sealed class CountingStream(Stream inner) : Stream
     {
         var n = await inner.ReadAsync(buffer, ct).ConfigureAwait(false);
         Interlocked.Add(ref _read, n);
+        WireTally.AddRead(n);
         return n;
     }
 
@@ -32,6 +33,7 @@ public sealed class CountingStream(Stream inner) : Stream
     {
         var n = await inner.ReadAsync(buffer.AsMemory(offset, count), ct).ConfigureAwait(false);
         Interlocked.Add(ref _read, n);
+        WireTally.AddRead(n);
         return n;
     }
 
@@ -39,6 +41,7 @@ public sealed class CountingStream(Stream inner) : Stream
     {
         var n = inner.Read(buffer, offset, count);
         Interlocked.Add(ref _read, n);
+        WireTally.AddRead(n);
         return n;
     }
 
@@ -47,6 +50,7 @@ public sealed class CountingStream(Stream inner) : Stream
     {
         await inner.WriteAsync(buffer, ct).ConfigureAwait(false);
         Interlocked.Add(ref _written, buffer.Length);
+        WireTally.AddWritten(buffer.Length);
     }
 
     public override async Task WriteAsync(
@@ -54,12 +58,14 @@ public sealed class CountingStream(Stream inner) : Stream
     {
         await inner.WriteAsync(buffer.AsMemory(offset, count), ct).ConfigureAwait(false);
         Interlocked.Add(ref _written, count);
+        WireTally.AddWritten(count);
     }
 
     public override void Write(byte[] buffer, int offset, int count)
     {
         inner.Write(buffer, offset, count);
         Interlocked.Add(ref _written, count);
+        WireTally.AddWritten(count);
     }
 
     public override void Flush() => inner.Flush();

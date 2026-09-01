@@ -12,7 +12,17 @@ public enum TransferState
     Fehler
 }
 
-/// <summary>Eine einzelne Hydration, also eine Datei, die gerade geholt wird.</summary>
+/// <summary>Wohin die Bytes laufen.</summary>
+public enum TransferDirection
+{
+    /// <summary>Wir holen eine Datei von der Gegenstelle.</summary>
+    Herein,
+
+    /// <summary>Die Gegenstelle holt eine Datei bei uns.</summary>
+    Hinaus
+}
+
+/// <summary>Eine Datei, die gerade geholt oder ausgeliefert wird.</summary>
 /// <remarks>
 /// Meldet Aenderungen auf dem Kontext, den die Oberflaeche gesetzt hat. Die
 /// Rueckrufe von CfAPI kommen aus dem Threadpool, Bindungen in WPF muessen
@@ -27,18 +37,33 @@ public sealed class TransferInfo : INotifyPropertyChanged
     private long _doneBytes;
     private string? _error;
 
-    public TransferInfo(string folderId, string relativePath, long totalBytes)
+    public TransferInfo(string folderId, string relativePath, long totalBytes,
+        TransferDirection direction = TransferDirection.Herein)
     {
         FolderId = folderId;
         RelativePath = relativePath;
         TotalBytes = totalBytes;
+        Direction = direction;
         Started = DateTimeOffset.Now;
+        Touched = Environment.TickCount64;
     }
 
     public string FolderId { get; }
     public string RelativePath { get; }
     public long TotalBytes { get; }
+    public TransferDirection Direction { get; }
     public DateTimeOffset Started { get; }
+
+    /// <summary>
+    /// Wann zuletzt etwas ankam oder hinausging.
+    /// </summary>
+    /// <remarks>
+    /// Nur fuer den ausgehenden Weg. Beim Holen weiss der Aufrufer, wann er
+    /// fertig ist; beim Ausliefern weiss es niemand -- die Gegenstelle fragt
+    /// Block fuer Block und sagt nicht, wann sie aufhoert. Bleibt eine
+    /// Auslieferung stehen, wird sie nach einer Weile beendet.
+    /// </remarks>
+    internal long Touched { get; set; }
 
     public string Name => System.IO.Path.GetFileName(RelativePath.Replace('/', '\\'));
 
@@ -80,7 +105,7 @@ public sealed class TransferInfo : INotifyPropertyChanged
     public string StateText => _state switch
     {
         TransferState.Wartet => "wartet",
-        TransferState.Laeuft => "lädt",
+        TransferState.Laeuft => Direction == TransferDirection.Hinaus ? "sendet" : "lädt",
         TransferState.Fertig => "fertig",
         TransferState.Fehler => _error ?? "Fehler",
         _ => ""

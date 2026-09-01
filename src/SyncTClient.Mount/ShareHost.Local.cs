@@ -103,6 +103,16 @@ public sealed partial class ShareHost
 
     private FileSystemWatcher? _watcher;
 
+    /// <summary>
+    /// Woher eine Datei kam, die gerade hierher verschoben wurde.
+    /// </summary>
+    /// <remarks>
+    /// Nur fuer den einen Zug von der Meldung bis zur Bewertung. Danach ist
+    /// der Eintrag verbraucht: eine zweite Bewertung desselben Namens ist
+    /// keine Verschiebung mehr.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, string> _renamedFrom = new(StringComparer.Ordinal);
+
     /// <summary>Namen, die zu pruefen sind.</summary>
     private readonly ConcurrentDictionary<string, byte> _dirty = new(StringComparer.Ordinal);
 
@@ -135,11 +145,24 @@ public sealed partial class ShareHost
     private CancellationTokenSource? _localCts;
     private Task? _localLoop;
 
-    /// <summary>Ob in dieser Sitzung schon ein Index fuer diesen Ordner ging.</summary>
-    private bool _indexSent;
+    /// <summary>
+    /// Ob in dieser Sitzung schon ein vollstaendiger Index an diese
+    /// Gegenstelle ging.
+    /// </summary>
+    /// <remarks>
+    /// Je Gegenstelle gefuehrt. Eine, die sich neu verbindet, braucht einen
+    /// vollstaendigen Index, auch wenn die anderen laengst Nachtraege
+    /// bekommen.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, bool> _indexSentTo =
+        new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Die hoechste Sequenznummer der zuletzt gesendeten Nachricht.</summary>
-    private long _lastSentSequence;
+    /// <summary>
+    /// Die hoechste Sequenznummer der zuletzt gesendeten Nachricht, je
+    /// Gegenstelle.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, long> _lastSentTo =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Die eigene Geraete-ID. Sie steht in <c>modified_by</c> und im eigenen
@@ -376,6 +399,22 @@ public sealed partial class ShareHost
 
         try
         {
+            // Verzeichnisse gehoeren ebenso zur Freigabe. Sie tragen keinen
+            // Inhalt, aber ein leerer Ordner ist eine Aussage -- ohne ihn
+            // entsteht er auf der Gegenseite erst, wenn eine Datei darin
+            // landet. In "vorhanden" gehoeren sie nicht: dort werden Groessen
+            // verglichen, und ein Verzeichnis hat keine.
+            foreach (var dir in new DirectoryInfo(root).EnumerateDirectories("*", options))
+            {
+                if (NameOf(dir.FullName) is not { } name) continue;
+
+                var gefuehrt = LocalCopy(name);
+                if (gefuehrt is not null && !gefuehrt.Deleted) continue;
+
+                _dirty[name] = 0;
+                found++;
+            }
+
             foreach (var info in new DirectoryInfo(root).EnumerateFiles("*", options))
             {
                 if (NameOf(info.FullName) is not { } name) continue;
@@ -467,13 +506,26 @@ public sealed partial class ShareHost
 
                 foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in _index.EnumerateLight())
                 {
-                    if (isDirectory || !_config.Includes(name)) continue;
+                    if (isDirectory) continue;
 
                     bekannt.Add(name);
                     gesamt++;
                     gesamtBytes += size;
                     vereint++;
                     vereintBytes += size;
+
+                    // Ausserhalb der Auswahl ist die Abwesenheit der
+                    // erwuenschte Zustand, nicht der Rueckstand. Offen ist ein
+                    // solcher Eintrag nur, solange er hier noch liegt und
+                    // darauf wartet, hinauszugehen.
+                    if (!_config.Includes(name))
+                    {
+                        if (!vorhanden.ContainsKey(name)) continue;
+
+                        offen++;
+                        bytes += size;
+                        continue;
+                    }
 
                     // Zwei Gruende, dass etwas aussteht. Der erste ist unser
                     // eigener: der Eintrag steht hier noch nicht so da.
@@ -778,6 +830,7 @@ public sealed partial class ShareHost
                 Interlocked.Exchange(ref _pendingWake, 0);
 
                 SweepHydrations();
+                SweepOutgoing();
 
                 // Erst hereinnehmen, dann hinausgeben. Andernfalls wuerde eine
                 // Datei, die beide Seiten geaendert haben, als eigene Aenderung
@@ -827,7 +880,7 @@ public sealed partial class ShareHost
     /// </summary>
     private async Task PublishAsync(CancellationToken ct)
     {
-        if (_connection is not { } connection || _index is null) return;
+        if (_connections.IsEmpty || _index is null) return;
         if (IsPaused) return;
 
         // Ohne eigene Geraete-ID liesse sich kein Zaehler fortschreiben. Eine
@@ -854,7 +907,7 @@ public sealed partial class ShareHost
 
             if (batch.Count < BatchFiles && bytes < BatchBytes) continue;
 
-            await FlushAsync(connection, batch, ct).ConfigureAwait(false);
+            await FlushAsync(batch, ct).ConfigureAwait(false);
             bytes = 0;
         }
 
@@ -865,11 +918,11 @@ public sealed partial class ShareHost
 
             if (batch.Count < BatchFiles && bytes < BatchBytes) continue;
 
-            await FlushAsync(connection, batch, ct).ConfigureAwait(false);
+            await FlushAsync(batch, ct).ConfigureAwait(false);
             bytes = 0;
         }
 
-        await FlushAsync(connection, batch, ct).ConfigureAwait(false);
+        await FlushAsync(batch, ct).ConfigureAwait(false);
     }
 
     // ------------------------------------------------------------ Bewerten
@@ -887,19 +940,29 @@ public sealed partial class ShareHost
         var path = ResolveInside(name);
         if (path is null) return Done(name);
 
+        if (AnnouncedName(name) is not { } announced) return Done(name);
+
+        // Verzeichnisse zuerst. Fuer sie ist FileInfo.Exists falsch, die
+        // Pruefung darunter verwuerfe sie also stillschweigend -- und ein
+        // leerer Ordner entstuende auf der Gegenseite nie.
+        if (Directory.Exists(path)) return EvaluateDirectory(name, announced, path);
+
         var info = new System.IO.FileInfo(path);
 
         // Eine fehlende Datei ist keine Loeschung. Sie kann verschoben oder
         // umbenannt worden sein, und der Zweig kann von einem Laufwerk
         // stammen, das gerade nicht da ist.
         if (!info.Exists) return Done(name);
-        if ((info.Attributes & FileAttributes.Directory) != 0) return Done(name);
 
-        // Ein Platzhalter hat den Inhalt nicht. Wir kuendigen nur an, was
-        // vollstaendig hier liegt.
-        if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) return Done(name);
-
-        if (AnnouncedName(name) is not { } announced) return Done(name);
+        // Ein Platzhalter hat den Inhalt nicht. Angekuendigt wird nur, was
+        // vollstaendig hier liegt -- ausser er ist gerade hierher verschoben
+        // worden. Dann kennen wir seine Bloecke, auch ohne sie zu haben.
+        if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
+        {
+            return _renamedFrom.TryRemove(name, out var vorher)
+                ? EvaluateMoved(name, announced, vorher, info)
+                : Done(name);
+        }
 
         var length = info.Length;
         var modified = new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds();
@@ -1020,6 +1083,122 @@ public sealed partial class ShareHost
         Store(file, StateAnnounced);
 
         _attempts.TryRemove(name, out _);
+        return file;
+    }
+
+    /// <summary>
+    /// Kuendigt ein Verzeichnis an.
+    /// </summary>
+    /// <remarks>
+    /// Ein Verzeichnis traegt keinen Inhalt und keine Blockliste. Angekuendigt
+    /// wird es trotzdem, denn ein leerer Ordner ist eine Aussage: ohne ihn
+    /// entsteht er auf der Gegenseite nur dann, wenn spaeter eine Datei darin
+    /// landet.
+    /// </remarks>
+    private BepFileInfo? EvaluateDirectory(string name, string announced, string path)
+    {
+        long modified;
+        try
+        {
+            modified = new DateTimeOffset(Directory.GetLastWriteTimeUtc(path)).ToUnixTimeSeconds();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Done(name);
+        }
+
+        var known = LocalCopy(announced);
+
+        // Schon angekuendigt und unveraendert. Die Zeit allein taugt hier als
+        // Vergleich: mehr hat ein Verzeichnis nicht.
+        if (known is not null && !known.Deleted
+            && known.Type == FileInfoType.Directory
+            && known.ModifiedS == modified)
+        {
+            return Done(name);
+        }
+
+        // Die Gegenstelle fuehrt es bereits. Dann ist es von dort gekommen und
+        // wird nur in den eigenen Bestand uebernommen.
+        if (known is null && PeerCopy(announced) is { Deleted: false, Type: FileInfoType.Directory } peer)
+        {
+            var adopted = peer.Clone();
+            adopted.Sequence = 0;
+            Store(adopted, StateClean);
+            return Done(name);
+        }
+
+        var file = new BepFileInfo
+        {
+            Name = announced,
+            Type = FileInfoType.Directory,
+            Size = 0,
+            Permissions = 0,
+            NoPermissions = true,
+            ModifiedS = modified,
+            ModifiedNs = 0,
+            Deleted = false,
+            Invalid = false,
+            Sequence = NextSequence(),
+            ModifiedBy = OwnDeviceId.ShortId(),
+            Version = NextVersion(known?.Version ?? PeerCopy(announced)?.Version)
+        };
+
+        Store(file, StateAnnounced);
+        _attempts.TryRemove(name, out _);
+        return file;
+    }
+
+    /// <summary>
+    /// Kuendigt einen Platzhalter an, der hierher verschoben wurde.
+    /// </summary>
+    /// <remarks>
+    /// Ein Platzhalter haelt seinen Inhalt nicht, aber wir kennen ihn: die
+    /// Blockliste steht unter dem alten Namen im Bestand. Sie wird
+    /// uebernommen, und damit ist die Datei unter dem neuen Namen angekuendigt,
+    /// ohne dass ein einziges Byte ueber die Leitung geht -- die Gegenstelle
+    /// hat die Bloecke bereits und schreibt die Datei aus ihrer eigenen Kopie.
+    ///
+    /// Die Groesse muss uebereinstimmen. Sonst ist es nicht dieselbe Datei,
+    /// und eine Ankuendigung mit fremden Bloecken waere eine Falschaussage.
+    /// </remarks>
+    private BepFileInfo? EvaluateMoved(
+        string name, string announced, string vorher, System.IO.FileInfo info)
+    {
+        if (AnnouncedName(vorher) is not { } alt) return Done(name);
+
+        var quelle = LocalCopy(alt) ?? PeerCopy(alt);
+        if (quelle is null || quelle.Deleted || quelle.Size != info.Length || quelle.Blocks.Count == 0)
+            return Done(name);
+
+        var modifiedUtc = info.LastWriteTimeUtc;
+
+        var file = new BepFileInfo
+        {
+            Name = announced,
+            Type = FileInfoType.File,
+            Size = quelle.Size,
+            Permissions = 0,
+            NoPermissions = true,
+            ModifiedS = new DateTimeOffset(modifiedUtc).ToUnixTimeSeconds(),
+            ModifiedNs = (int)((modifiedUtc.Ticks - DateTime.UnixEpoch.Ticks) % TimeSpan.TicksPerSecond * 100),
+            Deleted = false,
+            Invalid = false,
+            Sequence = NextSequence(),
+            ModifiedBy = OwnDeviceId.ShortId(),
+            Version = NextVersion(LocalCopy(announced)?.Version ?? PeerCopy(announced)?.Version),
+            BlockSize = quelle.BlockSize,
+            BlocksHash = quelle.BlocksHash
+        };
+
+        file.Blocks.AddRange(quelle.Blocks);
+
+        Store(file, StateAnnounced);
+        _attempts.TryRemove(name, out _);
+
+        _log($"[{FolderId}] \"{alt}\" liegt jetzt unter \"{announced}\" -- " +
+             "angekuendigt mit den bekannten Bloecken, ohne Uebertragung.");
+
         return file;
     }
 
@@ -1238,35 +1417,64 @@ public sealed partial class ShareHost
     /// Gegenstelle eine Luecke: fehlt ihr eine Nachricht, passt die
     /// Vorgaengernummer nicht zu ihrem Stand.
     /// </remarks>
-    private async Task FlushAsync(BepConnection connection, List<BepFileInfo> batch, CancellationToken ct)
+    /// <summary>
+    /// Schickt den Stapel an alle beteiligten Gegenstellen.
+    /// </summary>
+    /// <remarks>
+    /// Derselbe Stapel an jede: die Ankuendigung ist eine Aussage ueber
+    /// unseren Bestand und nicht ueber die Beziehung zu einer Gegenstelle.
+    /// Verschieden ist nur die Verpackung -- wer noch keinen Index bekommen
+    /// hat, bekommt einen, die uebrigen einen Nachtrag mit der Nummer ihres
+    /// eigenen Vorgaengers.
+    ///
+    /// Scheitert eine Leitung, laufen die uebrigen weiter. Der Ausfall einer
+    /// Gegenstelle ist kein Grund, den anderen nichts zu sagen.
+    /// </remarks>
+    private async Task FlushAsync(List<BepFileInfo> batch, CancellationToken ct)
     {
         if (batch.Count == 0) return;
 
         var last = batch.Max(f => f.Sequence);
+        var erreicht = 0;
 
-        if (_indexSent)
+        foreach (var (device, connection) in _connections)
         {
-            var update = new BepIndexUpdate
+            try
             {
-                Folder = FolderId,
-                LastSequence = last,
-                PrevSequence = _lastSentSequence
-            };
-            update.Files.AddRange(batch);
+                if (_indexSentTo.TryGetValue(device, out var gesendet) && gesendet)
+                {
+                    var update = new BepIndexUpdate
+                    {
+                        Folder = FolderId,
+                        LastSequence = last,
+                        PrevSequence = _lastSentTo.GetValueOrDefault(device)
+                    };
+                    update.Files.AddRange(batch);
 
-            await connection.SendIndexUpdateAsync(update, ct).ConfigureAwait(false);
+                    await connection.SendIndexUpdateAsync(update, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    var index = new BepIndex { Folder = FolderId, LastSequence = last };
+                    index.Files.AddRange(batch);
+
+                    await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
+                    _indexSentTo[device] = true;
+                }
+
+                _lastSentTo[device] = last;
+                erreicht++;
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+            {
+                _log($"[{FolderId}] Ankuendigung an eine Gegenstelle scheiterte: {ex.Message}");
+            }
         }
-        else
-        {
-            var index = new BepIndex { Folder = FolderId, LastSequence = last };
-            index.Files.AddRange(batch);
 
-            await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
-            _indexSent = true;
-        }
+        if (erreicht > 0)
+            _log($"[{FolderId}] {batch.Count} Aenderungen angekuendigt, Sequenz bis {last} " +
+                 $"({erreicht} Gegenstelle(n)).");
 
-        _lastSentSequence = last;
-        _log($"[{FolderId}] {batch.Count} Aenderungen angekuendigt, Sequenz bis {last}.");
         batch.Clear();
     }
 

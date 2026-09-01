@@ -28,7 +28,9 @@
   </Window.Resources>
 
   <ScrollViewer VerticalScrollBarVisibility="Auto">
-  <StackPanel Margin="16">
+  <!-- Rechts mehr Rand fuer die Bildlaufleiste. Das Fluent-Thema legt sie
+       ueber den Inhalt, statt Platz fuer sie zu lassen. -->
+  <StackPanel Margin="16,16,32,16">
 
     <TextBlock Text="{DynamicResource S.Settings.LookGroup}" Style="{StaticResource Gruppe}" Margin="0,0,0,2" />
 

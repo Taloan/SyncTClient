@@ -288,7 +288,7 @@
           </DataGridTemplateColumn.Header>
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <TextBlock VerticalAlignment="Center" Margin="4,0">
+              <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0">
                 <Hyperlink Click="OnShowPeers" ToolTip="{DynamicResource S.Main.NodesTip}">
                   <Run Text="{Binding PeersText, Mode=OneWay}" />
                 </Hyperlink>
@@ -363,7 +363,8 @@
           </DataGridTemplateColumn.Header>
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0"
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                          HorizontalAlignment="Center" Margin="4,0"
                           ToolTip="{Binding CopiesHint}">
                 <TextBlock Text="{Binding CopiesText}" VerticalAlignment="Center" />
                 <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="12"
@@ -462,16 +463,55 @@
             </StackPanel>
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
-        <DataGridTextColumn x:Name="ColThumbs" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Thumbs}" Width="110" Visibility="Collapsed"
-                            Binding="{Binding ThumbsText}" SortMemberPath="ThumbsValue" />
-        <DataGridTextColumn x:Name="ColLimit" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Limit}" Width="110" Visibility="Collapsed"
-                            Binding="{Binding LimitText}" SortMemberPath="LimitValue" />
+        <DataGridTextColumn x:Name="ColThumbs" ElementStyle="{StaticResource ZelleMitte}" Width="70" Visibility="Collapsed"
+                            Binding="{Binding ThumbsText}" SortMemberPath="ThumbsValue">
+          <!-- Ein Bild im Rahmen: Huegel und Sonne, wie jedes Bildsymbol seit
+               dreissig Jahren. Der Name steht im Tooltip. -->
+          <DataGridTextColumn.Header>
+            <Canvas Width="18" Height="14" Background="Transparent"
+                    ToolTip="{DynamicResource S.Col.Thumbs}">
+              <Rectangle Canvas.Left="1" Canvas.Top="1" Width="16" Height="12" RadiusX="1.5" RadiusY="1.5"
+                         Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+              <Ellipse Canvas.Left="4" Canvas.Top="3.4" Width="3" Height="3"
+                       Fill="{DynamicResource Sekundaer}" />
+              <Path Fill="{DynamicResource Sekundaer}"
+                    Data="M2.2,12 L6.8,7.2 L9.6,10 L12.4,6.6 L15.8,12 Z" />
+            </Canvas>
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
+        <DataGridTextColumn x:Name="ColLimit" ElementStyle="{StaticResource ZelleMitte}" Width="85" Visibility="Collapsed"
+                            Binding="{Binding LimitText}" SortMemberPath="LimitValue">
+          <!-- Ein Fuellstand mit einer Marke davor: bis hierher und nicht
+               weiter. Ein Fass oder eine Waage waere huebscher und sagte
+               weniger. -->
+          <DataGridTextColumn.Header>
+            <Canvas Width="18" Height="14" Background="Transparent"
+                    ToolTip="{DynamicResource S.Col.Limit}">
+              <Rectangle Canvas.Left="1" Canvas.Top="4" Width="16" Height="7" RadiusX="1.5" RadiusY="1.5"
+                         Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+              <Rectangle Canvas.Left="2.2" Canvas.Top="5.2" Width="7" Height="4.6"
+                         Fill="{DynamicResource Sekundaer}" />
+              <Line X1="12.5" Y1="2" X2="12.5" Y2="13" Stroke="{DynamicResource Warnung}"
+                    StrokeThickness="1.6" />
+            </Canvas>
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
         <DataGridTextColumn x:Name="ColMode" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Mode}" Width="130" Visibility="Collapsed"
                             Binding="{Binding ModeText}" />
-        <DataGridTextColumn x:Name="ColLast" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.LastTransfer}" Width="130" Visibility="Collapsed"
-                            Binding="{Binding LastTransferText}" SortMemberPath="LastTransferValue" />
-        <DataGridTextColumn x:Name="ColPeer" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.Peer}" Width="150" Visibility="Collapsed"
-                            Binding="{Binding PeerText}" />
+        <DataGridTextColumn x:Name="ColLast" ElementStyle="{StaticResource ZelleMitte}" Width="110" Visibility="Collapsed"
+                            Binding="{Binding LastTransferText}" SortMemberPath="LastTransferValue">
+          <!-- Eine Uhr. Die Zeiger stehen auf zehn nach zehn, weil ein Zifferblatt
+               so am ehesten als Uhr gelesen wird und nicht als Kreis mit Strichen. -->
+          <DataGridTextColumn.Header>
+            <Canvas Width="16" Height="16" Background="Transparent"
+                    ToolTip="{DynamicResource S.Col.LastTransfer}">
+              <Ellipse Canvas.Left="1.5" Canvas.Top="1.5" Width="13" Height="13"
+                       Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+              <Line X1="8" Y1="8" X2="8" Y2="4.5" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+              <Line X1="8" Y1="8" X2="10.8" Y2="9.6" Stroke="{DynamicResource Sekundaer}" StrokeThickness="1.2" />
+            </Canvas>
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
         <DataGridTextColumn x:Name="ColFolderId" ElementStyle="{StaticResource ZelleMitte}" Header="{DynamicResource S.Col.FolderId}" Width="120" Visibility="Collapsed"
                             Binding="{Binding FolderId}" />
         <DataGridTemplateColumn x:Name="ColPath" Header="{DynamicResource S.Col.Folder}" Width="*"

@@ -1,12 +1,18 @@
 ﻿<Window x:Class="SyncTClient.Gui.ShareSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{DynamicResource S.Settings.Title}" Height="640" Width="760" MinHeight="360"
+        Title="{DynamicResource S.Settings.Title}" Height="640" Width="760" MinHeight="420"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Flaeche}">
   <DockPanel Margin="14">
 
-    <!-- Die Knoepfe bleiben stehen, auch wenn der Rest rollt. -->
+    <!-- Kopf und Knoepfe stehen ausserhalb der Reiter: sie gelten fuer alle. -->
+    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+      <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" />
+      <TextBlock x:Name="SubTitleText" Foreground="{DynamicResource Gedaempft}"
+                 FontSize="11" Margin="0,2,0,0" />
+    </StackPanel>
+
     <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Save}" Padding="14,4" Click="OnSave" Margin="0" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Cancel}" Padding="14,4" IsCancel="True" Margin="0,0,6,0" />
@@ -17,100 +23,152 @@
                  TextWrapping="Wrap" />
     </DockPanel>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-      <StackPanel>
-        <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" />
-        <TextBlock x:Name="SubTitleText" Foreground="{DynamicResource Gedaempft}"
-                   FontSize="11" Margin="0,2,0,10" />
+    <TabControl BorderBrush="{DynamicResource Rahmen}">
 
-        <Label Content="{DynamicResource S.Col.Name}" />
-        <TextBox x:Name="LabelBox" />
-        <TextBlock Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap"
-                   FontSize="11" Margin="0,0,0,8"
-                   Text="{DynamicResource S.Share.LabelHint}" />
+      <!-- =============================================== Allgemein -->
+      <TabItem Header="{DynamicResource S.Share.TabGeneral}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <!-- Rechter Rand fuer die Bildlaufleiste. Das Fluent-Thema legt sie
+               ueber den Inhalt, statt Platz fuer sie zu lassen. -->
+          <StackPanel Margin="10,10,26,10">
+            <Label Content="{DynamicResource S.Col.Name}" />
+            <TextBox x:Name="LabelBox" />
+            <TextBlock Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap"
+                       FontSize="11" Margin="0,0,0,8"
+                       Text="{DynamicResource S.Share.LabelHint}" />
 
-        <Label Content="{DynamicResource S.Share.LocalPath}" />
-        <TextBox x:Name="LocalPathBox" />
+            <Label Content="{DynamicResource S.Share.LocalPath}" />
+            <TextBox x:Name="LocalPathBox" />
 
-        <Label Content="{DynamicResource S.Share.ModeNew}" />
-        <ComboBox x:Name="ModeBox" SelectionChanged="OnModeChanged">
-          <ComboBoxItem Content="{DynamicResource S.Mode.OnDemand}" />
-          <ComboBoxItem Content="{DynamicResource S.Mode.Always}" />
-        </ComboBox>
+            <Label Content="{DynamicResource S.Share.ModeNew}" />
+            <ComboBox x:Name="ModeBox" SelectionChanged="OnModeChanged">
+              <ComboBoxItem Content="{DynamicResource S.Mode.OnDemand}" />
+              <ComboBoxItem Content="{DynamicResource S.Mode.Always}" />
+            </ComboBox>
 
-        <Label Content="{DynamicResource S.Share.Conflict}" />
-        <ComboBox x:Name="ConflictBox" Width="360" HorizontalAlignment="Left">
-          <ComboBox.ToolTip>
-            <TextBlock Text="{DynamicResource S.Share.ConflictHint}" TextWrapping="Wrap" MaxWidth="420" />
-          </ComboBox.ToolTip>
-          <ComboBoxItem Content="{DynamicResource S.Conflict.KeepBoth}" />
-          <ComboBoxItem Content="{DynamicResource S.Conflict.Newer}" />
-          <ComboBoxItem Content="{DynamicResource S.Conflict.Older}" />
-          <ComboBoxItem Content="{DynamicResource S.Conflict.Local}" />
-          <ComboBoxItem Content="{DynamicResource S.Conflict.Remote}" />
-        </ComboBox>
+            <Label Content="{DynamicResource S.Share.Conflict}" />
+            <ComboBox x:Name="ConflictBox" Width="360" HorizontalAlignment="Left">
+              <ComboBox.ToolTip>
+                <TextBlock Text="{DynamicResource S.Share.ConflictHint}" TextWrapping="Wrap" MaxWidth="420" />
+              </ComboBox.ToolTip>
+              <ComboBoxItem Content="{DynamicResource S.Conflict.KeepBoth}" />
+              <ComboBoxItem Content="{DynamicResource S.Conflict.Newer}" />
+              <ComboBoxItem Content="{DynamicResource S.Conflict.Older}" />
+              <ComboBoxItem Content="{DynamicResource S.Conflict.Local}" />
+              <ComboBoxItem Content="{DynamicResource S.Conflict.Remote}" />
+            </ComboBox>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
 
-        <!-- Als TextBlock und nicht als Label: die Beschriftung ist laenger
-             als das Feld darunter, und ein Label bricht nicht um. -->
-        <StackPanel Width="320" HorizontalAlignment="Left" Margin="0,10,0,0">
-          <TextBlock Text="{DynamicResource S.Share.VersionDays}" TextWrapping="Wrap"
-                     Margin="5,5,5,3" />
-          <TextBox x:Name="VersionDaysBox">
-            <TextBox.ToolTip>
-              <TextBlock Text="{DynamicResource S.Share.VersionsHint}" TextWrapping="Wrap" MaxWidth="420" />
-            </TextBox.ToolTip>
-          </TextBox>
-        </StackPanel>
+      <!-- =============================================== Teilen -->
+      <TabItem Header="{DynamicResource S.Share.TabSharing}">
+        <DockPanel Margin="10">
+          <TextBlock DockPanel.Dock="Top" Text="{DynamicResource S.Share.SharedWith}"
+                     FontWeight="SemiBold" Margin="0,0,0,2" />
+          <TextBlock DockPanel.Dock="Top" Text="{DynamicResource S.Share.SharedWithHint}"
+                     Foreground="{DynamicResource Gedaempft}" FontSize="11"
+                     TextWrapping="Wrap" Margin="0,0,0,10" />
 
-        <DockPanel Margin="0,14,0,6" MinHeight="26">
-          <TextBlock DockPanel.Dock="Left" Text="{DynamicResource S.Share.TreeQuestion}"
-                     FontWeight="SemiBold" VerticalAlignment="Center">
-            <TextBlock.ToolTip>
-              <TextBlock Text="{DynamicResource S.Share.TreeHint}" TextWrapping="Wrap" MaxWidth="440" />
-            </TextBlock.ToolTip>
-          </TextBlock>
-          <Button DockPanel.Dock="Right" Content="{DynamicResource S.None}" Padding="10,3" Click="OnSelectNone" Margin="0" />
-          <Button DockPanel.Dock="Right" Content="{DynamicResource S.All}" Padding="10,3" Click="OnSelectAll" Margin="0,0,6,0" />
-          <TextBlock x:Name="TreeStatus" VerticalAlignment="Center" Margin="10,0"
-                     Foreground="{DynamicResource Gedaempft}" />
+          <!-- Leer, solange keine Gegenstelle eingetragen ist. Eine leere
+               Liste ohne Erklaerung sieht aus wie ein Fehler. -->
+          <TextBlock x:Name="NoPeersText" DockPanel.Dock="Top"
+                     Text="{DynamicResource S.Share.NoPeers}"
+                     Foreground="{DynamicResource Gedaempft}"
+                     Visibility="Collapsed" Margin="0,0,0,10" />
+
+          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <ItemsControl x:Name="PeerList" Margin="10,8,26,8">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <CheckBox IsChecked="{Binding Shared, Mode=TwoWay}" Margin="0,3">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ShortId}" Margin="10,0,0,0"
+                                   FontFamily="Consolas" FontSize="11"
+                                   Foreground="{DynamicResource Gedaempft}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                    </CheckBox>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
         </DockPanel>
+      </TabItem>
 
-        <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" MinHeight="240">
-          <TreeView x:Name="FolderTree" BorderThickness="0">
-            <TreeView.ItemContainerStyle>
-              <Style TargetType="TreeViewItem">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
-                <Setter Property="Foreground" Value="{DynamicResource Text}" />
-              </Style>
-            </TreeView.ItemContainerStyle>
-            <TreeView.ItemTemplate>
-              <HierarchicalDataTemplate ItemsSource="{Binding Children}">
-                <StackPanel Orientation="Horizontal" Margin="0,1">
-                  <!-- Ein Zweig, in dem noch eine Datei die Schwelle nicht
-                       erreicht hat, laesst sich nicht abwaehlen. Der Tooltip
-                       nennt den Grund; ein Kaestchen, das sich nicht
-                       umstellen laesst, wirkt sonst kaputt. -->
-                  <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                            IsThreeState="False" VerticalAlignment="Center">
-                    <CheckBox.Style>
-                      <Style TargetType="CheckBox">
-                        <Style.Triggers>
-                          <DataTrigger Binding="{Binding Removable}" Value="False">
-                            <Setter Property="ToolTip" Value="{DynamicResource S2.Locked}" />
-                          </DataTrigger>
-                        </Style.Triggers>
-                      </Style>
-                    </CheckBox.Style>
-                  </CheckBox>
-                  <TextBlock Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding Summary}" Margin="10,0,0,0"
-                             Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center" />
-                </StackPanel>
-              </HierarchicalDataTemplate>
-            </TreeView.ItemTemplate>
-          </TreeView>
-        </Border>
-      </StackPanel>
-    </ScrollViewer>
+      <!-- =============================================== Versionierung -->
+      <TabItem Header="{DynamicResource S.Share.TabVersions}">
+        <StackPanel Margin="10">
+          <!-- Als TextBlock und nicht als Label: die Beschriftung ist laenger
+               als das Feld darunter, und ein Label bricht nicht um. -->
+          <StackPanel Width="320" HorizontalAlignment="Left">
+            <TextBlock Text="{DynamicResource S.Share.VersionDays}" TextWrapping="Wrap"
+                       Margin="5,5,5,3" />
+            <TextBox x:Name="VersionDaysBox" />
+          </StackPanel>
+
+          <TextBlock Text="{DynamicResource S.Share.VersionsHint}" TextWrapping="Wrap"
+                     Foreground="{DynamicResource Gedaempft}" FontSize="11"
+                     MaxWidth="520" HorizontalAlignment="Left" Margin="5,10,0,0" />
+        </StackPanel>
+      </TabItem>
+
+      <!-- =============================================== Inhalt -->
+      <TabItem Header="{DynamicResource S.Share.TabContent}">
+        <DockPanel Margin="10">
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6" MinHeight="26">
+            <TextBlock DockPanel.Dock="Left" Text="{DynamicResource S.Share.TreeQuestion}"
+                       FontWeight="SemiBold" VerticalAlignment="Center">
+              <TextBlock.ToolTip>
+                <TextBlock Text="{DynamicResource S.Share.TreeHint}" TextWrapping="Wrap" MaxWidth="440" />
+              </TextBlock.ToolTip>
+            </TextBlock>
+            <Button DockPanel.Dock="Right" Content="{DynamicResource S.None}" Padding="10,3" Click="OnSelectNone" Margin="0" />
+            <Button DockPanel.Dock="Right" Content="{DynamicResource S.All}" Padding="10,3" Click="OnSelectAll" Margin="0,0,6,0" />
+            <TextBlock x:Name="TreeStatus" VerticalAlignment="Center" Margin="10,0"
+                       Foreground="{DynamicResource Gedaempft}" />
+          </DockPanel>
+
+          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1">
+            <TreeView x:Name="FolderTree" BorderThickness="0">
+              <TreeView.ItemContainerStyle>
+                <Style TargetType="TreeViewItem">
+                  <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                  <Setter Property="Foreground" Value="{DynamicResource Text}" />
+                </Style>
+              </TreeView.ItemContainerStyle>
+              <TreeView.ItemTemplate>
+                <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                  <StackPanel Orientation="Horizontal" Margin="0,1">
+                    <!-- Ein Zweig, in dem noch eine Datei die Schwelle nicht
+                         erreicht hat, laesst sich nicht abwaehlen. Der Tooltip
+                         nennt den Grund; ein Kaestchen, das sich nicht
+                         umstellen laesst, wirkt sonst kaputt. -->
+                    <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                              IsThreeState="False" VerticalAlignment="Center">
+                      <CheckBox.Style>
+                        <Style TargetType="CheckBox">
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding Removable}" Value="False">
+                              <Setter Property="ToolTip" Value="{DynamicResource S2.Locked}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </CheckBox.Style>
+                    </CheckBox>
+                    <TextBlock Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Summary}" Margin="10,0,0,0"
+                               Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center" />
+                  </StackPanel>
+                </HierarchicalDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
+          </Border>
+        </DockPanel>
+      </TabItem>
+    </TabControl>
   </DockPanel>
 </Window>

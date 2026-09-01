@@ -47,13 +47,24 @@ public sealed class PeerHost : IAsyncDisposable
     private TaskCompletionSource<ClusterConfig> _clusterConfig = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private PeerState _state = PeerState.Getrennt;
 
-    public PeerHost(PeerConfig config, AppConfig app, DeviceIdentity identity, Action<string> log)
+    /// <param name="registry">
+    /// Woher die Ordner kommen. Mehrere Gegenstellen teilen sich dieselben
+    /// Objekte; ohne diese Ablage legte jede ihre eigenen an, und zwei
+    /// Teilnehmer eines Ordners haetten zwei Sync-Roots und zwei Schreiber
+    /// auf einer Datenbank.
+    /// </param>
+    public PeerHost(
+        PeerConfig config, AppConfig app, DeviceIdentity identity, Action<string> log,
+        ShareRegistry? registry = null)
     {
         _config = config;
         _app = app;
         _identity = identity;
         _log = log;
+        _registry = registry ?? new ShareRegistry(app, identity, log);
     }
+
+    private readonly ShareRegistry _registry;
 
     public PeerConfig Config => _config;
     public string DeviceId => _config.DeviceId;
@@ -320,16 +331,17 @@ public sealed class PeerHost : IAsyncDisposable
             // Sync-Root und Platzhalter neben die bestehenden zu setzen.
             if (_shares.TryGetValue(share.FolderId, out var bestehend))
             {
-                bestehend.Rebind(connection);
+                bestehend.Rebind(DeviceId, connection);
                 continue;
             }
 
-            // Die eigene Geraete-ID gehoert in jede eigene Ankuendigung: in
-            // modified_by und in den eigenen Zaehler des Versionsvektors.
-            var host2 = new ShareHost(share, _app, _log) { OwnDeviceId = _identity.Id };
-            host2.OpenIndex();
+            var host2 = _registry.GetOrAdd(share, out var frisch);
             _shares[share.FolderId] = host2;
-            ShareAdded?.Invoke(host2);
+
+            // Nur ein neu entstandener Ordner ist anzumelden. Ein zweiter
+            // Teilnehmer findet einen fertigen vor, der schon in der Tabelle
+            // steht.
+            if (frisch) ShareAdded?.Invoke(host2);
         }
 
         await NegotiateAsync(token);
@@ -340,7 +352,7 @@ public sealed class PeerHost : IAsyncDisposable
             // Ein Ordner, der schon steht, ist mit der neuen Leitung fertig.
             if (share.State != ShareState.Gestoppt) continue;
 
-            try { await share.StartAsync(connection, token); }
+            try { await share.StartAsync(DeviceId, connection, token); }
             catch (Exception ex) { _log($"[{share.FolderId}] {ex.Message}"); }
         }
     }
@@ -374,13 +386,20 @@ public sealed class PeerHost : IAsyncDisposable
 
             if (peerDevice is not null)
             {
-                if (share.PeerIndexId != 0 && share.PeerIndexId != peerDevice.IndexId)
-                    share.ResetIndex(peerDevice.IndexId);
+                // Eintraege aus einer Datenbank von vor dem Umbau tragen kein
+                // Geraet. Sie gehoeren der ersten Gegenstelle, die sich
+                // meldet -- damals gab es nur eine.
+                share.AdoptLegacy(DeviceId);
+
+                var bekannt = share.PeerIndexIdFor(DeviceId);
+
+                if (bekannt != 0 && bekannt != peerDevice.IndexId)
+                    share.ResetIndex(DeviceId, peerDevice.IndexId);
                 else
-                    share.RememberPeerIndexId(peerDevice.IndexId);
+                    share.RememberPeerIndexId(DeviceId, peerDevice.IndexId);
 
                 peerIndexId = peerDevice.IndexId;
-                maxSequence = share.MaxSequence;
+                maxSequence = share.MaxSequenceFor(DeviceId);
             }
 
             if (maxSequence > 0)
@@ -514,7 +533,7 @@ public sealed class PeerHost : IAsyncDisposable
 
     private void Route(string folderId, IEnumerable<Bep.Proto.FileInfo> files)
     {
-        if (_shares.TryGetValue(folderId, out var share)) share.Absorb(files);
+        if (_shares.TryGetValue(folderId, out var share)) share.Absorb(DeviceId, files);
     }
 
     /// <summary>
@@ -549,13 +568,12 @@ public sealed class PeerHost : IAsyncDisposable
     {
         if (_connection is null) throw new InvalidOperationException("nicht verbunden.");
 
-        var host = new ShareHost(share, _app, _log) { OwnDeviceId = _identity.Id };
-        host.OpenIndex();
+        var host = _registry.GetOrAdd(share, out _);
         _shares[share.FolderId] = host;
 
         // Erneut ankuendigen, jetzt mit dem neuen Ordner.
         await NegotiateAsync(ct);
-        await host.PrepareAsync(_connection, ct);
+        await host.PrepareAsync(DeviceId, _connection, ct);
 
         return host;
     }
@@ -602,6 +620,15 @@ public sealed class PeerHost : IAsyncDisposable
     public async Task UnbindAsync(string folderId)
     {
         if (!_shares.TryRemove(folderId, out var share)) return;
+
+        // Die eigene Leitung geht in jedem Fall.
+        share.DropConnection(DeviceId);
+
+        // Aufgeloest wird der Ordner genau einmal. Nehmen mehrere Gegenstellen
+        // teil, ruft die Oberflaeche jede von ihnen; wer ihn nicht mehr in der
+        // Ablage findet, hat nichts mehr aufzuloesen.
+        if (!_registry.Remove(folderId, out _)) return;
+
         await share.UnbindAsync();
         await share.DisposeAsync();
         MarkOffered();
@@ -626,7 +653,7 @@ public sealed class PeerHost : IAsyncDisposable
     {
         if (State != PeerState.Verbunden) return;
 
-        foreach (var share in _shares.Values) share.DropConnection();
+        foreach (var share in _shares.Values) share.DropConnection(DeviceId);
 
         if (_cts is not null) await _cts.CancelAsync();
 

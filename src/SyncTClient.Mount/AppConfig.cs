@@ -97,6 +97,20 @@ public sealed class ShareConfig
     /// <summary>Von welcher Gegenstelle dieser Ordner kommt.</summary>
     public string PeerDeviceId { get; set; } = "";
 
+    /// <summary>
+    /// Alle Gegenstellen, die an diesem Ordner teilnehmen.
+    /// </summary>
+    /// <remarks>
+    /// Ein Ordner ist ein Ordner, kein Verhaeltnis zu einer Gegenstelle. Er
+    /// hat einen Pfad, eine Auswahl und einen Index; wer daran teilnimmt,
+    /// steht hier.
+    ///
+    /// <see cref="PeerDeviceId"/> bleibt daneben stehen, solange der Abgleich
+    /// noch je Gegenstelle gefuehrt wird. Der Eintrag ist der erste dieser
+    /// Liste.
+    /// </remarks>
+    public List<string> PeerDeviceIds { get; set; } = [];
+
     /// <summary>Anzeigename. Die Gegenstelle nennt meist einen.</summary>
     public string Label { get; set; } = "";
 
@@ -559,8 +573,17 @@ public sealed class AppConfig
     public PeerConfig? PeerFor(ShareConfig share)
         => Peers.FirstOrDefault(p => p.DeviceId == share.PeerDeviceId) ?? Peers.FirstOrDefault();
 
+    /// <summary>
+    /// Die Ordner, an denen diese Gegenstelle teilnimmt.
+    /// </summary>
+    /// <remarks>
+    /// Massgeblich ist die Liste. Der einzelne Eintrag steht daneben, solange
+    /// aeltere Konfigurationen ihn tragen; er wird beim Laden in die Liste
+    /// gehoben.
+    /// </remarks>
     public IEnumerable<ShareConfig> SharesOf(PeerConfig peer)
-        => Shares.Where(s => s.PeerDeviceId == peer.DeviceId);
+        => Shares.Where(s => s.PeerDeviceIds.Contains(peer.DeviceId, StringComparer.OrdinalIgnoreCase)
+                          || s.PeerDeviceId == peer.DeviceId);
 
     private static readonly JsonSerializerOptions Format = new()
     {
@@ -667,8 +690,15 @@ public sealed class AppConfig
 
         var fallback = Peers.FirstOrDefault()?.DeviceId ?? "";
         foreach (var share in Shares)
+        {
             if (string.IsNullOrEmpty(share.PeerDeviceId))
                 share.PeerDeviceId = fallback;
+
+            // Aeltere Dateien kennen nur die eine Gegenstelle. Sie ist der
+            // erste Eintrag der Liste.
+            if (share.PeerDeviceIds.Count == 0 && !string.IsNullOrEmpty(share.PeerDeviceId))
+                share.PeerDeviceIds.Add(share.PeerDeviceId);
+        }
     }
 
     public void Save(string path)

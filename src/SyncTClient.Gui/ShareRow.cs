@@ -103,11 +103,31 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
     // --------------------------------------------------------------- Knoten
 
-    public bool PeerOnline => Peer.Host.State == PeerState.Verbunden;
+    /// <summary>
+    /// Alle Gegenstellen, die an diesem Ordner teilnehmen.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Peer"/> ist die erste davon. Ueber sie laufen die Aktionen,
+    /// die eine Gegenstelle brauchen -- uebernehmen und Bindung loesen. Der
+    /// Ordner selbst gehoert keiner von ihnen.
+    /// </remarks>
+    public List<PeerItem> Peers { get; } = [peer];
 
-    public string PeersText => Accepted ? (PeerOnline ? "1 von 1" : "0 von 1") : "—";
+    public void AddPeer(PeerItem weitere)
+    {
+        if (Peers.Any(p => p.Config.DeviceId == weitere.Config.DeviceId)) return;
 
-    public string PeerText => Peer.Display;
+        Peers.Add(weitere);
+        Notify(nameof(PeersText));
+        Notify(nameof(PeerOnline));
+    }
+
+    public bool PeerOnline => Peers.Any(p => p.Host.State == PeerState.Verbunden);
+
+    /// <summary>Wie viele der beteiligten Gegenstellen gerade erreichbar sind.</summary>
+    public string PeersText => Accepted
+        ? $"{Peers.Count(p => p.Host.State == PeerState.Verbunden)} von {Peers.Count}"
+        : "—";
 
     // ------------------------------------------------------- Vollständige Kopien
 
@@ -156,14 +176,38 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public bool Busy => Share is not null
                         && Share.Phase != SyncPhase.Fertig
                         && Share.Phase != SyncPhase.Ruht
-                        && (Share.Phase != SyncPhase.Abgleich || Share.Outstanding > 0);
+                        && (Share.Phase != SyncPhase.Abgleich
+                            || Share.Outstanding > 0
+                            || Share.Transferring);
+
+    /// <summary>Laeuft gerade eine Uebertragung, in welcher Richtung auch immer?</summary>
+    private bool Laeuft => Share is not null
+                           && Share.Phase == SyncPhase.Abgleich
+                           && Share.Transferring;
 
     /// <summary>Unbestimmt, solange die Gesamtzahl unbekannt ist.</summary>
-    public bool Indeterminate => Busy && Share!.PhaseTotal == 0;
+    public bool Indeterminate => Busy && !Laeuft && Share!.PhaseTotal == 0;
 
-    public double Percent => Share is null || Share.PhaseTotal == 0
-        ? 0
-        : Math.Clamp(100.0 * Share.PhaseDone / Share.PhaseTotal, 0, 100);
+    public double Percent
+    {
+        get
+        {
+            if (Share is null) return 0;
+
+            // Waehrend eine Uebertragung laeuft, zaehlt sie -- nicht der
+            // Rueckstand. Der steht dann oft schon auf null, weil die
+            // Gegenstelle die Ankuendigung bereits kennt.
+            if (Laeuft)
+            {
+                var (done, total) = Share.ActiveProgress;
+                return total <= 0 ? 0 : Math.Clamp(100.0 * done / total, 0, 100);
+            }
+
+            return Share.PhaseTotal == 0
+                ? 0
+                : Math.Clamp(100.0 * Share.PhaseDone / Share.PhaseTotal, 0, 100);
+        }
+    }
 
     public string ProgressText
     {
@@ -177,6 +221,22 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                 return Share.Phase == SyncPhase.Abgleich ? ""
                     : Share.State == ShareState.Bereit ? App.S("R.Synced")
                     : "";
+
+            // Laeuft gerade etwas, nennt die Zeile das Laufende: den Anteil
+            // und was davon noch fehlt. Der Rueckstand taugt dafuer nicht --
+            // er steht auf null, sobald die Indizes uebereinstimmen, und das
+            // ist lange vor dem letzten Block der Fall.
+            if (Laeuft)
+            {
+                var (done, total) = Share.ActiveProgress;
+
+                // Abgerundet. Gerundet stuenden bei 99,6 Prozent hundert da,
+                // waehrend daneben noch offene Bytes genannt sind -- die Zeile
+                // widerspraeche sich selbst.
+                var anteil = Math.Min(99, Math.Floor(Percent));
+
+                return App.S("R.SyncPercent", $"{anteil:0}", Format.Bytes(total - done));
+            }
 
             // Waehrend des Abgleichs sagt der Anteil mehr als die Stueckzahl.
             // Was noch aussteht, steht in Bytes daneben: 444 Dateien koennen
@@ -298,7 +358,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         foreach (var name in new[]
                  {
                      nameof(Name), nameof(StatusText), nameof(Ready), nameof(Accepted),
-                     nameof(PeersText), nameof(PeerOnline), nameof(PeerText),
+                     nameof(PeersText), nameof(PeerOnline),
                      nameof(Copies), nameof(CopiesText), nameof(CopiesAtRisk), nameof(CopiesHint),
                      nameof(Busy), nameof(Indeterminate), nameof(Percent), nameof(ProgressText),
                      nameof(ReceivedText), nameof(SentText), nameof(SizeText), nameof(LocalSizeText),

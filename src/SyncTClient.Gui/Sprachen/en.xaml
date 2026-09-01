@@ -29,7 +29,6 @@
   <s:String x:Key="S.Col.Limit">Usage limit</s:String>
   <s:String x:Key="S.Col.Mode">Mode</s:String>
   <s:String x:Key="S.Col.LastTransfer">Last transfer</s:String>
-  <s:String x:Key="S.Col.Peer">Remote device</s:String>
   <s:String x:Key="S.Col.FolderId">Folder ID</s:String>
   <s:String x:Key="S.Col.Folder">Folder</s:String>
   <s:String x:Key="S.Main.MenuHint">Right-click a share to open the menu of available actions.</s:String>
@@ -361,4 +360,11 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="C.Hidden">{0} branches hidden.</s:String>
   <s:String x:Key="C.Blocked">Not possible: {0} files have not reached the placeholder threshold.</s:String>
   <s:String x:Key="S.Share.TreeHint">Checked: kept here, as a placeholder or with content.&#10;Not checked: still transferred, then deleted here once the placeholder threshold is reached.</s:String>
+  <s:String x:Key="S.Share.TabGeneral">General</s:String>
+  <s:String x:Key="S.Share.TabSharing">Sharing</s:String>
+  <s:String x:Key="S.Share.TabVersions">Versioning</s:String>
+  <s:String x:Key="S.Share.TabContent">Content</s:String>
+  <s:String x:Key="S.Share.SharedWith">Shared with these devices</s:String>
+  <s:String x:Key="S.Share.SharedWithHint">Every device ticked carries the same folder. Unticking ends synchronisation with that device; the files stay here and there.</s:String>
+  <s:String x:Key="S.Share.NoPeers">No remote devices configured. One can be added under “Remote devices …”.</s:String>
 </ResourceDictionary>
