@@ -67,6 +67,16 @@ public sealed class TransferInfo : INotifyPropertyChanged
 
     public string Name => System.IO.Path.GetFileName(RelativePath.Replace('/', '\\'));
 
+    /// <summary>
+    /// Ein Pfeil fuer die Richtung.
+    /// </summary>
+    /// <remarks>
+    /// Vor dem Namen und nicht im Zustand: die Richtung gehoert zur
+    /// Uebertragung und nicht zu ihrem Fortschritt. So sieht man beim
+    /// Ueberfliegen in einer Spalte, was herein und was hinaus geht.
+    /// </remarks>
+    public string Arrow => Direction == TransferDirection.Hinaus ? "↑" : "↓";
+
     public string Folder
     {
         get
@@ -106,7 +116,10 @@ public sealed class TransferInfo : INotifyPropertyChanged
     {
         TransferState.Wartet => "wartet",
         TransferState.Laeuft => Direction == TransferDirection.Hinaus ? "sendet" : "lädt",
-        TransferState.Fertig => "fertig",
+
+        // Auch am Ende bleibt die Richtung ablesbar. "fertig" sagt, dass
+        // nichts mehr laeuft, und verschweigt, was gelaufen ist.
+        TransferState.Fertig => Direction == TransferDirection.Hinaus ? "gesendet" : "geladen",
         TransferState.Fehler => _error ?? "Fehler",
         _ => ""
     };
