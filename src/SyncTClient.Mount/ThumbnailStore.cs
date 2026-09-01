@@ -138,7 +138,45 @@ public sealed class ThumbnailStore(string directory)
         return (count, bytes);
     }
 
+    private (int Count, long Bytes) _bestand;
+    private DateTime _gezaehlt = DateTime.MinValue;
+    private int _zaehltGerade;
+
+    /// <summary>
+    /// Wie viele Vorschaubilder liegen hier und wie gross sind sie zusammen?
+    /// </summary>
+    /// <remarks>
+    /// Die zuletzt gezaehlte Menge, nicht die gerade vorliegende. Gezaehlt
+    /// wird im Hintergrund und hoechstens alle paar Sekunden.
+    ///
+    /// Der Aufrufer ist eine Eigenschaft in der Tabelle, und die wird bei
+    /// jedem Takt gelesen, mehrfach je Zeile. Ein Durchgang ueber das
+    /// Verzeichnis an dieser Stelle heisst: Plattenzugriffe auf dem Faden,
+    /// der das Fenster zeichnet, dutzendfach je Sekunde. Solange sonst nichts
+    /// los ist, faellt das nicht auf; waehrend drei Freigaben ihren Index
+    /// schreiben, steht das Fenster.
+    /// </remarks>
     public (int Count, long Bytes) Usage()
+    {
+        if (DateTime.UtcNow - _gezaehlt > TimeSpan.FromSeconds(10)
+            && Interlocked.Exchange(ref _zaehltGerade, 1) == 0)
+        {
+            _ = Task.Run(() =>
+            {
+                try { _bestand = Zaehlen(); }
+                catch (Exception) { /* die alte Zahl bleibt stehen */ }
+                finally
+                {
+                    _gezaehlt = DateTime.UtcNow;
+                    Interlocked.Exchange(ref _zaehltGerade, 0);
+                }
+            });
+        }
+
+        return _bestand;
+    }
+
+    private (int Count, long Bytes) Zaehlen()
     {
         if (!System.IO.Directory.Exists(Directory)) return (0, 0);
 

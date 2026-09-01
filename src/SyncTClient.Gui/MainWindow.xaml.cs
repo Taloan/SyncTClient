@@ -263,11 +263,17 @@ public partial class MainWindow : Window
         // Freigabe gehoert, wird abgemeldet. Ein solcher Rest ist von Hand
         // nicht zu entfernen: der Ordner dazu ist fort, und ohne ihn bietet
         // weder der Explorer noch dieses Programm eine Handhabe.
-        foreach (var rest in SyncTClient.Vfs.WinRtSyncRoot.UnregisterStrays(
-                     _config.Shares.Select(share => share.LocalPath)))
+        // Die Registrierung zu lesen und zu schreiben ist keine Arbeit fuer
+        // den Faden, der das Fenster zeichnet.
+        var pfade = _config.Shares.Select(share => share.LocalPath).ToList();
+        var uhr = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var rest in await Task.Run(
+                     () => SyncTClient.Vfs.WinRtSyncRoot.UnregisterStrays(pfade).ToList()))
         {
             AppendLog($"Verwaiste Sync-Wurzel abgemeldet: {rest}");
         }
+
+        AppendLog($"Sync-Wurzeln geprueft in {uhr.ElapsedMilliseconds} ms.");
 
         // Die Oberflaeche ist zugleich der Sync-Dienst. Wer sie oeffnet, will
         // in aller Regel, dass der Abgleich laeuft.

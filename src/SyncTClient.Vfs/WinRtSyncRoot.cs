@@ -39,6 +39,20 @@ public static class WinRtSyncRoot
             System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.Unicode.GetBytes(full)))[..16]}";
 
+        // Eine Wurzel ueberlebt das Programm. Nach einem gewoehnlichen Neustart
+        // steht sie noch genau so da, wie wir sie hinterlassen haben -- und
+        // dann ist das Anmelden reine Arbeit ohne Wirkung.
+        //
+        // Es ist keine billige Arbeit: jeder Aufruf schreibt in die
+        // Registrierung und benachrichtigt die Shell. Bei einer Handvoll
+        // Freigaben, zweimal je Freigabe, stand der Rechner beim Start ein
+        // paar Sekunden.
+        //
+        // Die Fassung entscheidet, ob neu angemeldet wird. Wer an den
+        // Eigenschaften etwas aendert, zaehlt sie hoch; sonst bleibt es beim
+        // Bestand.
+        if (await StehtSchonSoDa(id, providerVersion).ConfigureAwait(false)) return id;
+
         var folder = await StorageFolder.GetFolderFromPathAsync(full);
 
         var info = new StorageProviderSyncRootInfo
@@ -72,9 +86,31 @@ public static class WinRtSyncRoot
                 full, BinaryStringEncoding.Utf8)
         };
 
-        StorageProviderSyncRootManager.Register(info);
+        // Ausdruecklich auf einen eigenen Faden. Der Aufruf ist synchron und
+        // kommt ueber das Verbinden aus der Oberflaeche; dort gehoert er
+        // nicht hin.
+        await Task.Run(() => StorageProviderSyncRootManager.Register(info)).ConfigureAwait(false);
         return id;
     }
+
+    /// <summary>Ist diese Wurzel schon in genau dieser Fassung angemeldet?</summary>
+    /// <remarks>
+    /// Faellt der Aufruf durch, ist sie es nicht. Das ist der Normalfall beim
+    /// ersten Mal und kein Fehler.
+    /// </remarks>
+    private static async Task<bool> StehtSchonSoDa(string id, string providerVersion)
+        => await Task.Run(() =>
+        {
+            try
+            {
+                var vorhanden = StorageProviderSyncRootManager.GetSyncRootInformationForId(id);
+                return vorhanden.Version == providerVersion;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }).ConfigureAwait(false);
 
     public static void Unregister(string id)
         => StorageProviderSyncRootManager.Unregister(id);
