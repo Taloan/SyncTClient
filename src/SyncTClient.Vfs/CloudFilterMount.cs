@@ -584,6 +584,9 @@ public sealed class CloudFilterMount : IDisposable
             // Stuecken kommt.
             using var range = _source.BeginRange(request.RelativePath, length);
 
+            var begonnen = Environment.TickCount64;
+            long geliefert = 0;
+
             for (var offset = start; offset < alignedEnd;)
             {
                 var take = (int)Math.Min(ChunkSize, alignedEnd - offset);
@@ -591,10 +594,33 @@ public sealed class CloudFilterMount : IDisposable
                 var data = await _source.ReadAsync(request.RelativePath, offset, take, CancellationToken.None)
                     .ConfigureAwait(false);
 
-                if (!TransferData(request, data, offset)) return;
+                var geholt = Environment.TickCount64;
+
+                if (!TransferData(request, data, offset))
+                {
+                    _log?.Invoke($"  abgebrochen bei [{offset}..{offset + take}) " +
+                                 $"nach {geliefert} von {length} B.");
+                    return;
+                }
+
+                geliefert += take;
+
+                // Ein Stueck, das ungewoehnlich lange braucht, wird genannt --
+                // getrennt nach Holen und Durchreichen. Ohne diese Trennung
+                // sieht ein langsames Netz aus wie ein haengender Rueckruf.
+                var jetzt = Environment.TickCount64;
+                if (jetzt - begonnen > 5000)
+                    _log?.Invoke($"  [{offset}..{offset + take}) fertig: " +
+                                 $"{geholt - begonnen} ms geholt, {jetzt - geholt} ms durchgereicht.");
 
                 offset += take;
+                begonnen = jetzt;
             }
+
+            // Das Gegenstueck zu "Hydration: ...". Ohne diese Zeile steht im
+            // Protokoll nur, dass ein Rueckruf begonnen hat, und man kann
+            // nicht unterscheiden, ob er haengt oder laengst fertig ist.
+            _log?.Invoke($"  {request.RelativePath}: {geliefert} B durchgereicht.");
         }
         catch (Exception ex)
         {
