@@ -355,6 +355,22 @@ public sealed class BepConnection : IAsyncDisposable
     /// Fordert genau einen Block an. Mehrere Aufrufe duerfen gleichzeitig
     /// laufen; die Zuordnung der Antworten erfolgt ueber die Request-ID.
     /// </summary>
+    /// <summary>
+    /// So lange wird auf die Antwort zu einem Block gewartet.
+    /// </summary>
+    /// <remarks>
+    /// Ohne Schranke wartet der Aufruf fuer immer. Das ist keine
+    /// theoretische Sorge: die Anfrage haengt am Rueckruf des Dateisystems,
+    /// und der laeuft in einem Fenster mit wenigen Plaetzen. Zwei
+    /// unbeantwortete Anfragen genuegen, damit gar nichts mehr geschieht --
+    /// ohne Meldung, ohne Fehler, ohne Ende.
+    ///
+    /// Zwei Minuten sind grosszuegig. Ein Block ist hoechstens 16 MB; wer
+    /// dafuer laenger braucht, hat ein anderes Problem als eine zu knappe
+    /// Schranke.
+    /// </remarks>
+    private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(2);
+
     public async Task<byte[]> RequestAsync(
         string folder, string name, long offset, int size, ByteString hash, int blockNo,
         CancellationToken ct = default)
@@ -377,6 +393,12 @@ public sealed class BepConnection : IAsyncDisposable
             }, ct).ConfigureAwait(false);
 
             await using var registration = ct.Register(() => waiter.TrySetCanceled(ct));
+
+            using var frist = new CancellationTokenSource(RequestTimeout);
+            await using var abgelaufen = frist.Token.Register(() => waiter.TrySetException(
+                new TimeoutException(
+                    $"Keine Antwort auf Block {blockNo} von \"{name}\" in {RequestTimeout.TotalSeconds:0} s.")));
+
             var response = await waiter.Task.ConfigureAwait(false);
 
             if (response.Code != ErrorCode.NoError)
