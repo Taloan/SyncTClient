@@ -303,6 +303,11 @@ public partial class MainWindow : Window
                 Aufnehmen(peer, share.FolderId, share.Label, peer.Host.ShareFor(share.FolderId));
         }
 
+        // Uebernommen ist, was in der Konfiguration steht -- unabhaengig
+        // davon, ob gerade eine Freigabe dazu laeuft.
+        foreach (var zeile in _rows)
+            zeile.Configured = _config.Shares.Any(s => s.FolderId == zeile.FolderId);
+
         ShareGrid.SelectedItem = _rows.FirstOrDefault(r => r.FolderId == selected)
             ?? _rows.FirstOrDefault();
 
@@ -1515,7 +1520,7 @@ public partial class MainWindow : Window
 
     private async void OnUnbind(object sender, RoutedEventArgs e)
     {
-        if (_row is null || !_row.Accepted) return;
+        if (_row is null || !_row.Configured) return;
 
         var share = _config.Shares.FirstOrDefault(s => s.FolderId == _row.FolderId);
         var path = share?.LocalPath ?? "";
@@ -1895,12 +1900,16 @@ public partial class MainWindow : Window
     {
         var connected = _row?.Peer.Host.State == PeerState.Verbunden;
 
-        _menuConnect.IsEnabled = connected && _row is { Accepted: false };
-        _menuUnbind.IsEnabled = _row is { Accepted: true };
+        // Uebernehmen braucht eine Leitung; alles andere betrifft den eigenen
+        // Bestand. Trennen und Einstellungen gehen deshalb auch angehalten:
+        // wirksam wird es beim Fortsetzen, vorbereiten muss man es jetzt
+        // koennen.
+        _menuConnect.IsEnabled = connected && _row is { Accepted: false, Configured: false };
+        _menuUnbind.IsEnabled = _row is { Configured: true };
         _menuRescan.IsEnabled = _row is { Accepted: true };
         _menuResync.IsEnabled = _row is { Accepted: true } && connected;
-        _menuSettings.IsEnabled = _row is { Accepted: true };
-        _menuOpen.IsEnabled = _row is { Accepted: true };
+        _menuSettings.IsEnabled = _row is { Configured: true };
+        _menuOpen.IsEnabled = _row is { Configured: true };
 
         var state = _row?.Share?.State;
         _menuPause.IsEnabled = state is ShareState.Bereit or ShareState.Pausiert;
