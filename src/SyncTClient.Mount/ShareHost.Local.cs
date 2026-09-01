@@ -1001,12 +1001,17 @@ public sealed partial class ShareHost
             // Der Vermerk aus dem Rueckruf ist der schnelle Weg. Fehlt er --
             // etwa weil das Verschieben in einer frueheren Sitzung geschah --,
             // steht der urspruengliche Name in der Datei selbst.
-            if (!_renamedFrom.TryRemove(name, out var vorher))
-                vorher = CloudFilterMount.OriginalName(path, Einmal(name));
+            // Der Vermerk aus dem Rueckruf sagt: gerade eben verschoben. Dann
+            // gehoert die Loeschung des alten Namens dazu.
+            var geradeEben = _renamedFrom.TryRemove(name, out var vorher);
+
+            // Sonst die Identitaet aus der Datei. Sie sagt nur, woher der
+            // Platzhalter einmal kam -- und das kann Monate her sein.
+            vorher ??= CloudFilterMount.OriginalName(path, Einmal(name));
 
             if (vorher is null || vorher == name) return Done(name);
 
-            return EvaluateMoved(name, announced, vorher, info);
+            return EvaluateMoved(name, announced, vorher, info, geradeEben);
         }
 
         var length = info.Length;
@@ -1207,8 +1212,19 @@ public sealed partial class ShareHost
     /// Die Groesse muss uebereinstimmen. Sonst ist es nicht dieselbe Datei,
     /// und eine Ankuendigung mit fremden Bloecken waere eine Falschaussage.
     /// </remarks>
+    /// <param name="geradeEben">
+    /// Ob die Zuordnung aus dem Rueckruf stammt, das Verschieben also eben
+    /// geschehen ist. Nur dann gehoert die Loeschung des alten Namens dazu.
+    ///
+    /// Die Identitaet allein reicht dafuer nicht: sie haftet dauerhaft an der
+    /// Datei. Ein Platzhalter, der vor Monaten verschoben wurde, nennt seinen
+    /// Ursprungsnamen noch heute -- und unter dem kann laengst wieder eine
+    /// andere Datei liegen. Sie zu loeschen waere kein Nachziehen, sondern ein
+    /// Uebergriff.
+    /// </param>
     private BepFileInfo? EvaluateMoved(
-        string name, string announced, string vorher, System.IO.FileInfo info)
+        string name, string announced, string vorher, System.IO.FileInfo info,
+        bool geradeEben)
     {
         if (AnnouncedName(vorher) is not { } alt) return Done(name);
 
@@ -1260,10 +1276,11 @@ public sealed partial class ShareHost
         Store(file, StateAnnounced);
         _attempts.TryRemove(name, out _);
 
-        // Jetzt erst die Loeschung des alten Namens. Sie geht im selben
-        // Durchgang hinaus, aber nach der Ankuendigung: PublishAsync bewertet
-        // zuerst die Vermerke und sammelt danach die Loeschungen ein.
-        _removed[alt] = 0;
+        // Jetzt erst die Loeschung des alten Namens, und nur bei einem eben
+        // geschehenen Verschieben. Sie geht im selben Durchgang hinaus, aber
+        // nach der Ankuendigung: PublishAsync bewertet zuerst die Vermerke und
+        // sammelt danach die Loeschungen ein.
+        if (geradeEben) _removed[alt] = 0;
 
         _log($"[{FolderId}] \"{alt}\" liegt jetzt unter \"{announced}\" -- " +
              "angekuendigt mit den bekannten Bloecken, ohne Uebertragung.");
