@@ -185,6 +185,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
               </Grid.RowDefinitions>
 
               <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Merkmal}"
@@ -200,16 +201,22 @@
               <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource Wert}"
                          Text="{Binding OutstandingText}" />
               <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource Merkmal}"
-                         Text="{DynamicResource S.Detail.Content}" />
+                         Text="{DynamicResource S.Detail.Awaiting}" />
               <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource Wert}"
-                         Text="{Binding ContentText}" />
+                         Text="{Binding AwaitingText}"
+                         ToolTip="{DynamicResource S.Detail.AwaitingHint}" />
+
               <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource Merkmal}"
-                         Text="{DynamicResource S.Detail.Thumbs}" />
+                         Text="{DynamicResource S.Detail.Content}" />
               <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource Wert}"
-                         Text="{Binding ThumbDetailText}" />
+                         Text="{Binding ContentText}" />
               <TextBlock Grid.Row="5" Grid.Column="0" Style="{StaticResource Merkmal}"
+                         Text="{DynamicResource S.Detail.Thumbs}" />
+              <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource Wert}"
+                         Text="{Binding ThumbDetailText}" />
+              <TextBlock Grid.Row="6" Grid.Column="0" Style="{StaticResource Merkmal}"
                          Text="{DynamicResource S.Detail.Transfer}" />
-              <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource Wert}">
+              <TextBlock Grid.Row="6" Grid.Column="1" Style="{StaticResource Wert}">
                 <Run Text="&#x2193; " Foreground="{DynamicResource Gedaempft}" /><Run Text="{Binding ReceivedText, Mode=OneWay}" /><Run Text="   &#x2191; " Foreground="{DynamicResource Gedaempft}" /><Run Text="{Binding SentText, Mode=OneWay}" />
               </TextBlock>
 

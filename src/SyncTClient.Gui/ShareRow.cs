@@ -333,6 +333,11 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
             ? App.S("R.NothingOutstanding")
             : App.S("R.CountAndSize", Format.Count(Share.Outstanding), Format.Bytes(Share.OutstandingBytes));
 
+    /// <summary>Was die Gegenstelle nennt, aber selbst nicht haelt.</summary>
+    public string AwaitingText => Share is null || Share.Awaiting == 0
+        ? App.S("R.NothingOutstanding")
+        : App.S("R.CountAndSize", Format.Count(Share.Awaiting), Format.Bytes(Share.AwaitingBytes));
+
     public string LastScanText => Share is { LastScan.Year: > 1 }
         ? Share.LastScan.ToString("HH:mm:ss")
         : "—";
@@ -387,7 +392,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                      nameof(LimitValue), nameof(LastTransferValue),
                      nameof(GlobalText), nameof(LocalText), nameof(OutstandingText),
                      nameof(LastScanText), nameof(FolderIdText), nameof(ThumbDetailText),
-                     nameof(ContentText)
+                     nameof(ContentText), nameof(AwaitingText)
                  })
         {
             Notify(name);
