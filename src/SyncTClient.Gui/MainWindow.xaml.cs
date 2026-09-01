@@ -1513,17 +1513,28 @@ public partial class MainWindow : Window
 
         Status(App.S("M.Asking", row.Name));
 
+        // Ein Fenster statt einer Zeile am unteren Rand. Der Index eines
+        // grossen Ordners braucht Minuten, und in dieser Zeit sah es aus, als
+        // geschehe nichts -- der Satz in der Statuszeile steht an einer
+        // Stelle, an der niemand hinsieht, waehrend er auf einen Dialog
+        // wartet.
+        var lauf = new ProgressWindow(row.Name) { Owner = this };
+        lauf.Show();
+
         ShareHost host;
         try
         {
-            host = await row.Peer.Host.PrepareAsync(draft, _cts.Token);
+            host = await row.Peer.Host.PrepareAsync(draft, _cts.Token, lauf.Verfolge);
         }
         catch (Exception ex)
         {
+            lauf.Close();
             Status(App.S("M.ContentUnavailable", row.Name, ex.Message));
             RebuildRows();
             return;
         }
+
+        lauf.Close();
 
         var dialog = new AcceptShareWindow(draft, HomeDirectory, row.Name) { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -1544,6 +1555,14 @@ public partial class MainWindow : Window
         Persist();
 
         Status(App.S("M.Connecting", row.Name, draft.LocalPath));
+
+        // Und derselbe Fortschritt noch einmal fuer den zweiten Schritt. Er
+        // ist bei einem Ordner, der hier schon liegt, der laengere von beiden:
+        // jede vorhandene Datei wird gelesen und gerechnet.
+        var uebernahme = new ProgressWindow(row.Name) { Owner = this };
+        uebernahme.Verfolge(host);
+        uebernahme.Show();
+
         try
         {
             await row.Peer.Host.CommitAsync(host, _cts.Token);
@@ -1552,6 +1571,10 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Status(App.S("M.ConnectFailed", ex.Message));
+        }
+        finally
+        {
+            uebernahme.Close();
         }
 
         RebuildRows();
