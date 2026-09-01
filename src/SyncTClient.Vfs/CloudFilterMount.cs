@@ -753,9 +753,18 @@ public sealed class CloudFilterMount : IDisposable
     /// </summary>
     private static unsafe uint ComputeTransferDataParamSize()
     {
-        CF_OPERATION_PARAMETERS probe = default;
-        var offset = (byte*)&probe.Anonymous.TransferData - (byte*)&probe;
-        return (uint)(offset + sizeof(CF_OPERATION_PARAMETERS._Anonymous_e__Union._TransferData_e__Struct));
+        // FIELD_OFFSET(CF_OPERATION_PARAMETERS, TransferData) ist die Groesse
+        // von ParamSize, aufgerundet auf die Ausrichtung der Union: acht
+        // Bytes auf x64.
+        //
+        // Nicht ueber Zeigerarithmetik. Der Versatz der anonymen Union kam
+        // dort als 0 heraus, und damit stand in ParamSize 40 statt 48. Windows
+        // liest Puffer, Offset und Laenge dann acht Bytes zu frueh, findet
+        // Nullen -- und meldet Erfolg. Jede Uebergabe war wirkungslos, die
+        // Datei blieb ein leerer Platzhalter, und nach der Minutenfrist fragte
+        // Windows dieselbe Datei erneut an. Das war der Sechzig-Sekunden-Takt.
+        var offset = (uint)sizeof(nint);
+        return offset + (uint)sizeof(CF_OPERATION_PARAMETERS._Anonymous_e__Union._TransferData_e__Struct);
     }
 
     // ------------------------------------------------------------ Meldungen
