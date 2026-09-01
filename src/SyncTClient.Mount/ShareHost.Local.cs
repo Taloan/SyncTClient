@@ -1568,6 +1568,29 @@ public sealed partial class ShareHost
     /// Gegenstelle eine Luecke: fehlt ihr eine Nachricht, passt die
     /// Vorgaengernummer nicht zu ihrem Stand.
     /// </remarks>
+    /// <summary>
+    /// Der gesamte eigene Bestand, mit dem Stapel darin.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den vollstaendigen Index. Der Stapel steht in aller Regel schon in
+    /// der Datenbank -- Evaluate schreibt vor dem Senden --, aber verlassen
+    /// wird sich nicht darauf: eine Datei zweimal im Index waere eine
+    /// widerspruechliche Aussage, eine fehlende ein Verlust.
+    /// </remarks>
+    private List<BepFileInfo> Bestand(List<BepFileInfo> batch)
+    {
+        List<BepFileInfo> gespeichert;
+        lock (_indexGate) gespeichert = [.. _index?.LocalFrom(0) ?? []];
+
+        var namen = new HashSet<string>(batch.Select(f => f.Name), StringComparer.Ordinal);
+
+        var alle = new List<BepFileInfo>(gespeichert.Count + batch.Count);
+        alle.AddRange(gespeichert.Where(f => !namen.Contains(f.Name)));
+        alle.AddRange(batch);
+
+        return alle;
+    }
+
     /// <summary>Der Versionsvektor in einer Zeile.</summary>
     private static string Kurz(Vector? version)
         => version is null || version.Counters.Count == 0
@@ -1629,11 +1652,22 @@ public sealed partial class ShareHost
                 }
                 else
                 {
+                    // Ein Index ist die Aussage "das ist mein vollstaendiger
+                    // Bestand zu diesem Ordner". Nur den gerade geaenderten
+                    // Stapel hineinzuschreiben hiesse, der Gegenstelle zu
+                    // sagen, unser Ordner bestehe aus diesen paar Dateien --
+                    // und alles frueher Angekuendigte waere fuer sie fort.
+                    //
+                    // Genommen wird deshalb der gesamte eigene Bestand. Der
+                    // Stapel steckt darin, denn Evaluate hat ihn vor dem
+                    // Senden geschrieben.
+                    var alle = Bestand(batch);
+
                     var index = new BepIndex { Folder = FolderId, LastSequence = last };
-                    index.Files.AddRange(batch);
+                    index.Files.AddRange(alle);
 
                     _log($"[{FolderId}] -> Index an {device[..7]}: " +
-                         $"{batch.Count} Dateien, bis {last}.");
+                         $"{alle.Count} Dateien (Bestand), bis {last}.");
 
                     await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
                     _indexSentTo[device] = true;
