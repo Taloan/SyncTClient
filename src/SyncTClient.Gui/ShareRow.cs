@@ -242,7 +242,12 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
             // Was noch aussteht, steht in Bytes daneben: 444 Dateien koennen
             // vier Minuten sein oder vier Stunden.
             if (Share.Phase == SyncPhase.Abgleich)
-                return App.S("R.SyncPercent", $"{Percent:0}", Format.Bytes(Share.OutstandingBytes));
+            {
+                // Ebenfalls abgerundet: hundert Prozent neben offenen Bytes
+                // ist ein Widerspruch in derselben Zeile.
+                var anteil = Share.OutstandingBytes > 0 ? Math.Min(99, Math.Floor(Percent)) : Percent;
+                return App.S("R.SyncPercent", $"{anteil:0}", Format.Bytes(Share.OutstandingBytes));
+            }
 
             return Share.PhaseTotal == 0
                 ? $"{Share.PhaseDone:N0}"
