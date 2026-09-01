@@ -62,3 +62,10 @@ CF_SET_IN_SYNC_FLAGS
 CfGetPlaceholderInfo
 CF_PLACEHOLDER_INFO_CLASS
 CF_PLACEHOLDER_STANDARD_INFO
+
+// Zum Lesen der Identitaet ohne Hydration: FILE_FLAG_OPEN_NO_RECALL geht
+// nur ueber CreateFile, File.OpenHandle kennt die Fahne nicht.
+CreateFile
+FILE_ACCESS_RIGHTS
+FILE_SHARE_MODE
+FILE_CREATION_DISPOSITION

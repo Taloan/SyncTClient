@@ -258,8 +258,22 @@ public sealed class CloudFilterMount : IDisposable
     {
         try
         {
-            using var handle = File.OpenHandle(
-                fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            // OPEN_NO_RECALL, und nur Attribute lesen. Ohne beides holt schon
+            // das Oeffnen die Datei aus dem Netz -- bei einem Platzhalter, den
+            // man nur befragen wollte, waere das der ganze Inhalt, und zwar
+            // bei jedem Durchgang erneut.
+            using var handle = PInvoke.CreateFile(
+                fullPath,
+                (uint)FILE_ACCESS_RIGHTS.FILE_READ_ATTRIBUTES,
+                FILE_SHARE_MODE.FILE_SHARE_READ | FILE_SHARE_MODE.FILE_SHARE_WRITE
+                    | FILE_SHARE_MODE.FILE_SHARE_DELETE,
+                null,
+                FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+                FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OPEN_NO_RECALL
+                    | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
+                null);
+
+            if (handle.IsInvalid) return null;
 
             // Der Puffer traegt die Struktur und dahinter die Identitaet. Ein
             // Pfad ist kuerzer als tausend Zeichen; mehr gibt Windows nicht her.

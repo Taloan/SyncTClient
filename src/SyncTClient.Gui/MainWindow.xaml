@@ -675,6 +675,9 @@
                     <DockPanel>
                       <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}"
                                  Foreground="{DynamicResource Gedaempft}" Margin="8,0,0,0" />
+                      <TextBlock DockPanel.Dock="Left" Text="{Binding Arrow}"
+                                 Width="14" FontWeight="Bold"
+                                 Foreground="{DynamicResource Sekundaer}" />
                       <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
                     <DockPanel Margin="0,1,0,3">
