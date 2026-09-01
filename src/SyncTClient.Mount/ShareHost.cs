@@ -959,6 +959,94 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
+    /// Holt den Inhalt einer Datei und schreibt ihn selbst hinein.
+    /// </summary>
+    /// <remarks>
+    /// Nicht ueber den Rueckruf des Dateisystems. Der wird nur bedient, wenn
+    /// ein fremder Prozess die Datei oeffnet: dann fuellt Windows sie und die
+    /// Attribute wechseln. Oeffnet der Anbieter sie selbst, meldet CfExecute
+    /// Erfolg und schreibt nichts -- die Datei behaelt "bei Bedarf abrufen",
+    /// Windows wartet seine Minutenfrist ab und fragt erneut. Im Protokoll
+    /// stand es nebeneinander: derselbe Weg, einmal von Directory Opus
+    /// ausgeloest und einmal von uns, einmal 0x420 und einmal 0x401620.
+    ///
+    /// Also schreiben wir die Datei selbst und kennzeichnen sie danach als
+    /// abgeglichen. Stueckweise, damit eine grosse Datei nicht vollstaendig
+    /// im Arbeitsspeicher steht.
+    /// </remarks>
+    private async Task MaterialiseAsync(string path, CancellationToken ct)
+    {
+        if (NameOf(path) is not { } name) return;
+
+        BepFileInfo file;
+        lock (_indexGate)
+            if (_index is null || !_index.TryGet(name, out file!)) return;
+
+        if (file.Deleted || file.Blocks.Count == 0) return;
+
+        var leitung = LineFor(name)
+            ?? throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
+
+        var transfer = new TransferInfo(FolderId, name, file.Size, TransferDirection.Herein);
+        TransferStarted?.Invoke(transfer);
+        transfer.State = TransferState.Laeuft;
+
+        // Waehrend wir schreiben, ist jede Meldung darueber unsere eigene.
+        using var hold = HoldHydration(name);
+
+        var temp = path + ".synct-neu";
+
+        try
+        {
+            await using (var ziel = new FileStream(
+                temp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.Asynchronous))
+            {
+                const int Stueck = 8 << 20;
+
+                for (long offset = 0; offset < file.Size;)
+                {
+                    var nehmen = (int)Math.Min(Stueck, file.Size - offset);
+
+                    var data = await FileFetcher.FetchRangeAsync(
+                        leitung, FolderId, file, offset, nehmen, _app.Parallelism, null, ct)
+                        .ConfigureAwait(false);
+
+                    await ziel.WriteAsync(data, ct).ConfigureAwait(false);
+
+                    offset += nehmen;
+                    transfer.DoneBytes = offset;
+                    NoteReceived(data.Length);
+                }
+            }
+
+            File.SetLastWriteTimeUtc(temp, DateTimeOffset.FromUnixTimeSeconds(file.ModifiedS).UtcDateTime);
+
+            // Erst jetzt an die Stelle der leeren Datei. Ein Abbruch unterwegs
+            // laesst den Platzhalter stehen, statt eine halbe Datei zu
+            // hinterlassen.
+            File.Delete(path);
+            File.Move(temp, path);
+
+            _cache?.NoteContent(name, file.Size);
+            _cache?.MarkInSync(name);
+
+            transfer.State = TransferState.Fertig;
+        }
+        catch (Exception ex)
+        {
+            transfer.State = TransferState.Fehler;
+            transfer.Error = ex.Message;
+
+            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
+            throw;
+        }
+        finally
+        {
+            TransferFinished?.Invoke(transfer);
+        }
+    }
+
+    /// <summary>
     /// Nimmt auf, was schon im Ordner liegt.
     /// </summary>
     /// <remarks>
@@ -1070,27 +1158,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             {
                 try
                 {
-                    // Ausdruecklich fuellen lassen, nicht durch Lesen
-                    // anstossen.
-                    //
-                    // Der Umweg ueber einen Lesezugriff erzeugt zwei
-                    // Rueckrufe: einen fuer den gelesenen Sektor und, weil
-                    // die Hydrationsregel FULL ist, einen fuer die ganze
-                    // Datei. Den zweiten beantworten wir sofort und
-                    // vollstaendig; den ersten stellt Windows erst eine
-                    // Minute spaeter zu, und bis dahin steht der Lesezugriff.
-                    // Im Protokoll war es ein Takt von genau sechzig
-                    // Sekunden und zwei Dateien darin.
-                    var laenge = new System.IO.FileInfo(path).Length;
-                    if (!HydrationCache.Hydrate(path, laenge))
-                        _log($"  {Path.GetFileName(path)}: liess sich nicht fuellen.");
+                    await MaterialiseAsync(path, token).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     _log($"  {Path.GetFileName(path)}: {ex.Message}");
                 }
-
-                await Task.Yield();
 
                 var fertig = Interlocked.Increment(ref done);
                 SetPhase(SyncPhase.Inhalte, fertig, pending.Count);
