@@ -425,6 +425,57 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
+    /// Rechnet die Blocklisten aller lokalen Dateien neu.
+    /// </summary>
+    /// <remarks>
+    /// Der Durchgang uebergeht eine Datei, deren Groesse und Sekunde zum
+    /// eigenen Eintrag passen. Das ist die Heuristik, mit der jeder
+    /// Abgleichdienst arbeitet, und sie irrt sich selten -- aber wer Groesse
+    /// und Sekunde beibehaelt und den Inhalt aendert, wird nie bemerkt. Nach
+    /// einem Absturz, nach einem fremden Werkzeug im Ordner oder einfach aus
+    /// Misstrauen will man den Beweis statt der Vermutung.
+    ///
+    /// Angekuendigt wird darum nichts weiter: gerechnet wird alles, gemeldet
+    /// nur, was sich wirklich unterscheidet. Der Vergleich der Blocklisten
+    /// steht hinter der Heuristik und wird hier nicht uebergangen.
+    ///
+    /// Platzhalter bleiben aussen vor. Sie halten keinen Inhalt, und ein
+    /// Lesen wuerde sie aus dem Netz holen -- der Beweis waere teurer als die
+    /// Datei.
+    /// </remarks>
+    public int RebuildIndex()
+    {
+        if (!Directory.Exists(_config.LocalPath)) return 0;
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0
+        };
+
+        var anzahl = 0;
+
+        foreach (var info in new DirectoryInfo(_config.LocalPath).EnumerateFiles("*", options))
+        {
+            if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
+            if (NameOf(info.FullName) is not { } name) continue;
+            if (!_config.Includes(name)) continue;
+
+            _force[name] = 0;
+            _dirty[name] = 0;
+            anzahl++;
+        }
+
+        _log($"[{FolderId}] {anzahl} Dateien werden neu gerechnet.");
+
+        _lastScan = DateTime.MinValue;
+        Wake();
+
+        return anzahl;
+    }
+
+    /// <summary>
     /// Verwirft, was wir von dieser Gegenstelle wissen, und faengt von vorn an.
     /// </summary>
     /// <remarks>
