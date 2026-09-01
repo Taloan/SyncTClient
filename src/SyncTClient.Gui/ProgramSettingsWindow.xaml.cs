@@ -195,8 +195,7 @@ public partial class ProgramSettingsWindow : Window
 
         try
         {
-            var (geprueft, aufgeloest, fehler) = await Task.Run(
-                () => CloudFilterMount.RevertPlaceholdersIn(ordner));
+            var (geprueft, aufgeloest, fehler) = await CloudFilterMount.RepairAsync(ordner);
 
             // Auch die Zahl der betrachteten Eintraege. "0 aufgeloest" allein
             // laesst offen, ob nichts zu tun war oder ob nichts ging.
