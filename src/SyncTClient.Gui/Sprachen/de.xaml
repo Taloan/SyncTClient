@@ -347,4 +347,9 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Tray.Pause">Abgleich anhalten</s:String>
   <s:String x:Key="S.Status.Recent">ZULETZT ÜBERTRAGEN</s:String>
   <s:String x:Key="S.Status.Quiet">Zurzeit wird nichts übertragen.</s:String>
+  <s:String x:Key="C.NoShare">Kein Share für diesen Pfad.</s:String>
+  <s:String x:Key="C.Pinned">{0} Dateien ({1}) bleiben lokal.</s:String>
+  <s:String x:Key="C.Freed">{0} Dateien ({1}) in Platzhalter umgewandelt.</s:String>
+  <s:String x:Key="C.Hidden">{0} Zweige ausgeblendet.</s:String>
+  <s:String x:Key="C.Blocked">Nicht möglich: {0} Dateien erreichen die Platzhalter-Schwelle nicht.</s:String>
 </ResourceDictionary>
