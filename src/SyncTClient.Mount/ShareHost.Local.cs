@@ -548,13 +548,16 @@ public sealed partial class ShareHost
 
         if (!vorhanden.TryGetValue(name, out var da)) return "liegt hier nicht";
 
-        if (da.Size != size) return $"hier {da.Size} B statt {size} B";
+        if (da.Size != size) return $"hier {Format.Bytes(da.Size)} statt {Format.Bytes(size)}";
 
         return $"hier {Zeit(da.ModifiedS)} statt {Zeit(modifiedS)}";
     }
 
     /// <summary>So viele offene Namen werden gemerkt.</summary>
     private const int ListenGrenze = 2000;
+
+    /// <summary>Platzhalter, die bei "vollstaendig lokal" noch zu fuellen sind.</summary>
+    private List<string> _ohneInhalt = [];
 
     private static string Zeit(long unixSekunden)
         => DateTimeOffset.FromUnixTimeSeconds(unixSekunden).ToLocalTime().ToString("dd.MM. HH:mm:ss");
@@ -580,6 +583,11 @@ public sealed partial class ShareHost
         // frisch verbundenen Freigabe stehen alle Dateien offen, und
         // hunderttausend Zeilen liest niemand.
         var offeneListe = new List<OutstandingItem>();
+
+        // Und die Namen, die bei "vollstaendig lokal" noch leer sind. Der
+        // Durchgang stellt sie ohnehin fest; ein zweiter Lauf ueber den Index
+        // waere dieselbe Auskunft zum doppelten Preis.
+        var ohneInhalt = new List<string>();
         var gesamt = 0;
         long gesamtBytes = 0;
         var vereint = 0;
@@ -682,8 +690,11 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += size;
+                    if (leer && !fehlt) ohneInhalt.Add(name);
+
                     var grund = Grund(name, size, modifiedS, vorhanden, fehlt);
-                    if (offeneNamen.Count < 5) offeneNamen.Add($"{name} ({size} B, {grund})");
+                    if (offeneNamen.Count < 5)
+                        offeneNamen.Add($"{name} ({Format.Bytes(size)}, {grund})");
                     if (offeneListe.Count < ListenGrenze)
                         offeneListe.Add(new OutstandingItem(name, size, grund));
                 }
@@ -727,7 +738,7 @@ public sealed partial class ShareHost
                     bytes += eintrag.Size;
                     const string nochNicht = "hier vorhanden, noch nicht angekündigt";
                     if (offeneNamen.Count < 5)
-                        offeneNamen.Add($"{name} ({eintrag.Size} B, {nochNicht})");
+                        offeneNamen.Add($"{name} ({Format.Bytes(eintrag.Size)}, {nochNicht})");
                     if (offeneListe.Count < ListenGrenze)
                         offeneListe.Add(new OutstandingItem(name, eintrag.Size, nochNicht));
                 }
@@ -769,6 +780,7 @@ public sealed partial class ShareHost
         Outstanding = offen;
         OutstandingBytes = bytes;
         OutstandingItems = offeneListe;
+        _ohneInhalt = ohneInhalt;
         Awaiting = wartend;
         AwaitingBytes = wartendBytes;
         UpdateOutstandingPhase();
@@ -1259,6 +1271,14 @@ public sealed partial class ShareHost
                 {
                     _lastScan = DateTime.UtcNow;
                     ScanLocal(quiet: true);
+
+                    // "Vollstaendig lokal" wurde einmal beim Verbinden
+                    // eingeloest. Ein Platzhalter, der danach entsteht -- eine
+                    // neue Datei der Gegenstelle, ein Zweig, den jemand wieder
+                    // angehakt hat, ein Versuch, der abgebrochen ist --, blieb
+                    // fuer immer leer: als Rueckstand gezaehlt, ohne dass
+                    // irgendein Handgriff daran etwas geaendert haette.
+                    await FetchMissingAsync(ct).ConfigureAwait(false);
                 }
 
                 // Oefter als der Durchgang ueber den Ordner: das Entfernen

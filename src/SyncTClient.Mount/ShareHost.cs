@@ -1257,6 +1257,49 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
     }
 
+    /// <summary>
+    /// Holt nach, was bei "vollstaendig lokal" noch leer dasteht.
+    /// </summary>
+    /// <remarks>
+    /// Die Namen kommen aus dem Durchgang ueber den Ordner, der sie ohnehin
+    /// feststellt. Gefragt wird nur, was die Gegenstelle auch haelt: was sie
+    /// selbst nicht hat, zaehlt als Warten und nicht als Rueckstand.
+    /// </remarks>
+    private async Task FetchMissingAsync(CancellationToken ct)
+    {
+        if (_config.Mode != ShareMode.AlwaysLocal || IsPaused) return;
+        if (_connections.IsEmpty) return;
+
+        var offen = _ohneInhalt;
+        if (offen.Count == 0) return;
+
+        _log($"[{FolderId}] {offen.Count} Platzhalter werden nachgeholt ...");
+
+        var done = 0;
+        SetPhase(SyncPhase.Inhalte, 0, offen.Count);
+
+        await Parallel.ForEachAsync(
+            offen,
+            new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct },
+            async (name, token) =>
+            {
+                try
+                {
+                    await MaterialiseAsync(LocalPathOf(name), token).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    _log($"  {name}: {ex.Message}");
+                }
+
+                SetPhase(SyncPhase.Inhalte, Interlocked.Increment(ref done), offen.Count);
+            }).ConfigureAwait(false);
+
+        // Der naechste Durchgang misst neu. Bis dahin gilt die Liste als
+        // abgearbeitet -- sonst liefe sie im naechsten Takt noch einmal.
+        _ohneInhalt = [];
+    }
+
     private async Task ApplyModeAsync(CancellationToken ct)
     {
         if (_config.Mode != ShareMode.AlwaysLocal) return;
