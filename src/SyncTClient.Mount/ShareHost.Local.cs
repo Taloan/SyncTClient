@@ -105,10 +105,25 @@ public sealed partial class ShareHost
     /// sie aus einem abgewaehlten Zweig entfernt wird.
     /// </summary>
     /// <remarks>
-    /// Grosszuegig gewaehlt. Die Datei liegt in dieser Zeit hier und stoert
-    /// niemanden; sie zu frueh zu entfernen kostet ihren Inhalt.
+    /// Kurz gehalten. Die Gegenstelle fragt gleich nach der Ankuendigung nach
+    /// den Bloecken oder gar nicht; wer laenger wartet, wartet umsonst.
     /// </remarks>
-    private const long PruneDelayMs = 5 * 60 * 1000;
+    private const long PruneDelayMs = 10_000;
+
+    /// <summary>
+    /// Bis zu so vielen Dateien wird jede einzeln ins Protokoll geschrieben.
+    /// </summary>
+    /// <remarks>
+    /// Beim ersten Abgleich gehen tausende auf einmal hinaus; die einzeln zu
+    /// nennen waere kein Protokoll mehr. Bei einer Handvoll ist es genau das,
+    /// was man wissen will.
+    /// </remarks>
+    private const int AnnounceDetails = 8;
+
+    /// <summary>So oft wird geprueft, was sich entfernen laesst.</summary>
+    private static readonly TimeSpan PruneInterval = TimeSpan.FromSeconds(10);
+
+    private DateTime _lastPrune = DateTime.MinValue;
 
     /// <summary>Wann ein Name zuletzt angekuendigt wurde.</summary>
     /// <remarks>
@@ -910,9 +925,14 @@ public sealed partial class ShareHost
                 {
                     _lastScan = DateTime.UtcNow;
                     ScanLocal(quiet: true);
+                }
 
-                    // Danach, nicht davor: erst wird angekuendigt, was hier
-                    // liegt, und dann entfernt, was inzwischen angekommen ist.
+                // Oefter als der Durchgang ueber den Ordner: das Entfernen
+                // liest nur Namen und Zeiten und wartet auf eine Bedingung,
+                // die jederzeit eintreten kann.
+                if (DateTime.UtcNow - _lastPrune >= PruneInterval)
+                {
+                    _lastPrune = DateTime.UtcNow;
                     PruneExcluded();
                 }
 
@@ -1548,6 +1568,12 @@ public sealed partial class ShareHost
     /// Gegenstelle eine Luecke: fehlt ihr eine Nachricht, passt die
     /// Vorgaengernummer nicht zu ihrem Stand.
     /// </remarks>
+    /// <summary>Der Versionsvektor in einer Zeile.</summary>
+    private static string Kurz(Vector? version)
+        => version is null || version.Counters.Count == 0
+            ? "leer"
+            : string.Join(", ", version.Counters.Select(c => $"{c.Id:x}:{c.Value}"));
+
     /// <summary>
     /// Schickt den Stapel an alle beteiligten Gegenstellen.
     /// </summary>
@@ -1617,6 +1643,21 @@ public sealed partial class ShareHost
 
             _log($"[{FolderId}] {batch.Count} Aenderungen angekuendigt, Sequenz bis {last} " +
                  $"({erreicht} Gegenstelle(n)).");
+
+            // Bei wenigen Dateien auch, was genau gesagt wurde. Ohne diese
+            // Zeile steht im Protokoll die Zahl der Ankuendigungen, aber nicht
+            // ihr Inhalt -- und ob eine Gegenstelle zu Recht nichts abholt,
+            // entscheidet genau der.
+            if (batch.Count <= AnnounceDetails)
+            {
+                foreach (var eintrag in batch)
+                {
+                    _log($"[{FolderId}]   {(eintrag.Deleted ? "geloescht" : "vorhanden")} " +
+                         $"\"{eintrag.Name}\", {eintrag.Size} B, {eintrag.Blocks.Count} Bloecke, " +
+                         $"Blockgroesse {eintrag.BlockSize}, Typ {eintrag.Type}, " +
+                         $"Version {Kurz(eintrag.Version)}");
+                }
+            }
         }
 
         batch.Clear();
