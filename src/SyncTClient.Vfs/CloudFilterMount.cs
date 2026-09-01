@@ -20,6 +20,9 @@ public sealed class CloudFilterMount : IDisposable
     /// </summary>
     private const int SectorSize = 4096;
 
+    /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS.</summary>
+    private const uint FileAttributeRecallOnDataAccess = 0x0040_0000;
+
     private static readonly uint TransferDataParamSize = ComputeTransferDataParamSize();
 
     private readonly string _rootPath;
@@ -620,7 +623,21 @@ public sealed class CloudFilterMount : IDisposable
             // Das Gegenstueck zu "Hydration: ...". Ohne diese Zeile steht im
             // Protokoll nur, dass ein Rueckruf begonnen hat, und man kann
             // nicht unterscheiden, ob er haengt oder laengst fertig ist.
-            _log?.Invoke($"  {request.RelativePath}: {geliefert} B durchgereicht.");
+            //
+            // Dazu der Zustand der Datei danach. CfExecute meldet Erfolg,
+            // aber ob die Bytes wirklich in der Datei stehen, sagt nur das
+            // Dateisystem. Solange dort weiter "bei Bedarf abrufen" steht,
+            // war die Uebergabe wirkungslos -- und genau das erklaert, warum
+            // dieselbe Datei eine Minute spaeter noch einmal aus dem Netz
+            // geholt wird.
+            var voll = Path.Combine(_rootPath,
+                request.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            var attribute = (uint)new FileInfo(voll).Attributes;
+            var offline = (attribute & (FileAttributeRecallOnDataAccess | 0x00001000 | 0x00400000)) != 0;
+
+            _log?.Invoke($"  {request.RelativePath}: {geliefert} B durchgereicht, " +
+                         $"Attribute 0x{attribute:X}{(offline ? " -- weiterhin Platzhalter" : "")}.");
         }
         catch (Exception ex)
         {
