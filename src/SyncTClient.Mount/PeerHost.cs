@@ -385,14 +385,24 @@ public sealed class PeerHost : IAsyncDisposable
         await NegotiateAsync(token);
         State = PeerState.Verbunden;
 
-        foreach (var share in _shares.Values)
-        {
+        // Nebeneinander, nicht nacheinander.
+        //
+        // Ein Ordner mit fuenfzehntausend Dateien rechnet beim Aufnehmen des
+        // Bestands minutenlang. Nacheinander gestartet standen alle anderen
+        // derweil auf "gestoppt" -- nicht weil sie unerreichbar waeren,
+        // sondern weil sie noch nicht an der Reihe waren. Und genau das war
+        // ihnen nicht anzusehen.
+        //
+        // Auf der Leitung ist das gefahrlos: die Verbindung reiht ihre
+        // Schreibvorgaenge selbst hintereinander ein.
+        await Task.WhenAll(_shares.Values
             // Ein Ordner, der schon steht, ist mit der neuen Verbindung fertig.
-            if (share.State != ShareState.Gestoppt) continue;
-
-            try { await share.StartAsync(DeviceId, connection, token); }
-            catch (Exception ex) { _log($"[{share.FolderId}] {ex.Message}"); }
-        }
+            .Where(share => share.State == ShareState.Gestoppt)
+            .Select(async share =>
+            {
+                try { await share.StartAsync(DeviceId, connection, token); }
+                catch (Exception ex) { _log($"[{share.FolderId}] {ex.Message}"); }
+            }));
     }
 
     public event Action<ShareHost>? ShareAdded;
