@@ -636,13 +636,32 @@ public sealed class CloudFilterMount : IDisposable
     /// durch. <c>false</c> bedeutet, dass die Anfrage erledigt ist und nicht
     /// weiter bedient werden muss.
     /// </summary>
+    /// <summary>
+    /// Reicht ein Stueck an Windows durch.
+    /// </summary>
+    /// <remarks>
+    /// Die Laenge wird auf die Sektorgroesse aufgerundet, auch am Dateiende.
+    /// Der Ueberhang ist mit Nullen gefuellt; Windows schneidet ihn an der
+    /// wirklichen Dateigroesse ab.
+    ///
+    /// Ohne dieses Aufrunden galt die Uebergabe als unvollstaendig: die letzte
+    /// Datei endete mitten im Sektor, Windows wartete auf den Rest und gab
+    /// erst nach seiner Minutenfrist auf. Im Protokoll stand die Datei zweimal
+    /// als "durchgereicht", genau sechzig Sekunden auseinander -- einmal von
+    /// uns geliefert, einmal von Windows nachgefragt.
+    /// </remarks>
     private unsafe bool TransferData(HydrationRequest request, byte[] data, long offset)
     {
-        var buffer = NativeMemory.AlignedAlloc((nuint)data.Length, SectorSize);
+        var laenge = (data.Length + SectorSize - 1) & ~(SectorSize - 1);
+        var buffer = NativeMemory.AlignedAlloc((nuint)laenge, SectorSize);
+
         try
         {
-            data.AsSpan().CopyTo(new Span<byte>(buffer, data.Length));
-            return Transfer(request, buffer, offset, data.Length, ntStatus: 0);
+            var ziel = new Span<byte>(buffer, laenge);
+            data.AsSpan().CopyTo(ziel);
+            ziel[data.Length..].Clear();
+
+            return Transfer(request, buffer, offset, laenge, ntStatus: 0);
         }
         finally
         {
