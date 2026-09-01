@@ -924,10 +924,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// eine der Richtlinien --, zaehlt sie hoch. Sonst bleibt es beim
     /// Bestand, und die Aenderung kommt nie an.
     ///
-    /// 0.2: ShowSiblingsAsGroup, damit alle Freigaben unter einem Knoten im
-    /// Explorer stehen.
+    /// 0.2: ShowSiblingsAsGroup gesetzt.
+    /// 0.3: und wieder zurueckgenommen -- Windows gruppiert damit nach
+    /// Elternverzeichnis und benennt den Knoten danach.
     /// </remarks>
-    private const string SyncRootFassung = "0.2";
+    private const string SyncRootFassung = "0.3";
 
     private async Task ProjectAsync()
     {
