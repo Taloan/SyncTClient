@@ -395,6 +395,49 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
     }
 
+    /// <summary>
+    /// Sieht den Ordner sofort durch, statt auf den naechsten Durchgang zu
+    /// warten.
+    /// </summary>
+    /// <remarks>
+    /// Noetig ist das selten: der Beobachter meldet Aenderungen sofort und ein
+    /// Durchgang laeuft ohnehin jede Minute. Der Beobachter verliert aber
+    /// Ereignisse, wenn viele auf einmal kommen, und dann will man nicht
+    /// warten, sondern nachsehen.
+    /// </remarks>
+    public void RescanNow()
+    {
+        _lastScan = DateTime.MinValue;
+        Wake();
+    }
+
+    /// <summary>
+    /// Verwirft, was wir von dieser Gegenstelle wissen, und faengt von vorn an.
+    /// </summary>
+    /// <remarks>
+    /// Das Gegenstueck zu <see cref="ResetIndex"/>, nur von Hand ausgeloest.
+    /// Von selbst geschieht es nur, wenn die Gegenstelle ihre Index-Id
+    /// wechselt -- wenn also sie es fuer noetig haelt. Bleibt ein Bestand aus
+    /// anderem Grund stehen, gibt es sonst keinen Weg heraus.
+    ///
+    /// Verworfen wird beides: was sie uns gesagt hat, und was wir ihr gesagt
+    /// haben. Nach der naechsten Verhandlung schickt sie einen vollstaendigen
+    /// Index, und wir schicken ebenfalls einen.
+    /// </remarks>
+    public void Resync(string device)
+    {
+        lock (_indexGate)
+        {
+            _index?.Clear(device);
+            _index?.SetPeerIndexId(device, 0);
+        }
+
+        _indexSentTo[device] = false;
+        _lastSentTo[device] = 0;
+
+        _log($"[{FolderId}] Bestand dieser Gegenstelle verworfen -- sie wird neu abgefragt.");
+    }
+
     public void RememberPeerIndexId(string device, ulong id)
     {
         if (_index is not null) lock (_indexGate) _index.SetPeerIndexId(device, id);

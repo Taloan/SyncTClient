@@ -2,34 +2,84 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="{DynamicResource S.Peer.TitleAdd}"
-        Height="450" Width="620"
+        Height="520" Width="620"
         WindowStartupLocation="CenterOwner"
-        MinWidth="560" MinHeight="360"
+        MinWidth="560" MinHeight="420"
         Background="{DynamicResource Flaeche}">
-  <StackPanel Margin="16">
-    <Label Content="{DynamicResource S.Peer.Name}" />
-    <TextBox x:Name="NameBox" />
+  <DockPanel Margin="16">
 
-    <Label Content="{DynamicResource S.Peer.Address}" />
-    <TextBox x:Name="AddressBox" />
-    <TextBlock Foreground="{DynamicResource Gedaempft}" FontSize="11" Margin="0,0,0,8"
-               Text="{DynamicResource S.Peer.AddressHint}" />
-
-    <Label Content="{DynamicResource S.Peer.DeviceId}" />
-    <TextBox x:Name="DeviceIdBox" FontFamily="Consolas" />
-    <TextBlock x:Name="Hint" Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"
-               Text="{DynamicResource S.Peer.IdHint}" />
-
-    <CheckBox x:Name="AutoBox" Content="{DynamicResource S.Peer.AutoConnect}" IsChecked="True" Margin="0,4,0,0" />
-    <CheckBox x:Name="DiscoveryBox" Content="{DynamicResource S.Peer.Discovery}" IsChecked="True" Margin="0,6,0,0" />
-    <CheckBox x:Name="RelayBox" Content="{DynamicResource S.Peer.Relay}" IsChecked="True" Margin="0,6,0,0" />
-    <TextBlock Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,12"
-               Text="{DynamicResource S.Peer.RelayHint}" />
-
-    <DockPanel>
+    <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Cancel}" IsCancel="True" Margin="0" />
       <Button x:Name="AddButton" DockPanel.Dock="Right" Content="{DynamicResource S.Add}" Click="OnAdd" IsDefault="True" />
       <TextBlock />
     </DockPanel>
-  </StackPanel>
+
+    <TabControl BorderBrush="{DynamicResource Rahmen}">
+
+      <TabItem Header="{DynamicResource S.Share.TabGeneral}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <!-- Rechter Rand fuer die Bildlaufleiste; das Fluent-Thema legt sie
+               sonst ueber die Eingabefelder. -->
+          <StackPanel Margin="10,10,26,10">
+            <Label Content="{DynamicResource S.Peer.Name}" />
+            <TextBox x:Name="NameBox" />
+
+            <Label Content="{DynamicResource S.Peer.Address}" />
+            <TextBox x:Name="AddressBox" />
+            <TextBlock Foreground="{DynamicResource Gedaempft}" FontSize="11" Margin="0,0,0,8"
+                       Text="{DynamicResource S.Peer.AddressHint}" />
+
+            <Label Content="{DynamicResource S.Peer.DeviceId}" />
+            <TextBox x:Name="DeviceIdBox" FontFamily="Consolas" />
+            <TextBlock x:Name="Hint" Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"
+                       Text="{DynamicResource S.Peer.IdHint}" />
+
+            <CheckBox x:Name="AutoBox" Content="{DynamicResource S.Peer.AutoConnect}" IsChecked="True" Margin="0,4,0,0" />
+            <CheckBox x:Name="DiscoveryBox" Content="{DynamicResource S.Peer.Discovery}" IsChecked="True" Margin="0,6,0,0" />
+            <CheckBox x:Name="RelayBox" Content="{DynamicResource S.Peer.Relay}" IsChecked="True" Margin="0,6,0,0" />
+            <TextBlock Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Text="{DynamicResource S.Peer.RelayHint}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+
+      <!-- Derselbe Zusammenhang von der anderen Seite: dort steht je Ordner,
+           wer teilnimmt, hier je Geraet, woran es teilnimmt. Geschrieben wird
+           in dieselbe Liste. -->
+      <TabItem Header="{DynamicResource S.Share.TabSharing}">
+        <DockPanel Margin="10">
+          <TextBlock DockPanel.Dock="Top" Text="{DynamicResource S.Peer.SharedFolders}"
+                     FontWeight="SemiBold" Margin="0,0,0,2" />
+          <TextBlock DockPanel.Dock="Top" Text="{DynamicResource S.Peer.SharedFoldersHint}"
+                     Foreground="{DynamicResource Gedaempft}" FontSize="11"
+                     TextWrapping="Wrap" Margin="0,0,0,10" />
+
+          <TextBlock x:Name="NoSharesText" DockPanel.Dock="Top"
+                     Text="{DynamicResource S.Peer.NoShares}"
+                     Foreground="{DynamicResource Gedaempft}"
+                     Visibility="Collapsed" Margin="0,0,0,10" />
+
+          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+              <ItemsControl x:Name="ShareList" Margin="10,8,26,8">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <CheckBox IsChecked="{Binding Shared, Mode=TwoWay}" Margin="0,3">
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding FolderId}" Margin="10,0,0,0"
+                                   FontFamily="Consolas" FontSize="11"
+                                   Foreground="{DynamicResource Gedaempft}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                    </CheckBox>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </Border>
+        </DockPanel>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
 </Window>

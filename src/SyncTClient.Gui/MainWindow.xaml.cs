@@ -814,6 +814,9 @@ public partial class MainWindow : Window
     /// Eine Knopfleiste über der Tabelle bot dieselben Befehle. Die Knöpfe
     /// galten für die ausgewählte Zeile, standen aber nicht bei ihr.
     /// </remarks>
+    private MenuItem _menuRescan = null!;
+    private MenuItem _menuResync = null!;
+
     private void BuildRowMenu()
     {
         _menuConnect = Eintrag("S.Menu.Connect", OnAcceptFolder);
@@ -821,6 +824,8 @@ public partial class MainWindow : Window
         _menuOpen = Eintrag("S.Menu.Open", OnOpenFolder);
         _menuSettings = Eintrag("S.Menu.Settings", OnShowSettings);
         _menuUnbind = Eintrag("S.Menu.Unbind", OnUnbind);
+        _menuRescan = Eintrag("S.Menu.Rescan", OnRescan);
+        _menuResync = Eintrag("S.Menu.Resync", OnResync);
 
         var menu = new ContextMenu();
         menu.Items.Add(_menuConnect);
@@ -829,12 +834,69 @@ public partial class MainWindow : Window
         menu.Items.Add(_menuOpen);
         menu.Items.Add(_menuSettings);
         menu.Items.Add(new Separator());
+        menu.Items.Add(_menuRescan);
+        menu.Items.Add(_menuResync);
+        menu.Items.Add(new Separator());
         menu.Items.Add(_menuUnbind);
 
         ShareGrid.ContextMenu = menu;
 
         // Ohne ausgewaehlte Zeile gibt es nichts zu tun. Das Menue bleibt dann zu.
         ShareGrid.ContextMenuOpening += (_, e) => { if (_row is null) e.Handled = true; };
+    }
+
+    /// <summary>
+    /// Sieht den Ordner sofort durch.
+    /// </summary>
+    /// <remarks>
+    /// Der Durchgang laeuft ohnehin jede Minute, und der Beobachter meldet
+    /// jede Aenderung sofort. Gebraucht wird der Befehl, wenn der Beobachter
+    /// Ereignisse verloren hat -- und dann will man nicht warten.
+    /// </remarks>
+    private void OnRescan(object sender, RoutedEventArgs e)
+    {
+        if (_row?.Share is not { } share) return;
+
+        share.RescanNow();
+        Status(App.S("M.Rescanning", _row.Name));
+    }
+
+    /// <summary>
+    /// Verwirft den Bestand aller beteiligten Gegenstellen und fragt neu.
+    /// </summary>
+    /// <remarks>
+    /// Von selbst geschieht das nur, wenn eine Gegenstelle ihre Index-Id
+    /// wechselt. Bleibt ein Bestand aus anderem Grund stehen, ist das der
+    /// einzige Weg heraus -- deshalb mit Rueckfrage, aber ohne Umschweife.
+    /// </remarks>
+    private async void OnResync(object sender, RoutedEventArgs e)
+    {
+        if (_row?.Share is not { } share) return;
+
+        if (MessageBox.Show(this, App.S("S2.ResyncAsk"), _row.Name,
+                MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        var gefragt = 0;
+
+        foreach (var teilnehmer in _row.Peers)
+        {
+            share.Resync(teilnehmer.Config.DeviceId);
+
+            try
+            {
+                await teilnehmer.Host.RenegotiateAsync(_cts?.Token ?? default);
+                gefragt++;
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[{teilnehmer.Display}] Neuabgleich: {ex.Message}");
+            }
+        }
+
+        Status(App.S("M.Resyncing", _row.Name, gefragt));
     }
 
     private static MenuItem Eintrag(string schluessel, RoutedEventHandler klick)
@@ -1268,10 +1330,11 @@ public partial class MainWindow : Window
 
     private void AddPeer()
     {
-        var dialog = new PeerDialog { Owner = this };
+        var dialog = new PeerDialog(null, _config.Shares) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         _config.Peers.Add(dialog.Result);
+        ApplySharing(dialog.Result.DeviceId, dialog.SharedFolders);
         Persist();
         Load();
         Status(App.S("M.PeerAdded", dialog.Result.Display));
@@ -1285,18 +1348,52 @@ public partial class MainWindow : Window
     {
         var before = item.Config.DeviceId;
 
-        var dialog = new PeerDialog(item.Config) { Owner = this };
+        var dialog = new PeerDialog(item.Config, _config.Shares) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         // Die Freigaben zeigen auf die alte ID. Ohne das Nachziehen haengen
         // sie an einer Gegenstelle, die es nicht mehr gibt.
         if (!string.Equals(before, item.Config.DeviceId, StringComparison.Ordinal))
-            foreach (var share in _config.Shares.Where(s => s.PeerDeviceId == before))
-                share.PeerDeviceId = item.Config.DeviceId;
+        {
+            foreach (var share in _config.Shares)
+            {
+                if (share.PeerDeviceId == before) share.PeerDeviceId = item.Config.DeviceId;
+
+                var stelle = share.PeerDeviceIds.FindIndex(
+                    d => d.Equals(before, StringComparison.OrdinalIgnoreCase));
+
+                if (stelle >= 0) share.PeerDeviceIds[stelle] = item.Config.DeviceId;
+            }
+        }
+
+        ApplySharing(item.Config.DeviceId, dialog.SharedFolders);
 
         Persist();
         Load();
         Status(App.S("M.PeerChanged", item.Config.Display));
+    }
+
+    /// <summary>
+    /// Traegt ein, an welchen Ordnern dieses Geraet teilnimmt.
+    /// </summary>
+    /// <remarks>
+    /// Dieselbe Liste, die der Reiter "Teilen" im Ordner-Dialog fuehrt, nur
+    /// von der anderen Seite betrachtet. Beide schreiben in
+    /// <see cref="ShareConfig.PeerDeviceIds"/>.
+    /// </remarks>
+    private void ApplySharing(string deviceId, IReadOnlyList<string> folders)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId)) return;
+
+        foreach (var share in _config.Shares)
+        {
+            var soll = folders.Contains(share.FolderId, StringComparer.Ordinal);
+            var ist = share.PeerDeviceIds.Contains(deviceId, StringComparer.OrdinalIgnoreCase);
+
+            if (soll && !ist) share.PeerDeviceIds.Add(deviceId);
+            if (!soll && ist)
+                share.PeerDeviceIds.RemoveAll(d => d.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private async Task TogglePeer(PeerItem item)
@@ -1771,6 +1868,8 @@ public partial class MainWindow : Window
 
         _menuConnect.IsEnabled = connected && _row is { Accepted: false };
         _menuUnbind.IsEnabled = _row is { Accepted: true };
+        _menuRescan.IsEnabled = _row is { Accepted: true };
+        _menuResync.IsEnabled = _row is { Accepted: true } && connected;
         _menuSettings.IsEnabled = _row is { Accepted: true };
         _menuOpen.IsEnabled = _row is { Accepted: true };
 
