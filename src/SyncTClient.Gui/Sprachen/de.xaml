@@ -385,6 +385,11 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Menu.Rebuild">Index neu aufbauen</s:String>
   <s:String x:Key="M.Rebuilding">„{0}“: {1} Dateien werden neu gerechnet.</s:String>
   <s:String x:Key="M.Purged">„{0}“: {1} Namen durch Muster ausgenommen.</s:String>
+  <s:String x:Key="S.Work.Title">Ordner wird eingelesen</s:String>
+  <s:String x:Key="S.Work.Asking">Wird bei der Gegenstelle abgefragt …</s:String>
+  <s:String x:Key="S.Work.Of">{0} von {1}</s:String>
+  <s:String x:Key="S.Work.Hide">Ausblenden</s:String>
+  <s:String x:Key="S.Work.Hint">Ausblenden hält nichts an. Der Stand steht weiter in der Übersicht.</s:String>
   <s:String x:Key="S.Open.Title">Offene Dateien</s:String>
   <s:String x:Key="S.Open.For">Offen – {0}</s:String>
   <s:String x:Key="S.Open.Name">Datei</s:String>

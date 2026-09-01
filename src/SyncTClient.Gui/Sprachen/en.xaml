@@ -393,6 +393,11 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Menu.Rebuild">Rebuild index</s:String>
   <s:String x:Key="M.Rebuilding">“{0}”: recomputing {1} files.</s:String>
   <s:String x:Key="M.Purged">“{0}”: {1} names taken out by patterns.</s:String>
+  <s:String x:Key="S.Work.Title">Reading the folder</s:String>
+  <s:String x:Key="S.Work.Asking">Asking the remote device …</s:String>
+  <s:String x:Key="S.Work.Of">{0} of {1}</s:String>
+  <s:String x:Key="S.Work.Hide">Hide</s:String>
+  <s:String x:Key="S.Work.Hint">Hiding stops nothing. The state stays visible in the overview.</s:String>
   <s:String x:Key="S.Open.Title">Outstanding files</s:String>
   <s:String x:Key="S.Open.For">Outstanding – {0}</s:String>
   <s:String x:Key="S.Open.Name">File</s:String>

@@ -622,13 +622,20 @@ public sealed class PeerHost : IAsyncDisposable
     /// der Ordner soll und welche Zweige daraus uebernommen werden. Beides
     /// laesst sich erst entscheiden, wenn der Inhalt bekannt ist.
     /// </remarks>
-    public async Task<ShareHost> PrepareAsync(ShareConfig share, CancellationToken ct = default)
+    /// <param name="angelegt">
+    /// Wird gerufen, sobald der Ordner besteht -- vor dem Warten auf den
+    /// Index. Wer den Fortschritt zeigen will, braucht ihn zu diesem
+    /// Zeitpunkt und nicht erst, wenn alles vorbei ist.
+    /// </param>
+    public async Task<ShareHost> PrepareAsync(
+        ShareConfig share, CancellationToken ct = default, Action<ShareHost>? angelegt = null)
     {
         if (_connection is null) throw new InvalidOperationException("nicht verbunden.");
 
         var host = _registry.GetOrAdd(share, out _);
         Uebernehmen(host);
         _shares[share.FolderId] = host;
+        angelegt?.Invoke(host);
 
         // Erneut ankuendigen, jetzt mit dem neuen Ordner.
         await NegotiateAsync(ct);

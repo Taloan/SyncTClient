@@ -1,0 +1,37 @@
+﻿<Window x:Class="SyncTClient.Gui.ProgressWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource S.Work.Title}"
+        Width="460" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Flaeche}">
+  <StackPanel Margin="16">
+    <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+    <TextBlock x:Name="PhaseText" Foreground="{DynamicResource Gedaempft}" Margin="0,4,0,0"
+               TextTrimming="CharacterEllipsis" />
+
+    <Grid Margin="0,12,0,0" Height="22">
+      <ProgressBar x:Name="Bar" Minimum="0" Maximum="100" Height="22"
+                   Template="{StaticResource BalkenVorlage}"
+                   Background="{DynamicResource Feld}" Foreground="{DynamicResource Ein}" />
+      <TextBlock x:Name="CountText" FontSize="11" FontWeight="SemiBold" Foreground="White"
+                 HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBlock.Effect>
+          <DropShadowEffect Color="Black" ShadowDepth="0" BlurRadius="5" Opacity="1" />
+        </TextBlock.Effect>
+      </TextBlock>
+    </Grid>
+
+    <!-- Kein Abbrechen: der Ordner wird gerade eingelesen, und ein Abbruch
+         mitten im Index liesse einen halben Stand zurueck. Wegklicken darf
+         man das Fenster trotzdem: die Arbeit laeuft dann weiter, und die
+         Zeile in der Uebersicht zeigt denselben Stand. -->
+    <DockPanel Margin="0,14,0,0">
+      <TextBlock DockPanel.Dock="Left" Text="{DynamicResource S.Work.Hint}"
+                 Foreground="{DynamicResource Gedaempft}" FontSize="11"
+                 VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300" />
+      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Work.Hide}" Padding="12,4"
+              HorizontalAlignment="Right" Margin="0" IsCancel="True" />
+    </DockPanel>
+  </StackPanel>
+</Window>
