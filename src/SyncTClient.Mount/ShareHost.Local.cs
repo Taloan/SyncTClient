@@ -1693,7 +1693,21 @@ public sealed partial class ShareHost
         var namen = new HashSet<string>(batch.Select(f => f.Name), StringComparer.Ordinal);
 
         var alle = new List<BepFileInfo>(gespeichert.Count + batch.Count);
-        alle.AddRange(gespeichert.Where(f => !namen.Contains(f.Name)));
+
+        // Nur was eine eigene Sequenznummer hat, gehoert in den Index.
+        //
+        // Eine uebernommene Datei traegt die Null: sie stammt von der
+        // Gegenstelle, wir haben sie nie angekuendigt, und der Eintrag haelt
+        // nur fest, dass wir sie haben. Im Protokoll ist die Sequenznummer
+        // aber eindeutig und aufsteigend. Mehrere Nullen in einer Nachricht
+        // sind darum kein Schoenheitsfehler, sondern ein Formfehler --
+        // Syncthing beantwortet ihn mit "duplicate remote sequence number 0"
+        // und schliesst die Verbindung.
+        //
+        // Genau deshalb brach die Leitung ab, sobald ein Ordner mit
+        // vorhandenen Dateien uebernommen wurde: die Aufnahme des Bestands
+        // erzeugt lauter Eintraege mit Nummer null.
+        alle.AddRange(gespeichert.Where(f => f.Sequence > 0 && !namen.Contains(f.Name)));
         alle.AddRange(batch);
 
         return alle;
