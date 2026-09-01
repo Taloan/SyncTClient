@@ -1594,6 +1594,20 @@ public sealed partial class ShareHost
         var last = batch.Max(f => f.Sequence);
         var erreicht = 0;
 
+        // Vor dem Senden aufschreiben, nicht danach. Bricht die Verbindung
+        // ab, ist gerade das der Inhalt, den man sehen will -- und der stand
+        // bisher nirgends.
+        if (batch.Count <= AnnounceDetails)
+        {
+            foreach (var eintrag in batch)
+            {
+                _log($"[{FolderId}]   {(eintrag.Deleted ? "geloescht" : "vorhanden")} " +
+                     $"\"{eintrag.Name}\", {eintrag.Size} B, {eintrag.Blocks.Count} Bloecke, " +
+                     $"Blockgroesse {eintrag.BlockSize}, Typ {eintrag.Type}, " +
+                     $"Sequenz {eintrag.Sequence}, Version {Kurz(eintrag.Version)}");
+            }
+        }
+
         foreach (var (device, connection) in _connections)
         {
             try
@@ -1608,12 +1622,18 @@ public sealed partial class ShareHost
                     };
                     update.Files.AddRange(batch);
 
+                    _log($"[{FolderId}] -> IndexUpdate an {device[..7]}: " +
+                         $"{batch.Count} Dateien, prev {update.PrevSequence}, bis {last}.");
+
                     await connection.SendIndexUpdateAsync(update, ct).ConfigureAwait(false);
                 }
                 else
                 {
                     var index = new BepIndex { Folder = FolderId, LastSequence = last };
                     index.Files.AddRange(batch);
+
+                    _log($"[{FolderId}] -> Index an {device[..7]}: " +
+                         $"{batch.Count} Dateien, bis {last}.");
 
                     await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
                     _indexSentTo[device] = true;
@@ -1644,20 +1664,6 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] {batch.Count} Aenderungen angekuendigt, Sequenz bis {last} " +
                  $"({erreicht} Gegenstelle(n)).");
 
-            // Bei wenigen Dateien auch, was genau gesagt wurde. Ohne diese
-            // Zeile steht im Protokoll die Zahl der Ankuendigungen, aber nicht
-            // ihr Inhalt -- und ob eine Gegenstelle zu Recht nichts abholt,
-            // entscheidet genau der.
-            if (batch.Count <= AnnounceDetails)
-            {
-                foreach (var eintrag in batch)
-                {
-                    _log($"[{FolderId}]   {(eintrag.Deleted ? "geloescht" : "vorhanden")} " +
-                         $"\"{eintrag.Name}\", {eintrag.Size} B, {eintrag.Blocks.Count} Bloecke, " +
-                         $"Blockgroesse {eintrag.BlockSize}, Typ {eintrag.Type}, " +
-                         $"Version {Kurz(eintrag.Version)}");
-                }
-            }
         }
 
         batch.Clear();
