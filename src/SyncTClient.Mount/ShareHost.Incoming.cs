@@ -78,10 +78,38 @@ public sealed partial class ShareHost
     /// steht hier nicht. Er ist Inhalt dieses Ordners, und ob er
     /// mitgenommen wird, entscheidet niemand ausser dem, dem er gehoert.
     /// </remarks>
-    public static bool IsVersionsPath(string name)
+    public static bool IsHousekeeping(string name)
         => Unterhalb(name, VersionsFolder)
            || Unterhalb(name, MarkerFolder)
-           || Heisst(name, IgnoreFile);
+           || Heisst(name, IgnoreFile)
+           || IstArbeitsdatei(name);
+
+    /// <summary>
+    /// Die Datei, in die Syncthing gerade schreibt.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Schreibweisen: "~syncthing~name.tmp" bis Version 0.14 und
+    /// ".syncthing.name.tmp" danach. Beide sind Zwischenstaende, die
+    /// Syncthing selbst nie uebertraegt; nach dem Umbenennen sind sie fort.
+    ///
+    /// Anders als ".sync" von Resilio, das Inhalt dieses Ordners ist und
+    /// ueber dessen Mitnahme niemand ausser dem Anwender entscheidet: diese
+    /// hier gehoeren zur Verwaltung eines Abgleichs, so wie ".stfolder".
+    ///
+    /// Eine liegengebliebene meldet sich sonst als dauerhafter Rueckstand.
+    /// Sie wurde einmal leer angekuendigt, spaeter vollgeschrieben, und die
+    /// beiden Staende gehen von da an auseinander.
+    /// </remarks>
+    private static bool IstArbeitsdatei(string name)
+    {
+        var schnitt = name.LastIndexOf('/');
+        var letzter = schnitt < 0 ? name : name[(schnitt + 1)..];
+
+        if (!letzter.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) return false;
+
+        return letzter.StartsWith("~syncthing~", StringComparison.OrdinalIgnoreCase)
+               || letzter.StartsWith(".syncthing.", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Traegt der Name diesen Dateinamen, gleich in welcher Ebene?</summary>
     private static bool Heisst(string name, string dateiname)
@@ -109,7 +137,7 @@ public sealed partial class ShareHost
 
         foreach (var name in names)
         {
-            if (!_config.Includes(name) || IsVersionsPath(name)) continue;
+            if (!_config.Includes(name) || IsHousekeeping(name)) continue;
             if (_config.IsIgnored(name)) continue;
             if (_incoming.TryAdd(name, 0)) neu++;
         }

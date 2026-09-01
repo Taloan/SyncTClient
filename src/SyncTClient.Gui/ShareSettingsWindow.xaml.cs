@@ -100,7 +100,7 @@ public partial class ShareSettingsWindow : Window
             // ohnehin nie uebertragen; im Baum waere es ein Kaestchen,
             // das nichts bewirkt.
             var entries = index.EnumerateLight()
-                .Where(e => !ShareHost.IsVersionsPath(e.Name))
+                .Where(e => !ShareHost.IsHousekeeping(e.Name))
                 .Select(e => (e.Name, e.Size, e.IsDirectory, e.HasContent))
                 .ToList();
 
