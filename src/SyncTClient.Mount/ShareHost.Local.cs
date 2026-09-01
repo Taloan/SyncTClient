@@ -528,6 +528,34 @@ public sealed partial class ShareHost
     /// <summary>Was beim letzten Durchgang wirklich Inhalt hielt.</summary>
     private Dictionary<string, (long Bytes, DateTimeOffset LastAccess)> _mitInhalt = [];
 
+    /// <summary>
+    /// Warum dieser Eintrag noch aussteht -- in Worten, mit den Zahlen, die
+    /// nicht zusammenpassen.
+    /// </summary>
+    /// <remarks>
+    /// "Steht hier nicht so da" hat drei ganz verschiedene Ursachen: die
+    /// Datei fehlt, sie ist anders gross, oder sie traegt eine andere Zeit.
+    /// Die erste ist ein Rueckstand, die dritte oft nur eine eigene
+    /// Aenderung, die noch nicht heraus ist. Ohne die Unterscheidung raet
+    /// man, und ein Verdacht wie "die Datei ist gesperrt" liegt naeher als
+    /// die Wahrheit.
+    /// </remarks>
+    private static string Grund(
+        string name, long size, long modifiedS,
+        Dictionary<string, (long Size, long ModifiedS)> vorhanden, bool fehlt)
+    {
+        if (!fehlt) return $"{size} B, hier ohne Inhalt";
+
+        if (!vorhanden.TryGetValue(name, out var da)) return $"{size} B, liegt hier nicht";
+
+        if (da.Size != size) return $"hier {da.Size} B statt {size} B";
+
+        return $"{size} B, hier {Zeit(da.ModifiedS)} statt {Zeit(modifiedS)}";
+    }
+
+    private static string Zeit(long unixSekunden)
+        => DateTimeOffset.FromUnixTimeSeconds(unixSekunden).ToLocalTime().ToString("dd.MM. HH:mm:ss");
+
     private void MeasureOutstanding(Dictionary<string, (long Size, long ModifiedS)> vorhanden)
     {
         var offen = 0;
@@ -647,7 +675,7 @@ public sealed partial class ShareHost
                     offen++;
                     bytes += size;
                     if (offeneNamen.Count < 5)
-                        offeneNamen.Add($"{name} ({size} B, {(fehlt ? "steht hier nicht so da" : "ohne Inhalt")})");
+                        offeneNamen.Add($"{name} ({Grund(name, size, modifiedS, vorhanden, fehlt)})");
                 }
 
                 // Die andere Richtung: was hier liegt und noch nicht
@@ -688,7 +716,7 @@ public sealed partial class ShareHost
                     offen++;
                     bytes += eintrag.Size;
                     if (offeneNamen.Count < 5)
-                        offeneNamen.Add($"{name} ({eintrag.Size} B, nicht angekuendigt)");
+                        offeneNamen.Add($"{name}, {eintrag.Size} B: hier vorhanden, aber noch nicht angekuendigt");
                 }
             }
         }
