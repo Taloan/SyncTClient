@@ -148,28 +148,55 @@ public static class WinRtSyncRoot
             catch (Exception) { /* unbrauchbarer Pfad, dann eben nicht */ }
         }
 
-        foreach (var (id, pfad) in ListOwn().ToList())
+        var eigene = ListOwn().ToList();
+        yield return $"{eigene.Count} eigene Sync-Wurzeln angemeldet, {bekannt.Count} eingerichtet.";
+
+        foreach (var (id, pfad) in eigene)
         {
             var voll = pfad;
             try { voll = Path.TrimEndingDirectorySeparator(Path.GetFullPath(pfad)); }
             catch (Exception) { /* der Pfad ist fort; abmelden ist dann erst recht richtig */ }
 
-            if (bekannt.Contains(voll)) continue;
+            // Ein leerer Pfad heisst: der Ordner ist nicht mehr aufzuloesen.
+            // Das ist kein Zweifelsfall, sondern der Rest selbst.
+            if (voll.Length > 0 && bekannt.Contains(voll)) continue;
+
+            var wer = voll.Length > 0 ? voll : id;
 
             string? fehler = null;
             try { Unregister(id); }
             catch (Exception ex) { fehler = ex.Message; }
 
-            yield return fehler is null ? pfad : $"{pfad} -- {fehler}";
+            yield return fehler is null ? $"abgemeldet: {wer}" : $"bleibt: {wer} -- {fehler}";
         }
     }
 
     public static IEnumerable<(string Id, string Path)> ListOwn()
     {
-        foreach (var root in StorageProviderSyncRootManager.GetCurrentSyncRoots())
+        // Ein einzelner unlesbarer Eintrag darf die Liste nicht kippen.
+        //
+        // Genau die Eintraege, um die es hier geht, sind die kaputten: ihr
+        // Ordner ist fort, und "Path" ist ein StorageFolder, der dann nicht
+        // mehr aufzuloesen ist. Ein Wurf an dieser Stelle nahm alle anderen
+        // mit -- und das Aufraeumen lief ins Leere, ohne dass es jemand
+        // erfuhr.
+        IReadOnlyList<StorageProviderSyncRootInfo> roots;
+        try { roots = StorageProviderSyncRootManager.GetCurrentSyncRoots(); }
+        catch (Exception) { yield break; }
+
+        foreach (var root in roots)
         {
-            if (root.Id.StartsWith("SyncTClient!", StringComparison.Ordinal))
-                yield return (root.Id, root.Path?.Path ?? "");
+            string id;
+            try { id = root.Id; }
+            catch (Exception) { continue; }
+
+            if (!id.StartsWith("SyncTClient!", StringComparison.Ordinal)) continue;
+
+            var pfad = "";
+            try { pfad = root.Path?.Path ?? ""; }
+            catch (Exception) { /* der Ordner ist fort; die Kennung genuegt */ }
+
+            yield return (id, pfad);
         }
     }
 }
