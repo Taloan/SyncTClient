@@ -100,6 +100,23 @@ public sealed partial class ShareHost
     /// <summary>Abstand zwischen zwei Durchgaengen ueber den Ordner.</summary>
     private static readonly TimeSpan RescanInterval = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// So lange nach der eigenen Ankuendigung bleibt eine Datei liegen, bevor
+    /// sie aus einem abgewaehlten Zweig entfernt wird.
+    /// </summary>
+    /// <remarks>
+    /// Grosszuegig gewaehlt. Die Datei liegt in dieser Zeit hier und stoert
+    /// niemanden; sie zu frueh zu entfernen kostet ihren Inhalt.
+    /// </remarks>
+    private const long PruneDelayMs = 5 * 60 * 1000;
+
+    /// <summary>Wann ein Name zuletzt angekuendigt wurde.</summary>
+    /// <remarks>
+    /// Nur im Arbeitsspeicher. Nach einem Neustart gilt jede Datei als alt
+    /// genug -- die Gegenstelle hatte die ganze Zwischenzeit.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, long> _announcedAt = new(StringComparer.Ordinal);
+
     private DateTime _lastScan = DateTime.UtcNow;
 
     private FileSystemWatcher? _watcher;
@@ -680,6 +697,23 @@ public sealed partial class ShareHost
             // Auswahl kostet dann Platz und keine Daten -- und genau so ein
             // Fehler hat einmal genuegt.
             if (!MayEvict(name)) continue;
+
+            // Und die dritte: eine eben erst angekuendigte Datei bleibt
+            // liegen, bis die Gegenstelle Gelegenheit hatte, sie zu holen.
+            //
+            // Die Schwelle allein reicht dafuer nicht. Sie zaehlt Eintraege
+            // mit Blockliste, und die Gegenstelle spiegelt unsere eigene
+            // Ankuendigung samt Blockliste zurueck, lange bevor sie ein Byte
+            // geholt hat. Wer das fuer einen Besitznachweis haelt, loescht die
+            // Datei, bevor sie irgendwo ankommt.
+            //
+            // Ein besseres Merkmal gibt das Protokoll nicht her: BEP sagt dem
+            // Sender nie, dass der Empfaenger fertig ist. Also wird gewartet.
+            if (_announcedAt.TryGetValue(name, out var seit)
+                && Environment.TickCount64 - seit < PruneDelayMs)
+            {
+                continue;
+            }
 
             try
             {
@@ -1577,8 +1611,13 @@ public sealed partial class ShareHost
         }
 
         if (erreicht > 0)
+        {
+            var jetzt = Environment.TickCount64;
+            foreach (var file in batch) _announcedAt[file.Name] = jetzt;
+
             _log($"[{FolderId}] {batch.Count} Aenderungen angekuendigt, Sequenz bis {last} " +
                  $"({erreicht} Gegenstelle(n)).");
+        }
 
         batch.Clear();
     }
