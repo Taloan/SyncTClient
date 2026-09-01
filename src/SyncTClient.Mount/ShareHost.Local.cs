@@ -1652,7 +1652,35 @@ public sealed partial class ShareHost
                 DropConnection(device);
                 LineLost?.Invoke(device);
 
-                _log($"[{FolderId}] Ankuendigung fehlgeschlagen, Verbindung verworfen: {ex.Message}");
+                // Und die Dateien zurueck in die Vermerke.
+                //
+                // Der eigene Eintrag steht zu diesem Zeitpunkt schon auf
+                // "angekuendigt" -- Evaluate schreibt ihn, bevor gesendet
+                // wird, damit eine vergebene Sequenznummer nicht verlorengeht.
+                // Scheitert das Senden, gilt die Datei damit als erledigt,
+                // und der Vorfilter uebergeht sie fortan: Groesse und Zeit
+                // passen ja zum eigenen Eintrag. Sie waere nie wieder
+                // angekuendigt worden.
+                foreach (var eintrag in batch)
+                {
+                    if (eintrag.Deleted)
+                    {
+                        _removed[eintrag.Name] = 0;
+                        continue;
+                    }
+
+                    _dirty[eintrag.Name] = 0;
+
+                    // Ohne dies faellt sie beim naechsten Mal durch den
+                    // Vorfilter: an der Datei hat sich nichts geaendert, nur
+                    // das Wissen der Gegenstelle ueber sie.
+                    _force[eintrag.Name] = 0;
+                }
+
+                Wake();
+
+                _log($"[{FolderId}] Ankuendigung fehlgeschlagen, Verbindung verworfen, " +
+                     $"{batch.Count} Dateien erneut vorgemerkt: {ex.Message}");
             }
         }
 
