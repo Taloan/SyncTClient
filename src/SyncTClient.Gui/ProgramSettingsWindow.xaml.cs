@@ -153,6 +153,74 @@ public partial class ProgramSettingsWindow : Window
 
     private void OnBrowseHome(object sender, RoutedEventArgs e) => Browse(HomeBox);
 
+    /// <summary>
+    /// Loest die Platzhalter eines beliebigen Ordners auf.
+    /// </summary>
+    /// <remarks>
+    /// Fuer einen Ordner, der nach einer geloesten Bindung liegenblieb. Ein
+    /// Platzhalter ohne angemeldete Wurzel ist fuer Windows kaputt: es findet
+    /// den Anbieter nicht mehr und meldet beim Lesen wie beim Loeschen "Die
+    /// Clouddatei-Metadaten sind beschaedigt und nicht lesbar".
+    ///
+    /// Geloescht wird nichts. Eine geholte Datei behaelt ihren Inhalt, ein
+    /// leerer Platzhalter wird eine leere Datei -- seine Bytes lagen ohnehin
+    /// nie hier. Danach ist es ein gewoehnlicher Ordner, den man behalten
+    /// oder entfernen kann.
+    /// </remarks>
+    private async void OnRevertPlaceholders(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog { Multiselect = false };
+        if (dialog.ShowDialog(this) != true) return;
+
+        var ordner = dialog.FolderName;
+
+        // Ein laufender Ordner darf so nicht angefasst werden: seine Wurzel
+        // ist angemeldet, und die Platzhalter sind dort kein Rest, sondern
+        // der Betriebszustand.
+        if (_config.Shares.Any(s => Unterhalb(ordner, s.LocalPath)))
+        {
+            RevertText.Text = App.S("S.Settings.RevertInUse");
+            return;
+        }
+
+        if (MessageBox.Show(this,
+                App.S("S.Settings.RevertAsk", ordner), App.S("S.Settings.Revert"),
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        RevertButton.IsEnabled = false;
+        RevertText.Text = App.S("S.Settings.RevertRunning");
+
+        try
+        {
+            var anzahl = await Task.Run(() => CloudFilterMount.RevertPlaceholdersIn(ordner));
+            RevertText.Text = App.S("S.Settings.RevertDone", Format.Count(anzahl));
+        }
+        catch (Exception ex)
+        {
+            RevertText.Text = ex.Message;
+        }
+        finally
+        {
+            RevertButton.IsEnabled = true;
+        }
+    }
+
+    /// <summary>Liegt der eine Pfad im anderen oder ist er derselbe?</summary>
+    private static bool Unterhalb(string pfad, string wurzel)
+    {
+        if (string.IsNullOrWhiteSpace(wurzel)) return false;
+
+        var a = Path.TrimEndingDirectorySeparator(Path.GetFullPath(pfad));
+        var b = Path.TrimEndingDirectorySeparator(Path.GetFullPath(wurzel));
+
+        return a.Equals(b, StringComparison.OrdinalIgnoreCase)
+               || a.StartsWith(b + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+               || b.StartsWith(a + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     private void Browse(TextBox box)
     {
