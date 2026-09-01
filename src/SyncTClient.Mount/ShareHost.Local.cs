@@ -569,6 +569,15 @@ public sealed partial class ShareHost
                         continue;
                     }
 
+                    // Und zur Bewertung vormerken. Der Durchgang ueber den
+                    // Ordner uebergeht Platzhalter -- sie halten keinen Inhalt,
+                    // also gibt es normalerweise nichts anzukuendigen. Ein
+                    // hierher verschobener Platzhalter ist die Ausnahme: seine
+                    // Blockliste steht unter dem alten Namen, und den nennt
+                    // seine Identitaet. Ohne diesen Vermerk kaeme er nie zur
+                    // Bewertung und bliebe fuer immer offen.
+                    _dirty[name] = 0;
+
                     offen++;
                     bytes += eintrag.Size;
                 }
