@@ -1552,7 +1552,11 @@ public partial class MainWindow : Window
         var share = _row?.Share?.Config;
         if (share is null) { Status(App.S("M.NoShareSelected")); return; }
 
-        var dialog = new ShareSettingsWindow(share, _config.Peers, HomeDirectory, _row!.Name) { Owner = this };
+        var dialog = new ShareSettingsWindow(
+            share, _config.Peers, HomeDirectory, _row!.Name,
+            id => _peers.FirstOrDefault(p =>
+                p.Config.DeviceId.Equals(id, StringComparison.OrdinalIgnoreCase))?.Host.ReportedName)
+        { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         Persist();
