@@ -31,6 +31,9 @@ public sealed class CloudFilterMount : IDisposable
     /// <summary>Und die aelteste. Windows setzt sie zusaetzlich.</summary>
     private const uint FileAttributeOffline = 0x1000;
 
+    /// <summary>Ein Wiederherstellungspunkt. Jeder Platzhalter traegt einen.</summary>
+    private const uint ReparsePoint = 0x400;
+
     private static readonly uint TransferDataParamSize = ComputeTransferDataParamSize();
 
     private readonly string _rootPath;
@@ -232,8 +235,11 @@ public sealed class CloudFilterMount : IDisposable
     /// </remarks>
     public int RevertPlaceholders()
     {
-        var aufgeloest = RevertPlaceholdersIn(_rootPath);
+        var (_, aufgeloest, fehler) = RevertPlaceholdersIn(_rootPath);
+
         if (aufgeloest > 0) _log?.Invoke($"{aufgeloest} Platzhalter aufgeloest.");
+        if (fehler is not null) _log?.Invoke($"Platzhalter aufloesen: {fehler}");
+
         return aufgeloest;
     }
 
@@ -245,9 +251,9 @@ public sealed class CloudFilterMount : IDisposable
     /// dieses Aufloesen geloest wurde. Ein solcher Ordner laesst sich sonst
     /// nicht einmal von Hand entfernen.
     /// </remarks>
-    public static unsafe int RevertPlaceholdersIn(string root)
+    public static unsafe (int Geprueft, int Aufgeloest, string? Fehler) RevertPlaceholdersIn(string root)
     {
-        if (!Directory.Exists(root)) return 0;
+        if (!Directory.Exists(root)) return (0, 0, "Der Ordner besteht nicht.");
 
         var options = new EnumerationOptions
         {
@@ -256,40 +262,80 @@ public sealed class CloudFilterMount : IDisposable
             AttributesToSkip = 0
         };
 
+        var geprueft = 0;
         var aufgeloest = 0;
+        string? fehler = null;
 
-        foreach (var info in new DirectoryInfo(root).EnumerateFiles("*", options))
+        // Von unten nach oben, und der Ordner selbst zuletzt.
+        //
+        // Auch ein Verzeichnis kann ein Platzhalter sein -- der Ordner, den
+        // Windows nicht loeschen wollte, war genau das. Ein aufgeloestes
+        // Elternverzeichnis vor seinen Kindern waere unnoetig riskant: erst
+        // raeumen, dann die Klammer darum.
+        var eintraege = new List<System.IO.FileSystemInfo>();
+
+        try
         {
-            var attribute = (uint)info.Attributes;
+            eintraege.AddRange(new DirectoryInfo(root).EnumerateFileSystemInfos("*", options));
+        }
+        catch (Exception ex)
+        {
+            fehler = ex.Message;
+        }
 
-            // Nur Platzhalter. Eine gewoehnliche Datei hat nichts aufzuloesen,
-            // und ein Handle darauf zu oeffnen kostet ohne Gewinn.
+        eintraege.Sort((a, b) => b.FullName.Length.CompareTo(a.FullName.Length));
+        eintraege.Add(new DirectoryInfo(root));
+
+        foreach (var info in eintraege)
+        {
+            uint attribute;
+            try { attribute = (uint)info.Attributes; }
+            catch (Exception ex) { fehler ??= ex.Message; continue; }
+
+            // Nur Platzhalter. Der Wiederherstellungspunkt allein genuegt als
+            // Merkmal: eine Datei, deren Inhalt hier liegt und die trotzdem
+            // zum Anbieter gehoert, traegt keines der anderen Attribute mehr.
             if ((attribute & (FileAttributeRecallOnDataAccess
                               | FileAttributeRecallOnOpen
-                              | FileAttributeOffline)) == 0
-                && (attribute & 0x400) == 0)
+                              | FileAttributeOffline
+                              | ReparsePoint)) == 0)
             {
                 continue;
             }
 
-            try
-            {
-                using var handle = File.OpenHandle(
-                    info.FullName, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            geprueft++;
 
-                var result = PInvoke.CfRevertPlaceholder(
-                    handle, CF_REVERT_FLAGS.CF_REVERT_FLAG_NONE, null);
+            // Ein Verzeichnis laesst sich nur mit FILE_FLAG_BACKUP_SEMANTICS
+            // oeffnen; File.OpenHandle kennt die Fahne nicht. Und ohne
+            // OPEN_NO_RECALL wuerde das Oeffnen selbst versuchen, den Inhalt
+            // zu holen -- bei einer Wurzel, die es nicht mehr gibt, ist das
+            // genau der Fehler, den wir beheben wollen.
+            using var handle = PInvoke.CreateFile(
+                info.FullName,
+                (uint)(FILE_ACCESS_RIGHTS.FILE_READ_ATTRIBUTES | FILE_ACCESS_RIGHTS.FILE_WRITE_ATTRIBUTES
+                       | FILE_ACCESS_RIGHTS.FILE_READ_DATA | FILE_ACCESS_RIGHTS.FILE_WRITE_DATA),
+                FILE_SHARE_MODE.FILE_SHARE_READ | FILE_SHARE_MODE.FILE_SHARE_WRITE
+                    | FILE_SHARE_MODE.FILE_SHARE_DELETE,
+                null,
+                FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+                FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OPEN_NO_RECALL
+                    | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
+                null);
 
-                if (result.Succeeded) aufgeloest++;
-            }
-            catch (Exception)
+            if (handle.IsInvalid)
             {
-                // Gesperrt, verschwunden, kein Zugriff. Kein Grund, das
-                // Abmelden der Wurzel aufzuhalten.
+                fehler ??= $"\"{info.Name}\": 0x{(uint)Marshal.GetLastWin32Error():X8}";
+                continue;
             }
+
+            var result = PInvoke.CfRevertPlaceholder(
+                handle, CF_REVERT_FLAGS.CF_REVERT_FLAG_NONE, null);
+
+            if (result.Succeeded) aufgeloest++;
+            else fehler ??= $"\"{info.Name}\": 0x{(uint)result.Value:X8}";
         }
 
-        return aufgeloest;
+        return (geprueft, aufgeloest, fehler);
     }
 
     public void ProjectPlaceholders(Action<int, int>? progress = null)

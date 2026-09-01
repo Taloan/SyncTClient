@@ -116,7 +116,8 @@
   <s:String x:Key="S.Settings.Revert">Platzhalter in einem Ordner auflösen …</s:String>
   <s:String x:Key="S.Settings.RevertAsk">Alle Platzhalter unterhalb von „{0}“ auflösen?&#10;&#10;Geholte Dateien behalten ihren Inhalt. Ein leerer Platzhalter wird eine leere Datei — seine Bytes lagen ohnehin nie hier. Gelöscht wird nichts.</s:String>
   <s:String x:Key="S.Settings.RevertRunning">Wird aufgelöst …</s:String>
-  <s:String x:Key="S.Settings.RevertDone">{0} Platzhalter aufgelöst. Der Ordner lässt sich jetzt wie jeder andere behandeln.</s:String>
+  <s:String x:Key="S.Settings.RevertDone">{1} Platzhalter gefunden, {0} aufgelöst.</s:String>
+  <s:String x:Key="S.Settings.RevertFailed">Nicht alle ließen sich auflösen: {0}</s:String>
   <s:String x:Key="S.Settings.RevertInUse">Dieser Ordner gehört zu einer eingerichteten Freigabe. Dort sind Platzhalter kein Rest, sondern der Betriebszustand.</s:String>
   <s:String x:Key="S.Settings.DataGroup">DATEN</s:String>
   <s:String x:Key="S.Settings.DataDir">Datenverzeichnis</s:String>
