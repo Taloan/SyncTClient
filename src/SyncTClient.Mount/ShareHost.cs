@@ -1466,7 +1466,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         using var hold = HoldHydration(relativePath);
 
         // Ab hier steht der Auftrag in der Warteschlange, bis ein Platz frei wird.
+        var angestellt = Environment.TickCount64;
         await _hydrationGate.WaitAsync(ct).ConfigureAwait(false);
+
+        var gewartet = Environment.TickCount64 - angestellt;
+        if (gewartet > 2000)
+            _log($"[{FolderId}] \"{relativePath}\" wartete {gewartet} ms auf einen Platz.");
         try
         {
             transfer.State = TransferState.Laeuft;
