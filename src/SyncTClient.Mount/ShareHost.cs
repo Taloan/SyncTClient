@@ -1030,6 +1030,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             _cache?.NoteContent(name, file.Size);
             _cache?.MarkInSync(name);
 
+            // In den eigenen Bestand aufnehmen -- als Fassung der
+            // Gegenstelle, denn von dort kommt sie.
+            //
+            // Ohne diesen Eintrag haelt der naechste Durchgang jede eben
+            // geschriebene Datei fuer eine fremde Aenderung: er kennt sie
+            // nicht, rechnet ihre Blockliste und vergleicht. Bei 972 Dateien
+            // sind das 335 MB, die noch einmal von der Platte gelesen werden,
+            // nur um festzustellen, was wir gerade selbst geschrieben haben.
+            //
+            // Die Sequenznummer bleibt null: angekuendigt haben wir diese
+            // Fassung nie, und im Index darf die Null nicht stehen.
+            var uebernommen = file.Clone();
+            uebernommen.Sequence = 0;
+            Store(uebernommen, StateClean);
+
             transfer.State = TransferState.Fertig;
         }
         catch (Exception ex)
