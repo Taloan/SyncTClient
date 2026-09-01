@@ -376,4 +376,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Peer.SharedFoldersHint">Ticked is what this device takes part in. The same setting appears in the folder under “Sharing” — per device here, per folder there.</s:String>
   <s:String x:Key="S.Peer.NoShares">No folders set up yet.</s:String>
   <s:String x:Key="M.AlreadyRunning">SyncTClient is already running.&#10;&#10;A second client would take the same port and the same device ID; the remote device would drop one of the two connections. The running window is in the notification area next to the clock.</s:String>
+  <s:String x:Key="S.Main.Outgoing">↑ OUT</s:String>
+  <s:String x:Key="S.Main.Incoming">↓ IN</s:String>
 </ResourceDictionary>

@@ -22,7 +22,16 @@ public partial class MainWindow : Window
     private const int Buckets = 120;
 
     private readonly string _configPath;
-    private readonly ObservableCollection<TransferInfo> _transfers = [];
+    /// <summary>
+    /// Was hinausgeht und was hereinkommt, getrennt gefuehrt.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Listen und nicht eine mit Filter: die Anzeige stellt sie
+    /// nebeneinander, und zwei Sichten auf dieselbe Sammlung waeren derselbe
+    /// Aufwand mit einer Umleitung mehr.
+    /// </remarks>
+    private readonly ObservableCollection<TransferInfo> _outgoing = [];
+    private readonly ObservableCollection<TransferInfo> _incoming = [];
     private readonly ObservableCollection<PeerItem> _peers = [];
     private readonly ObservableCollection<ShareRow> _rows = [];
     private readonly DispatcherTimer _refresh = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -93,7 +102,8 @@ public partial class MainWindow : Window
         // Oberflaechen-Thread.
         TransferInfo.UiContext = SynchronizationContext.Current;
 
-        TransferList.ItemsSource = _transfers;
+        UploadList.ItemsSource = _outgoing;
+        DownloadList.ItemsSource = _incoming;
         ShareGrid.ItemsSource = _rows;
         CacheList.ItemsSource = _cacheRows;
 
@@ -603,7 +613,7 @@ public partial class MainWindow : Window
         if (uebernommen.Count > 0 && uebernommen.All(r => r.Share!.State == ShareState.Pausiert))
             return TrayStatus.Pausiert;
 
-        if (uebernommen.Any(r => r.Busy) || _transfers.Any(t => t.State == TransferState.Laeuft))
+        if (uebernommen.Any(r => r.Busy) || Laufend().Any(t => t.State == TransferState.Laeuft))
             return TrayStatus.Synchronisiert;
 
         return TrayStatus.Erledigt;
@@ -1782,7 +1792,7 @@ public partial class MainWindow : Window
     private void ZustandZeigen()
     {
         _status ??= new StatusWindow(
-            _rows, _transfers,
+            _rows, _outgoing, _incoming,
             () => App.S(Zustand() switch
             {
                 TrayStatus.Synchronisiert => "S.Tray.Syncing",
@@ -1838,27 +1848,43 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------ Anzeige
 
+    /// <summary>Beide Richtungen zusammen, fuer die Zaehlungen.</summary>
+    private IEnumerable<TransferInfo> Laufend() => _outgoing.Concat(_incoming);
+
     private void AddTransfer(TransferInfo transfer)
     {
-        _transfers.Insert(0, transfer);
+        var liste = transfer.Direction == TransferDirection.Hinaus ? _outgoing : _incoming;
+        liste.Insert(0, transfer);
         TrimTransfers();
     }
 
     private void TrimTransfers()
     {
-        // Laufende bleiben, von den abgeschlossenen nur die letzten paar.
-        foreach (var stale in _transfers
-                     .Where(t => t.State is TransferState.Fertig or TransferState.Fehler)
-                     .Skip(KeepFinished).ToList())
-        {
-            _transfers.Remove(stale);
-        }
+        Kuerzen(_outgoing);
+        Kuerzen(_incoming);
 
-        var running = _transfers.Count(t => t.State == TransferState.Laeuft);
-        var waiting = _transfers.Count(t => t.State == TransferState.Wartet);
+        var running = Laufend().Count(t => t.State == TransferState.Laeuft);
+        var waiting = Laufend().Count(t => t.State == TransferState.Wartet);
+        // Der Hinweis liegt hinter den Listen und ist nur zu sehen, solange
+        // sie leer sind. Ueber ihnen naehme er dauerhaft eine Zeile weg.
+        QueueText.Visibility = _outgoing.Count + _incoming.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
         QueueText.Text = running + waiting == 0
             ? "nichts unterwegs"
             : $"{running} aktiv, {waiting} in der Warteschlange";
+    }
+
+    /// <summary>Laufende bleiben, von den abgeschlossenen nur die letzten paar.</summary>
+    private static void Kuerzen(ObservableCollection<TransferInfo> liste)
+    {
+        foreach (var stale in liste
+                     .Where(t => t.State is TransferState.Fertig or TransferState.Fehler)
+                     .Skip(KeepFinished).ToList())
+        {
+            liste.Remove(stale);
+        }
     }
 
     private void UpdateButtons()
