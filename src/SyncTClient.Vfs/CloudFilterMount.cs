@@ -25,6 +25,12 @@ public sealed class CloudFilterMount : IDisposable
     /// <summary>FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS.</summary>
     private const uint FileAttributeRecallOnDataAccess = 0x0040_0000;
 
+    /// <summary>Dieselbe Aussage, aeltere Schreibweise: der Inhalt liegt nicht hier.</summary>
+    private const uint FileAttributeRecallOnOpen = 0x0004_0000;
+
+    /// <summary>Und die aelteste. Windows setzt sie zusaetzlich.</summary>
+    private const uint FileAttributeOffline = 0x1000;
+
     private static readonly uint TransferDataParamSize = ComputeTransferDataParamSize();
 
     private readonly string _rootPath;
@@ -165,7 +171,23 @@ public sealed class CloudFilterMount : IDisposable
     /// Freigaben dauert dieser Lauf lange. Ohne Rueckmeldung wirkt das Fenster
     /// waehrenddessen wie abgestuerzt.
     /// </param>
-    /// <summary>Liegt diese Datei bereits in genau dieser Fassung?</summary>
+    /// <summary>Darf diese Datei so bleiben, wie sie dasteht?</summary>
+    /// <remarks>
+    /// Eine Datei mit Inhalt bleibt immer -- auch dann, wenn Groesse oder
+    /// Zeit von dem abweichen, was die Gegenstelle fuehrt.
+    ///
+    /// Das war einmal anders gedacht: wer abweicht, bekommt seinen
+    /// Platzhalter und wird danach als Konflikt oder als Aenderung
+    /// behandelt. Danach gibt es aber nichts mehr zu behandeln.
+    /// CfCreatePlaceholders prueft nicht, ob dort eine gewoehnliche Datei
+    /// liegt -- es legt an, und der vorhandene Inhalt ist fort. Eine
+    /// abweichende Datei ist entweder eine eigene Aenderung oder ein
+    /// Konflikt, und beides braucht ihre Bytes, um entschieden zu werden.
+    ///
+    /// Fuer einen leeren Platzhalter gilt die alte Regel weiter: er haelt
+    /// nichts, das verloren gehen koennte, und darf mit den richtigen
+    /// Angaben neu angelegt werden.
+    /// </remarks>
     private bool StehtSchonDa(VirtualEntry entry)
     {
         try
@@ -173,8 +195,14 @@ public sealed class CloudFilterMount : IDisposable
             var info = new FileInfo(Path.Combine(
                 _rootPath, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar)));
 
-            return info.Exists
-                   && info.Length == entry.Size
+            if (!info.Exists) return false;
+
+            var leer = ((uint)info.Attributes & (FileAttributeRecallOnDataAccess
+                                                 | FileAttributeRecallOnOpen
+                                                 | FileAttributeOffline)) != 0;
+            if (!leer) return true;
+
+            return info.Length == entry.Size
                    && new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds()
                       == entry.LastWrite.ToUnixTimeSeconds();
         }
