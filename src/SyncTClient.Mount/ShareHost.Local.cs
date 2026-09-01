@@ -565,7 +565,25 @@ public sealed partial class ShareHost
                     //
                     // Was hier faelschlich liegt, meldet das Entfernen. Der
                     // Abgleich hat damit nichts zu tun.
-                    if (!_config.Includes(name)) continue;
+                    // Ausserhalb der Auswahl ist die Abwesenheit der
+                    // erwuenschte Zustand. Offen ist ein solcher Eintrag nur,
+                    // solange wir seinen Inhalt halten und er noch hinaus
+                    // muss: erst hochladen, dann hier entfernen.
+                    //
+                    // Ein Platzhalter zaehlt dabei nicht. Er haelt nichts,
+                    // hat nichts hinauszugeben und verschwindet beim naechsten
+                    // Entfernen von selbst.
+                    if (!_config.Includes(name))
+                    {
+                        if (!_mitInhalt.ContainsKey(name)) continue;
+
+                        offen++;
+                        bytes += size;
+                        vereint++;
+                        vereintBytes += size;
+                        continue;
+                    }
+
 
                     bekannt.Add(name);
                     gesamt++;
@@ -759,11 +777,22 @@ public sealed partial class ShareHost
             if (NameOf(info.FullName) is not { } name) continue;
             if (_config.Includes(name)) continue;
 
+            // Ein Platzhalter haelt keinen Inhalt. Ihn zu entfernen kann
+            // nichts kosten, und die Pruefungen darunter schuetzen Inhalt --
+            // nicht Namen.
+            //
+            // Ohne diese Ausnahme blieb ein abgewaehlter Zweig fuer immer
+            // stehen, sobald die Gegenstelle seine Dateien auch nicht fuehrt:
+            // hochladen unmoeglich, weil wir die Bytes nicht haben, entfernen
+            // verboten, weil niemand sie hat. Ein Name ohne Inhalt, den
+            // niemand loswird.
+            var leer = ((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0;
+
             // Die zweite Sperre, unabhaengig von der Oberflaeche: entfernt wird
             // nur, was die Platzhalter-Schwelle erreicht hat. Ein Fehler in der
             // Auswahl kostet dann Platz und keine Daten -- und genau so ein
             // Fehler hat einmal genuegt.
-            if (!MayEvict(name)) { geblieben.Add(name); continue; }
+            if (!leer && !MayEvict(name)) { geblieben.Add(name); continue; }
 
             // Und nur, was in genau dieser Fassung angekuendigt ist.
             //
@@ -771,10 +800,10 @@ public sealed partial class ShareHost
             // fuehrt -- nicht, ob sie diesen Inhalt fuehrt. Wer sich darauf
             // verlaesst, loescht eine lokale Aenderung, die noch niemand
             // gesehen hat, weil zufaellig derselbe Name drueben liegt.
-            if (!Angekuendigt(name, info)) { geblieben.Add(name); continue; }
+            if (!leer && !Angekuendigt(name, info)) { geblieben.Add(name); continue; }
 
             // Und der Beweis dafuer, gerechnet und nicht geschaetzt.
-            if (!InhaltStimmt(name, info)) { geblieben.Add(name); continue; }
+            if (!leer && !InhaltStimmt(name, info)) { geblieben.Add(name); continue; }
 
             // Und die dritte: eine eben erst angekuendigte Datei bleibt
             // liegen, bis die Gegenstelle Gelegenheit hatte, sie zu holen.
