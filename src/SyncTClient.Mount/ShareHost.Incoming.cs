@@ -479,11 +479,21 @@ public sealed partial class ShareHost
             var target = LocalPathOf($"{VersionsFolder}/{stem}~{stamp}{extension}");
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
-            // Zweimal dieselbe Sekunde ist moeglich. Die aeltere Ablage bleibt.
+            // Zweimal dieselbe Sekunde ist moeglich. Dann bekommt die zweite
+            // Ablage eine laufende Nummer.
+            //
+            // Vorher wurde in diesem Fall die Datei geloescht, statt sie zu
+            // sichern -- in einer Methode, deren einziger Zweck das Sichern
+            // ist. Zwei Aenderungen innerhalb einer Sekunde sind selten, und
+            // genau deshalb faellt so etwas nie auf.
+            for (var nummer = 1; File.Exists(target) && nummer < 1000; nummer++)
+                target = LocalPathOf($"{VersionsFolder}/{stem}~{stamp}-{nummer}{extension}");
+
             if (File.Exists(target))
             {
-                File.Delete(path);
-                return true;
+                _log($"[{FolderId}] \"{name}\" liess sich nicht sichern: " +
+                     "zu viele Ablagen aus derselben Sekunde.");
+                return false;
             }
 
             File.Move(path, target);
