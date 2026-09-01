@@ -92,6 +92,7 @@ public partial class MainWindow : Window
     private MenuItem _menuSettings = new();
     private MenuItem _menuUnbind = new();
     private MenuItem _menuRescan = new();
+    private MenuItem _menuRebuild = new();
     private MenuItem _menuResync = new();
 
     public MainWindow()
@@ -839,6 +840,7 @@ public partial class MainWindow : Window
         _menuSettings = Eintrag("S.Menu.Settings", OnShowSettings);
         _menuUnbind = Eintrag("S.Menu.Unbind", OnUnbind);
         _menuRescan = Eintrag("S.Menu.Rescan", OnRescan);
+        _menuRebuild = Eintrag("S.Menu.Rebuild", OnRebuild);
         _menuResync = Eintrag("S.Menu.Resync", OnResync);
 
         var menu = new ContextMenu();
@@ -849,6 +851,7 @@ public partial class MainWindow : Window
         menu.Items.Add(_menuSettings);
         menu.Items.Add(new Separator());
         menu.Items.Add(_menuRescan);
+        menu.Items.Add(_menuRebuild);
         menu.Items.Add(_menuResync);
         menu.Items.Add(new Separator());
         menu.Items.Add(_menuUnbind);
@@ -883,6 +886,18 @@ public partial class MainWindow : Window
     /// wechselt. Bleibt ein Bestand aus anderem Grund stehen, ist das der
     /// einzige Weg heraus -- deshalb mit Rueckfrage, aber ohne Umschweife.
     /// </remarks>
+    /// <summary>
+    /// Rechnet die Blocklisten neu, statt sich auf Groesse und Zeit zu
+    /// verlassen.
+    /// </summary>
+    private void OnRebuild(object sender, RoutedEventArgs e)
+    {
+        if (_row?.Share is not { } share) return;
+
+        var anzahl = share.RebuildIndex();
+        Status(App.S("M.Rebuilding", _row.Name, Format.Count(anzahl)));
+    }
+
     private async void OnResync(object sender, RoutedEventArgs e)
     {
         if (_row?.Share is not { } share) return;
@@ -1907,6 +1922,7 @@ public partial class MainWindow : Window
         _menuConnect.IsEnabled = connected && _row is { Accepted: false, Configured: false };
         _menuUnbind.IsEnabled = _row is { Configured: true };
         _menuRescan.IsEnabled = _row is { Accepted: true };
+        _menuRebuild.IsEnabled = _row is { Accepted: true };
         _menuResync.IsEnabled = _row is { Accepted: true } && connected;
         _menuSettings.IsEnabled = _row is { Configured: true };
         _menuOpen.IsEnabled = _row is { Configured: true };
