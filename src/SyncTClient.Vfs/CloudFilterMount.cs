@@ -254,7 +254,12 @@ public sealed class CloudFilterMount : IDisposable
     /// Liefert <c>null</c>, wenn die Datei kein Platzhalter ist oder sich
     /// nicht lesen laesst.
     /// </remarks>
-    public static unsafe string? OriginalName(string fullPath)
+    /// <param name="log">
+    /// Bekommt den Grund, wenn es nicht geht. Ohne ihn ist ein leeres Ergebnis
+    /// nicht von "kein Platzhalter" zu unterscheiden, und man sucht den Fehler
+    /// an der falschen Stelle.
+    /// </param>
+    public static unsafe string? OriginalName(string fullPath, Action<string>? log = null)
     {
         try
         {
@@ -273,7 +278,12 @@ public sealed class CloudFilterMount : IDisposable
                     | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
                 null);
 
-            if (handle.IsInvalid) return null;
+            if (handle.IsInvalid)
+            {
+                log?.Invoke($"Identitaet von \"{fullPath}\": nicht zu oeffnen " +
+                            $"(Win32 {Marshal.GetLastWin32Error()}).");
+                return null;
+            }
 
             // Der Puffer traegt die Struktur und dahinter die Identitaet. Ein
             // Pfad ist kuerzer als tausend Zeichen; mehr gibt Windows nicht her.
@@ -287,10 +297,20 @@ public sealed class CloudFilterMount : IDisposable
                     handle, CF_PLACEHOLDER_INFO_CLASS.CF_PLACEHOLDER_INFO_STANDARD,
                     zeiger, (uint)groesse, &gelesen);
 
-                if (result.Failed) return null;
+                if (result.Failed)
+                {
+                    log?.Invoke($"Identitaet von \"{fullPath}\": " +
+                                $"CfGetPlaceholderInfo 0x{(uint)result.Value:X8}.");
+                    return null;
+                }
 
                 var info = (CF_PLACEHOLDER_STANDARD_INFO*)zeiger;
-                if (info->FileIdentityLength == 0) return null;
+
+                if (info->FileIdentityLength == 0)
+                {
+                    log?.Invoke($"Identitaet von \"{fullPath}\": leer.");
+                    return null;
+                }
 
                 // Die Identitaet steht hinter der Struktur, als Feld
                 // veraenderlicher Laenge. Gebraucht wird ihre Adresse.
@@ -303,6 +323,7 @@ public sealed class CloudFilterMount : IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            log?.Invoke($"Identitaet von \"{fullPath}\": {ex.Message}");
             return null;
         }
     }

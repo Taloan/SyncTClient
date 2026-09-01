@@ -1002,11 +1002,11 @@ public sealed partial class ShareHost
             // etwa weil das Verschieben in einer frueheren Sitzung geschah --,
             // steht der urspruengliche Name in der Datei selbst.
             if (!_renamedFrom.TryRemove(name, out var vorher))
-                vorher = CloudFilterMount.OriginalName(path);
+                vorher = CloudFilterMount.OriginalName(path, Einmal(name));
 
-            return vorher is not null && vorher != name
-                ? EvaluateMoved(name, announced, vorher, info)
-                : Done(name);
+            if (vorher is null || vorher == name) return Done(name);
+
+            return EvaluateMoved(name, announced, vorher, info);
         }
 
         var length = info.Length;
@@ -1213,8 +1213,20 @@ public sealed partial class ShareHost
         if (AnnouncedName(vorher) is not { } alt) return Done(name);
 
         var quelle = LocalCopy(alt) ?? PeerCopy(alt);
-        if (quelle is null || quelle.Deleted || quelle.Size != info.Length || quelle.Blocks.Count == 0)
+
+        if (quelle is null)
+        {
+            Einmal(name)($"[{FolderId}] \"{name}\" kam von \"{alt}\" -- dazu ist nichts bekannt.");
             return Done(name);
+        }
+
+        if (quelle.Deleted || quelle.Size != info.Length || quelle.Blocks.Count == 0)
+        {
+            Einmal(name)($"[{FolderId}] \"{name}\" kam von \"{alt}\", passt aber nicht: " +
+                         $"{quelle.Size} statt {info.Length} Bytes, {quelle.Blocks.Count} Bloecke" +
+                         (quelle.Deleted ? ", geloescht" : "") + ".");
+            return Done(name);
+        }
 
         var modifiedUtc = info.LastWriteTimeUtc;
 
@@ -1246,6 +1258,17 @@ public sealed partial class ShareHost
 
         return file;
     }
+
+    /// <summary>
+    /// Ein Meldeweg, der je Name nur einmal schreibt.
+    /// </summary>
+    /// <remarks>
+    /// Die Bewertung laeuft jede Minute ueber dieselben Namen. Ein Grund, der
+    /// sich nicht aendert, gehoert einmal ins Protokoll und nicht sechzigmal
+    /// je Stunde.
+    /// </remarks>
+    private Action<string> Einmal(string name)
+        => text => { if (_warned.TryAdd(name, 0)) _log(text); };
 
     /// <summary>Nichts zu tun: Fehlversuche vergessen und <c>null</c> liefern.</summary>
     private BepFileInfo? Done(string name)
