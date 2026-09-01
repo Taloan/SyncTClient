@@ -527,6 +527,11 @@ public sealed partial class ShareHost
         long bytes = 0;
         var wartend = 0;
         long wartendBytes = 0;
+
+        // Die ersten paar Namen. Eine Zahl allein laesst raten, welche Dateien
+        // gemeint sind -- und bei zwei Ordnern mit derselben Groesse raet man
+        // falsch.
+        var wartendeNamen = new List<string>();
         var gesamt = 0;
         long gesamtBytes = 0;
         var vereint = 0;
@@ -597,6 +602,7 @@ public sealed partial class ShareHost
                     {
                         wartend++;
                         wartendBytes += size;
+                        if (wartendeNamen.Count < 5) wartendeNamen.Add(name);
                         continue;
                     }
 
@@ -668,6 +674,13 @@ public sealed partial class ShareHost
         IndexTotalBytes = gesamtBytes;
         SyncTotal = vereint;
         SyncTotalBytes = vereintBytes;
+        // Nur wenn sich die Menge geaendert hat. Sie aendert sich selten und
+        // steht sonst in jeder Minute noch einmal da.
+        if (wartend != Awaiting && wartend > 0)
+            _log($"[{FolderId}] wartet auf die Gegenstelle: " +
+                 string.Join(", ", wartendeNamen.Select(n => $"\"{n}\"")) +
+                 (wartend > wartendeNamen.Count ? $" und {wartend - wartendeNamen.Count} weitere" : "") + ".");
+
         Outstanding = offen;
         OutstandingBytes = bytes;
         Awaiting = wartend;
