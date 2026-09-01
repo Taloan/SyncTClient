@@ -1,4 +1,4 @@
-using System.Security.Principal;
+﻿using System.Security.Principal;
 using Windows.Security.Cryptography;
 using Windows.Storage;
 using Windows.Storage.Provider;
@@ -59,7 +59,14 @@ public static class WinRtSyncRoot
             InSyncPolicy = StorageProviderInSyncPolicy.FileLastWriteTime,
             HardlinkPolicy = StorageProviderHardlinkPolicy.None,
 
-            ShowSiblingsAsGroup = false,
+            // Ein Knoten im Navigationsbereich statt einer Zeile je Ordner.
+            //
+            // Windows gruppiert die Wurzeln desselben Anbieters -- das ist der
+            // Teil der Kennung vor dem ersten Ausrufezeichen -- unter einem
+            // gemeinsamen Eintrag. Ohne das stand jede Freigabe einzeln neben
+            // "Dieser PC", und bei einer Handvoll Ordnern war der Baum nicht
+            // mehr zu lesen.
+            ShowSiblingsAsGroup = true,
             // Context ist Pflicht und darf nicht leer sein.
             Context = CryptographicBuffer.ConvertStringToBinary(
                 full, BinaryStringEncoding.Utf8)
@@ -76,6 +83,51 @@ public static class WinRtSyncRoot
     /// Alle von diesem Programm angemeldeten Roots. Wird zum Aufraeumen
     /// gebraucht.
     /// </summary>
+    /// <summary>
+    /// Meldet ab, was hier angemeldet ist und zu keinem der genannten Pfade
+    /// gehoert.
+    /// </summary>
+    /// <remarks>
+    /// Eine Wurzel ueberlebt das Programm: sie steht in der Registrierung und
+    /// nicht in unserer Konfiguration. Wer eine Freigabe wieder entfernt,
+    /// ohne dass das Abmelden durchlief -- ein Absturz, ein Versuch, eine von
+    /// Hand geloeschte Konfiguration --, hinterlaesst einen Eintrag im
+    /// Navigationsbereich, den niemand mehr wegbekommt: der Ordner dazu ist
+    /// fort, und ohne ihn bietet weder der Explorer noch dieses Programm eine
+    /// Handhabe.
+    ///
+    /// Deshalb beim Start ein Abgleich mit dem, was wirklich eingerichtet
+    /// ist. Verglichen werden Pfade, nicht Kennungen: die Kennung leitet sich
+    /// zwar aus dem Pfad ab, aber das ist eine Eigenschaft dieser Fassung und
+    /// keine Zusage.
+    /// </remarks>
+    public static IEnumerable<string> UnregisterStrays(IEnumerable<string> configured)
+    {
+        var bekannt = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var pfad in configured)
+        {
+            if (string.IsNullOrWhiteSpace(pfad)) continue;
+            try { bekannt.Add(Path.TrimEndingDirectorySeparator(Path.GetFullPath(pfad))); }
+            catch (Exception) { /* unbrauchbarer Pfad, dann eben nicht */ }
+        }
+
+        foreach (var (id, pfad) in ListOwn().ToList())
+        {
+            var voll = pfad;
+            try { voll = Path.TrimEndingDirectorySeparator(Path.GetFullPath(pfad)); }
+            catch (Exception) { /* der Pfad ist fort; abmelden ist dann erst recht richtig */ }
+
+            if (bekannt.Contains(voll)) continue;
+
+            string? fehler = null;
+            try { Unregister(id); }
+            catch (Exception ex) { fehler = ex.Message; }
+
+            yield return fehler is null ? pfad : $"{pfad} -- {fehler}";
+        }
+    }
+
     public static IEnumerable<(string Id, string Path)> ListOwn()
     {
         foreach (var root in StorageProviderSyncRootManager.GetCurrentSyncRoots())
