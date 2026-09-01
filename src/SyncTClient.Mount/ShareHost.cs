@@ -1070,28 +1070,27 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             {
                 try
                 {
-                    // Ein einziges Byte genuegt: der Lesezugriff loest die
-                    // Hydration der ganzen Datei aus.
+                    // Ausdruecklich fuellen lassen, nicht durch Lesen
+                    // anstossen.
                     //
-                    // Ausdruecklich als asynchrone Datei geoeffnet. File.OpenRead
-                    // liefert einen Strom, der synchron liest -- das Warten auf
-                    // die Hydration haelt dann den Faden fest, statt ihn
-                    // freizugeben. Bei zwei Plaetzen genuegen zwei solche
-                    // Wartende, damit nichts mehr nachrueckt.
-                    //
-                    // Und geteilt geoeffnet: eine Datei, die ein anderes
-                    // Programm gerade haelt, soll nicht am Oeffnen scheitern.
-                    await using var stream = new FileStream(
-                        path, FileMode.Open, FileAccess.Read,
-                        FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.Asynchronous);
-
-                    var probe = new byte[1];
-                    await stream.ReadExactlyAsync(probe, token).ConfigureAwait(false);
+                    // Der Umweg ueber einen Lesezugriff erzeugt zwei
+                    // Rueckrufe: einen fuer den gelesenen Sektor und, weil
+                    // die Hydrationsregel FULL ist, einen fuer die ganze
+                    // Datei. Den zweiten beantworten wir sofort und
+                    // vollstaendig; den ersten stellt Windows erst eine
+                    // Minute spaeter zu, und bis dahin steht der Lesezugriff.
+                    // Im Protokoll war es ein Takt von genau sechzig
+                    // Sekunden und zwei Dateien darin.
+                    var laenge = new System.IO.FileInfo(path).Length;
+                    if (!HydrationCache.Hydrate(path, laenge))
+                        _log($"  {Path.GetFileName(path)}: liess sich nicht fuellen.");
                 }
                 catch (Exception ex)
                 {
                     _log($"  {Path.GetFileName(path)}: {ex.Message}");
                 }
+
+                await Task.Yield();
 
                 var fertig = Interlocked.Increment(ref done);
                 SetPhase(SyncPhase.Inhalte, fertig, pending.Count);

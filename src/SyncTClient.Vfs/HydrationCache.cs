@@ -108,6 +108,31 @@ public sealed class HydrationCache
             });
     }
 
+    /// <summary>
+    /// Fordert Windows auf, diesen Platzhalter zu fuellen.
+    /// </summary>
+    /// <remarks>
+    /// Der Weg ueber einen Lesezugriff -- Datei oeffnen, ein Byte lesen --
+    /// tut dasselbe, aber ueber zwei Rueckrufe: einen fuer den gelesenen
+    /// Sektor und, weil die Hydrationsregel FULL ist, einen fuer die ganze
+    /// Datei. Den zweiten beantworten wir vollstaendig; den ersten stellt
+    /// Windows erst eine Minute spaeter zu, und bis dahin steht der
+    /// Lesezugriff. Bei zwei Plaetzen sind das zwei Dateien je Minute.
+    ///
+    /// Dieser Aufruf ist genau dafuer gemacht: er erzeugt einen Rueckruf,
+    /// wartet, bis er beantwortet ist, und kehrt zurueck.
+    /// </remarks>
+    public static unsafe bool Hydrate(string fullPath, long length)
+    {
+        using var handle = File.OpenHandle(
+            fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        var result = PInvoke.CfHydratePlaceholder(
+            handle, 0, length, CF_HYDRATE_FLAGS.CF_HYDRATE_FLAG_NONE, null);
+
+        return !result.Failed;
+    }
+
     public void NoteAccess(string relativePath)
     {
         if (_entries.TryGetValue(relativePath, out var entry))
