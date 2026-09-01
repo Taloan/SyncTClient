@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Windows.Data;
 using System.Windows;
 using SyncTClient.Mount;
 
@@ -29,11 +30,13 @@ public partial class StatusWindow : Window
         new() { Interval = TimeSpan.FromSeconds(1) };
 
     /// <param name="shares">Die Zeilen der Übersicht, unverändert.</param>
-    /// <param name="transfers">Was gerade geholt wird.</param>
+    /// <param name="outgoing">Was gerade hinausgeht.</param>
+    /// <param name="incoming">Was gerade hereinkommt.</param>
     /// <param name="state">Der Zustand in einem Satz.</param>
     public StatusWindow(
         ObservableCollection<ShareRow> shares,
-        ObservableCollection<TransferInfo> transfers,
+        ObservableCollection<TransferInfo> outgoing,
+        ObservableCollection<TransferInfo> incoming,
         Func<string> state,
         Func<bool> paused,
         Action openWindow,
@@ -49,7 +52,13 @@ public partial class StatusWindow : Window
         _togglePause = togglePause;
 
         ShareList.ItemsSource = shares;
-        TransferList.ItemsSource = transfers;
+        // Beide Richtungen in einer Liste. Das kleine Fenster hat keinen
+        // Platz fuer zwei Spalten; der Pfeil vor dem Namen sagt die Richtung.
+        TransferList.ItemsSource = new CompositeCollection
+        {
+            new CollectionContainer { Collection = outgoing },
+            new CollectionContainer { Collection = incoming }
+        };
 
         Nachziehen();
 

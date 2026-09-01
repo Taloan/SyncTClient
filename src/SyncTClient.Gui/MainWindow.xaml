@@ -57,6 +57,45 @@
       </Canvas>
     </ControlTemplate>
 
+    <!-- Eine Uebertragung ist eine Zeile hoch. Alles steht auf dem Balken:
+         Name links, Menge und Zustand rechts. Drei Zeilen je Datei waren bei
+         zwanzig gleichzeitigen Uebertragungen eine Bildschirmseite pro
+         Handvoll.
+
+         Der Text steht weiss mit dunklem Saum, damit er auf der Fuellung wie
+         auf dem Rest lesbar bleibt: dasselbe Verfahren wie bei Untertiteln
+         in einem Film, aus demselben Grund. -->
+    <DataTemplate x:Key="Uebertragung">
+      <Grid Margin="0,1" Height="18" ToolTip="{Binding RelativePath}">
+        <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}" />
+
+        <DockPanel Margin="6,0">
+          <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" FontSize="10"
+                     Margin="8,0,0,0" VerticalAlignment="Center" Foreground="White"
+                     FontWeight="SemiBold">
+            <TextBlock.Effect>
+              <DropShadowEffect Color="Black" ShadowDepth="0" BlurRadius="5" Opacity="1" />
+            </TextBlock.Effect>
+          </TextBlock>
+
+          <TextBlock DockPanel.Dock="Right" Text="{Binding Progress}" FontSize="10"
+                     Margin="8,0,0,0" VerticalAlignment="Center" Foreground="White"
+                     FontWeight="SemiBold">
+            <TextBlock.Effect>
+              <DropShadowEffect Color="Black" ShadowDepth="0" BlurRadius="5" Opacity="1" />
+            </TextBlock.Effect>
+          </TextBlock>
+
+          <TextBlock Text="{Binding Name}" FontSize="10" TextTrimming="CharacterEllipsis"
+                     VerticalAlignment="Center" Foreground="White" FontWeight="SemiBold">
+            <TextBlock.Effect>
+              <DropShadowEffect Color="Black" ShadowDepth="0" BlurRadius="5" Opacity="1" />
+            </TextBlock.Effect>
+          </TextBlock>
+        </DockPanel>
+      </Grid>
+    </DataTemplate>
+
     <Style x:Key="ZelleMitte" TargetType="TextBlock">
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="HorizontalAlignment" Value="Center" />
@@ -661,39 +700,40 @@
       </TabItem>
 
       <TabItem Header="{DynamicResource S.Main.Transfers}">
-        <DockPanel>
-          <TextBlock x:Name="QueueText" DockPanel.Dock="Top" Foreground="{DynamicResource Gedaempft}"
-                     Margin="8,6,8,4" Text="{DynamicResource S.Main.Idle}" />
-          <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="TransferList">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <!-- Eine Zeile je Datei, nicht so breit wie das Fenster. Der
-                       Fortschritt ist auf 700 Punkten so gut abzulesen wie auf
-                       zweitausend, und der Blick muss weniger wandern. -->
-                  <StackPanel Margin="8,4" MaxWidth="700" HorizontalAlignment="Left">
-                    <DockPanel>
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}"
-                                 Foreground="{DynamicResource Gedaempft}" Margin="8,0,0,0" />
-                      <TextBlock DockPanel.Dock="Left" Text="{Binding Arrow}"
-                                 Width="14" FontWeight="Bold"
-                                 Foreground="{DynamicResource Sekundaer}" />
-                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-                    <DockPanel Margin="0,1,0,3">
-                      <TextBlock DockPanel.Dock="Right" Text="{Binding Progress}"
-                                 Foreground="{DynamicResource Gedaempft}" FontSize="11" Margin="8,0,0,0" />
-                      <TextBlock Text="{Binding Folder}" Foreground="{DynamicResource Gedaempft}" FontSize="11"
-                                 TextTrimming="CharacterEllipsis" />
-                    </DockPanel>
-                    <ProgressBar Height="5" Minimum="0" Maximum="100"
-                                 Value="{Binding Percent, Mode=OneWay}" />
-                  </StackPanel>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+        <!-- Zwei Spalten: was hinausgeht links, was hereinkommt rechts. In
+             einer gemeinsamen Liste musste man je Zeile nachsehen, in welche
+             Richtung sie lief; nebeneinander beantwortet die Spalte das. -->
+        <Grid Margin="8,6,8,6">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="14" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource S.Main.Outgoing}"
+                     Style="{StaticResource Kopfzeile}" />
+          <TextBlock Grid.Row="0" Grid.Column="2" Text="{DynamicResource S.Main.Incoming}"
+                     Style="{StaticResource Kopfzeile}" />
+
+          <ScrollViewer Grid.Row="1" Grid.Column="0" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="UploadList" ItemTemplate="{StaticResource Uebertragung}"
+                          Margin="0,0,4,0" />
           </ScrollViewer>
-        </DockPanel>
+
+          <ScrollViewer Grid.Row="1" Grid.Column="2" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="DownloadList" ItemTemplate="{StaticResource Uebertragung}"
+                          Margin="0,0,4,0" />
+          </ScrollViewer>
+
+          <TextBlock x:Name="QueueText" Grid.Row="1" Grid.ColumnSpan="3"
+                     Foreground="{DynamicResource Gedaempft}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Text="{DynamicResource S.Main.Idle}" />
+        </Grid>
       </TabItem>
 
       <TabItem Header="{DynamicResource S.Main.Log}">
