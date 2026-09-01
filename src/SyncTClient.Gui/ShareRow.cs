@@ -21,7 +21,19 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public string Label { get; private set; } = label;
     public ShareHost? Share { get; private set; } = share;
 
+    /// <summary>Laeuft dieser Ordner gerade?</summary>
     public bool Accepted => Share is not null;
+
+    /// <summary>
+    /// Steht dieser Ordner in der Konfiguration?
+    /// </summary>
+    /// <remarks>
+    /// Nicht dasselbe wie <see cref="Accepted"/>. Angehalten laeuft keine
+    /// Freigabe, und ohne Verbindung entsteht keine -- uebernommen ist sie
+    /// trotzdem. Wer sie in diesem Zustand trennen will, meint die
+    /// Konfiguration, und die ist da.
+    /// </remarks>
+    public bool Configured { get; set; }
 
     /// <summary>
     /// Der Anzeigename. Schreibbar, damit er sich in der Liste umbenennen
@@ -363,6 +375,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         foreach (var name in new[]
                  {
                      nameof(Name), nameof(StatusText), nameof(Ready), nameof(Accepted),
+                     nameof(Configured),
                      nameof(PeersText), nameof(PeerOnline),
                      nameof(Copies), nameof(CopiesText), nameof(CopiesAtRisk), nameof(CopiesHint),
                      nameof(Busy), nameof(Indeterminate), nameof(Percent), nameof(ProgressText),
