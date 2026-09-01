@@ -73,14 +73,23 @@ public static class WinRtSyncRoot
             InSyncPolicy = StorageProviderInSyncPolicy.FileLastWriteTime,
             HardlinkPolicy = StorageProviderHardlinkPolicy.None,
 
-            // Ein Knoten im Navigationsbereich statt einer Zeile je Ordner.
+            // Jede Freigabe steht fuer sich im Navigationsbereich.
             //
-            // Windows gruppiert die Wurzeln desselben Anbieters -- das ist der
-            // Teil der Kennung vor dem ersten Ausrufezeichen -- unter einem
-            // gemeinsamen Eintrag. Ohne das stand jede Freigabe einzeln neben
-            // "Dieser PC", und bei einer Handvoll Ordnern war der Baum nicht
-            // mehr zu lesen.
-            ShowSiblingsAsGroup = true,
+            // Mit true gruppiert Windows -- aber nicht nach Anbieter, wie es
+            // die Bezeichnung nahelegt, sondern nach gemeinsamem
+            // Elternverzeichnis, und es benennt den Knoten danach. Aus sieben
+            // Freigaben wurden vier Knoten mit den Namen "DATA", "dirkm",
+            // "GPSoftware" und "johnsadventures.com". Das sagt niemandem
+            // etwas und ist schlechter als sieben ehrliche Zeilen.
+            //
+            // Ein einziger Knoten, so wie ihn Nextcloud hat, waere nur mit
+            // einer einzigen Wurzel zu haben -- ein Pfad, unter dem alles
+            // liegt. Genau das geht hier nicht: der Ordner des Background
+            // Switcher muss unter AppData\Roaming\johnsadventures.com liegen
+            // und der von Directory Opus unter AppData\Roaming\GPSoftware,
+            // weil diese Programme dort lesen. Das ist der Grund, warum es
+            // dieses Programm ueberhaupt gibt.
+            ShowSiblingsAsGroup = false,
             // Context ist Pflicht und darf nicht leer sein.
             Context = CryptographicBuffer.ConvertStringToBinary(
                 full, BinaryStringEncoding.Utf8)
