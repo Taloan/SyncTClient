@@ -95,32 +95,126 @@ public sealed class PersistentFolderIndex : IDisposable
         // Unwissen kein erfundener Rueckstand.
         try { Execute("ALTER TABLE files ADD COLUMN has_blocks INTEGER NOT NULL DEFAULT 1"); }
         catch (SqliteException) { /* steht schon da */ }
+
+        Schema2();
+    }
+
+    /// <summary>
+    /// Traegt ein, von welchem Geraet ein Eintrag stammt.
+    /// </summary>
+    /// <remarks>
+    /// Bis hierher war der Name allein der Schluessel: ein Ordner gehoerte
+    /// genau einer Gegenstelle. Nehmen mehrere teil, ueberschreiben sich ihre
+    /// Eintraege gegenseitig -- und mit ihnen die Blocklisten, an denen
+    /// haengt, wer eine Datei wirklich haelt.
+    ///
+    /// Der Schluessel besteht deshalb aus Geraet und Name. Vorhandene Zeilen
+    /// bekommen ein leeres Geraet; welches gemeint war, weiss erst die erste
+    /// Verbindung, und <see cref="AdoptLegacy"/> traegt es dann nach.
+    /// </remarks>
+    private void Schema2()
+    {
+        if (GetMeta("schema") == "2") return;
+
+        Execute("""
+            CREATE TABLE IF NOT EXISTS files_neu (
+                device     TEXT    NOT NULL,
+                name       TEXT    NOT NULL,
+                sequence   INTEGER NOT NULL,
+                size       INTEGER NOT NULL,
+                modified   INTEGER NOT NULL,
+                kind       INTEGER NOT NULL,
+                deleted    INTEGER NOT NULL,
+                has_blocks INTEGER NOT NULL DEFAULT 1,
+                version    BLOB,
+                info       BLOB NOT NULL,
+                PRIMARY KEY (device, name)
+            );
+
+            INSERT OR IGNORE INTO files_neu
+                (device, name, sequence, size, modified, kind, deleted, has_blocks, version, info)
+            SELECT '', name, sequence, size, modified, kind, deleted, has_blocks, version, info
+            FROM files;
+
+            DROP TABLE files;
+            ALTER TABLE files_neu RENAME TO files;
+
+            CREATE INDEX IF NOT EXISTS files_sequence ON files(device, sequence);
+            CREATE INDEX IF NOT EXISTS files_name ON files(name);
+            """);
+
+        SetMeta("schema", "2");
+    }
+
+    /// <summary>
+    /// Ordnet Eintraege aus einer aelteren Datenbank ihrer Gegenstelle zu.
+    /// </summary>
+    /// <remarks>
+    /// Aufzurufen, sobald feststeht, mit wem gesprochen wird. Vor dem Umbau
+    /// gab es nur eine Gegenstelle je Ordner; die Zeilen ohne Geraet gehoeren
+    /// also der ersten, die sich meldet.
+    /// </remarks>
+    public void AdoptLegacy(string device)
+    {
+        if (string.IsNullOrEmpty(device)) return;
+
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "UPDATE files SET device = $device WHERE device = ''";
+        command.Parameters.AddWithValue("$device", device);
+
+        if (command.ExecuteNonQuery() == 0) return;
+
+        if (GetMeta("peerIndexId") is { Length: > 0 } alt)
+        {
+            SetMeta($"peerIndexId:{device}", alt);
+            SetMeta("peerIndexId", "");
+        }
     }
 
     /// <summary>Zahl der empfangenen Index-Nachrichten in dieser Sitzung.</summary>
     public int MessageCount => _messageCount;
 
-    public int Count => (int)(long)(Scalar("SELECT COUNT(*) FROM files WHERE deleted = 0") ?? 0L);
+    /// <summary>
+    /// Zahl der Dateien, die die Gegenstellen fuehren.
+    /// </summary>
+    /// <remarks>
+    /// Gezaehlt werden Namen, nicht Zeilen. Fuehren drei Gegenstellen
+    /// dieselbe Datei, ist es eine Datei und nicht drei.
+    /// </remarks>
+    public int Count => (int)(long)(
+        Scalar("SELECT COUNT(DISTINCT name) FROM files WHERE deleted = 0") ?? 0L);
 
     /// <summary>Summe der Dateigroessen. Wird fuer die Anzeige gebraucht.</summary>
-    public long TotalBytes =>
-        (long)(Scalar("SELECT COALESCE(SUM(size), 0) FROM files WHERE deleted = 0 AND kind = 0") ?? 0L);
+    public long TotalBytes => (long)(Scalar("""
+        SELECT COALESCE(SUM(size), 0) FROM (
+            SELECT name, MAX(size) AS size FROM files
+            WHERE deleted = 0 AND kind = 0
+            GROUP BY name)
+        """) ?? 0L);
 
     /// <summary>
     /// Die hoechste bisher empfangene Sequenznummer. Wird dem Peer im
     /// ClusterConfig genannt, damit er nur Neueres schickt.
     /// </summary>
-    public long MaxSequence => (long)(Scalar("SELECT COALESCE(MAX(sequence), 0) FROM files") ?? 0L);
+    public long MaxSequenceOf(string device)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT COALESCE(MAX(sequence), 0) FROM files WHERE device = $device";
+        command.Parameters.AddWithValue("$device", device);
+        return (long)(command.ExecuteScalar() ?? 0L);
+    }
 
     /// <summary>
     /// Die IndexId des Peers zu diesem Ordner. Aendert sie sich, hat der Peer
     /// seinen Index neu aufgebaut und wir muessen von vorn anfangen.
     /// </summary>
-    public ulong PeerIndexId
-    {
-        get => ulong.TryParse(GetMeta("peerIndexId"), out var v) ? v : 0;
-        set => SetMeta("peerIndexId", value.ToString());
-    }
+    public ulong PeerIndexIdOf(string device)
+        => ulong.TryParse(GetMeta($"peerIndexId:{device}"), out var v) ? v : 0;
+
+    public void SetPeerIndexId(string device, ulong value)
+        => SetMeta($"peerIndexId:{device}", value.ToString());
 
     /// <summary>
     /// Unsere eigene IndexId zu diesem Ordner.
@@ -178,7 +272,11 @@ public sealed class PersistentFolderIndex : IDisposable
     /// Dateien sich inhaltlich geaendert haben. Fuer diese Dateien muss ein
     /// zwischengespeicherter Inhalt verworfen werden.
     /// </summary>
-    public IReadOnlyList<string> Absorb(IEnumerable<BepFileInfo> files)
+    /// <param name="device">
+    /// Von welcher Gegenstelle die Eintraege stammen. Jede fuehrt ihren
+    /// eigenen Bestand; erst zusammen ergeben sie, wer was haelt.
+    /// </param>
+    public IReadOnlyList<string> Absorb(string device, IEnumerable<BepFileInfo> files)
     {
         using var gate = _gate.EnterScope();
         Interlocked.Increment(ref _messageCount);
@@ -188,15 +286,16 @@ public sealed class PersistentFolderIndex : IDisposable
 
         using var lookup = _db.CreateCommand();
         lookup.Transaction = transaction;
-        lookup.CommandText = "SELECT version FROM files WHERE name = $name";
+        lookup.CommandText = "SELECT version FROM files WHERE device = $device AND name = $name";
+        lookup.Parameters.AddWithValue("$device", device);
         var lookupName = lookup.Parameters.Add("$name", SqliteType.Text);
 
         using var upsert = _db.CreateCommand();
         upsert.Transaction = transaction;
         upsert.CommandText = """
-            INSERT INTO files (name, sequence, size, modified, kind, deleted, version, info, has_blocks)
-            VALUES ($name, $sequence, $size, $modified, $kind, $deleted, $version, $info, $hasBlocks)
-            ON CONFLICT(name) DO UPDATE SET
+            INSERT INTO files (device, name, sequence, size, modified, kind, deleted, version, info, has_blocks)
+            VALUES ($device, $name, $sequence, $size, $modified, $kind, $deleted, $version, $info, $hasBlocks)
+            ON CONFLICT(device, name) DO UPDATE SET
                 sequence   = excluded.sequence,
                 size       = excluded.size,
                 modified   = excluded.modified,
@@ -206,6 +305,7 @@ public sealed class PersistentFolderIndex : IDisposable
                 info       = excluded.info,
                 has_blocks = excluded.has_blocks
             """;
+        upsert.Parameters.AddWithValue("$device", device);
         var pName = upsert.Parameters.Add("$name", SqliteType.Text);
         var pSequence = upsert.Parameters.Add("$sequence", SqliteType.Integer);
         var pSize = upsert.Parameters.Add("$size", SqliteType.Integer);
@@ -378,11 +478,23 @@ public sealed class PersistentFolderIndex : IDisposable
     /// <summary>Wie viele eigene Dateien wir fuehren.</summary>
     public int LocalCount => (int)(long)(Scalar("SELECT COUNT(*) FROM local_files") ?? 0L);
 
+    /// <summary>
+    /// Die beste Ankuendigung zu diesem Namen.
+    /// </summary>
+    /// <remarks>
+    /// Mehrere Gegenstellen koennen denselben Namen fuehren, und nicht alle
+    /// mit Inhalt. Genommen wird die, die am meisten sagt: eine vorhandene vor
+    /// einer geloeschten, eine mit Blockliste vor einer ohne.
+    /// </remarks>
     public bool TryGet(string name, out BepFileInfo file)
     {
         using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
-        command.CommandText = "SELECT info FROM files WHERE name = $name";
+        command.CommandText = """
+            SELECT info FROM files WHERE name = $name
+            ORDER BY deleted ASC, has_blocks DESC, sequence DESC
+            LIMIT 1
+            """;
         command.Parameters.AddWithValue("$name", name);
 
         if (command.ExecuteScalar() is byte[] blob)
@@ -408,7 +520,7 @@ public sealed class PersistentFolderIndex : IDisposable
     {
         using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
-        command.CommandText = "SELECT name FROM files WHERE name <> '' ORDER BY name";
+        command.CommandText = "SELECT DISTINCT name FROM files WHERE name <> '' ORDER BY name";
 
         var namen = new List<string>();
         using var reader = command.ExecuteReader();
@@ -427,9 +539,12 @@ public sealed class PersistentFolderIndex : IDisposable
         using var gate = _gate.EnterScope();
         var eintraege = new List<(string, long, long, bool, bool)>();
         using var command = _db.CreateCommand();
+        // Je Name eine Zeile, auch wenn mehrere Gegenstellen ihn fuehren.
+        // Inhalt hat er, sobald ihn eine von ihnen fuehrt.
         command.CommandText = """
-            SELECT name, size, modified, kind, has_blocks FROM files
+            SELECT name, MAX(size), MAX(modified), MAX(kind), MAX(has_blocks) FROM files
             WHERE deleted = 0 AND name <> ''
+            GROUP BY name
             ORDER BY name
             """;
 
@@ -450,7 +565,56 @@ public sealed class PersistentFolderIndex : IDisposable
     /// <summary>
     /// Verwirft alles. Noetig, wenn der Peer seinen Index neu aufgebaut hat.
     /// </summary>
-    public void Clear() => Execute("DELETE FROM files");
+    public void Clear(string device)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "DELETE FROM files WHERE device = $device";
+        command.Parameters.AddWithValue("$device", device);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Welche Gegenstellen diese Datei vollstaendig fuehren.</summary>
+    /// <remarks>
+    /// Fuer die Wahl der Leitung: geholt wird bei einer Gegenstelle, die den
+    /// Inhalt hat, nicht bei irgendeiner.
+    /// </remarks>
+    public IReadOnlyList<string> HolderDevices(string name)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            SELECT device FROM files
+            WHERE name = $name AND deleted = 0 AND has_blocks = 1 AND size > 0
+            """;
+        command.Parameters.AddWithValue("$name", name);
+
+        var geraete = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) geraete.Add(reader.GetString(0));
+
+        return geraete;
+    }
+
+    /// <summary>
+    /// Wie viele Gegenstellen diese Datei vollstaendig fuehren.
+    /// </summary>
+    /// <remarks>
+    /// Das ist die Zahl, an der die Platzhalter-Schwelle haengt. Eine
+    /// Ankuendigung ohne Blockliste zaehlt nicht: die Gegenstelle kennt die
+    /// Datei dann, haelt sie aber nicht.
+    /// </remarks>
+    public int Holders(string name)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*) FROM files
+            WHERE name = $name AND deleted = 0 AND has_blocks = 1 AND size > 0
+            """;
+        command.Parameters.AddWithValue("$name", name);
+        return (int)(long)(command.ExecuteScalar() ?? 0L);
+    }
 
     // ------------------------------------------------------------ Kleinkram
 

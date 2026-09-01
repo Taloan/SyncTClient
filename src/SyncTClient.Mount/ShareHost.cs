@@ -104,7 +104,41 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private readonly SemaphoreSlim _hydrationGate = new(ConcurrentHydrations);
     private readonly SemaphoreSlim _indexArrived = new(0);
 
-    private BepConnection? _connection;
+    /// <summary>
+    /// Die Leitungen zu den beteiligten Gegenstellen, je Geraet eine.
+    /// </summary>
+    /// <remarks>
+    /// Ein Ordner gehoert nicht einer Gegenstelle, sondern hat Teilnehmer.
+    /// Angekuendigt wird an alle; geholt wird bei einer, die den Inhalt hat.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, BepConnection> _connections =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Irgendeine Leitung. Fuer alles, was jede beantworten kann.</summary>
+    private BepConnection? AnyLine => _connections.Values.FirstOrDefault();
+
+    /// <summary>
+    /// Die Leitung zu einer Gegenstelle, die diese Datei fuehrt.
+    /// </summary>
+    /// <remarks>
+    /// Bei irgendeiner zu fragen waere ein Fehlschlag mit Ansage: eine
+    /// Gegenstelle, die den Namen nur kennt, liefert keine Bloecke. Kennt
+    /// keine der verbundenen die Datei, bleibt der Versuch bei der ersten --
+    /// dann ist die Absage die Auskunft.
+    /// </remarks>
+    private BepConnection? LineFor(string name)
+    {
+        if (_connections.IsEmpty) return null;
+        if (_index is null) return AnyLine;
+
+        List<string> halter;
+        lock (_indexGate) halter = [.. _index.HolderDevices(name)];
+
+        foreach (var device in halter)
+            if (_connections.TryGetValue(device, out var line)) return line;
+
+        return AnyLine;
+    }
     private PersistentFolderIndex? _index;
     private CloudFilterMount? _mount;
     private HydrationCache? _cache;
@@ -185,8 +219,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public int IndexCount => _index?.Count ?? 0;
     public long IndexBytes => _index?.TotalBytes ?? 0;
-    public long MaxSequence => _index?.MaxSequence ?? 0;
-    public ulong PeerIndexId => _index?.PeerIndexId ?? 0;
+    /// <summary>
+    /// Der Stand, bis zu dem wir von dieser Gegenstelle gehoert haben.
+    /// </summary>
+    /// <remarks>
+    /// Je Gegenstelle eine eigene Zaehlung. Sie vergibt ihre Sequenznummern
+    /// selbst und weiss nichts von denen der anderen.
+    /// </remarks>
+    public long MaxSequenceFor(string device) => _index?.MaxSequenceOf(device) ?? 0;
+
+    public ulong PeerIndexIdFor(string device) => _index?.PeerIndexIdOf(device) ?? 0;
 
     /// <summary>Unsere eigene IndexId zu diesem Ordner. Sie bleibt ueber Neustarts hinweg dieselbe.</summary>
     public ulong OwnIndexId => _index?.OwnIndexId ?? 0;
@@ -241,8 +283,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         // Auch hier die Sperre. Der Aufruf kommt aus dem Freigeben von Speicherplatz, und das
         // laeuft in einem anderen Faden als der Hintergrundlauf.
-        lock (_indexGate)
-            return _index.TryGet(relativePath, out var file) && HasContent(file) ? 1 : 0;
+        lock (_indexGate) return _index.Holders(relativePath);
     }
 
     /// <summary>
@@ -252,7 +293,40 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private bool MayEvict(string relativePath)
     {
         var wanted = _app.MinimumCopies;
-        return wanted <= 0 || HoldersOf(relativePath) >= wanted;
+        if (wanted <= 0) return true;
+        if (HoldersOf(relativePath) >= wanted) return true;
+
+        // Eine leere Datei erreicht die Schwelle sonst nie: HasContent
+        // verlangt Bloecke, und die hat sie nicht. Sie bliebe als einzige
+        // fuer immer hier stehen. Zu verlieren ist dabei nichts, null Bytes
+        // sind null Bytes.
+        //
+        // Massgeblich ist die eigene Groesse, nicht die angekuendigte. Die
+        // Gegenstelle setzt die Groesse auch dann auf null, wenn sie eine
+        // grosse Datei nur kennt und nicht haelt; wer sich darauf verliesse,
+        // gaebe den Platz der letzten Kopie einer Datei frei.
+        return LeerHier(relativePath) && LeerDortAuch(relativePath);
+    }
+
+    private bool LeerHier(string relativePath)
+    {
+        try
+        {
+            var info = new System.IO.FileInfo(LocalPathOf(relativePath));
+            return info.Exists && info.Length == 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private bool LeerDortAuch(string relativePath)
+    {
+        if (_index is null) return false;
+
+        lock (_indexGate)
+            return _index.TryGet(relativePath, out var file) && !file.Deleted && file.Size == 0;
     }
 
     /// <summary>Gibt an, ob diese Ankuendigung Inhalt fuehrt und nicht nur einen Namen.</summary>
@@ -273,7 +347,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// das Netz. Ueber Knoten, mit denen gerade keine Verbindung besteht, ist
     /// nichts bekannt.
     /// </remarks>
-    public int ReachableCopies => _connection is not null && (_index?.Count ?? 0) > 0 ? 1 : 0;
+    public int ReachableCopies => (_index?.Count ?? 0) > 0 ? _connections.Count : 0;
 
     private long _bytesReceived;
     private long _bytesSent;
@@ -302,26 +376,45 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _index ??= new PersistentFolderIndex(databasePath, FolderId);
     }
 
-    /// <summary>Die Gegenstelle hat ihren Index neu aufgebaut. Der lokale ist damit unbrauchbar.</summary>
-    public void ResetIndex(ulong newPeerIndexId)
+    /// <summary>
+    /// Eine Gegenstelle hat ihren Index neu aufgebaut. Ihr Teil des lokalen
+    /// Bestandes ist damit unbrauchbar.
+    /// </summary>
+    /// <remarks>
+    /// Verworfen wird nur, was von ihr stammt. Was die anderen Gegenstellen
+    /// fuehren, geht das nichts an.
+    /// </remarks>
+    public void ResetIndex(string device, ulong newPeerIndexId)
     {
-        _log($"[{FolderId}] die Gegenstelle hat ihren Index neu aufgebaut -- verwerfe den lokalen.");
-        _index!.Clear();
-        _index.PeerIndexId = newPeerIndexId;
+        _log($"[{FolderId}] die Gegenstelle hat ihren Index neu aufgebaut -- verwerfe ihren Teil.");
+
+        lock (_indexGate)
+        {
+            _index!.Clear(device);
+            _index.SetPeerIndexId(device, newPeerIndexId);
+        }
     }
 
-    public void RememberPeerIndexId(ulong id)
+    public void RememberPeerIndexId(string device, ulong id)
     {
-        if (_index is not null) _index.PeerIndexId = id;
+        if (_index is not null) lock (_indexGate) _index.SetPeerIndexId(device, id);
+    }
+
+    /// <summary>
+    /// Ordnet Eintraege aus einer aelteren Datenbank dieser Gegenstelle zu.
+    /// </summary>
+    public void AdoptLegacy(string device)
+    {
+        if (_index is not null) lock (_indexGate) _index.AdoptLegacy(device);
     }
 
     /// <summary>Nimmt einen Stapel Index-Eintraege auf, den der PeerHost zugestellt hat.</summary>
-    public void Absorb(IEnumerable<BepFileInfo> files)
+    public void Absorb(string device, IEnumerable<BepFileInfo> files)
     {
         // Der Hintergrundlauf schreibt in dieselbe Datenbank. Sie haengt an
         // einer einzigen Verbindung und vertraegt keine zwei Schreiber.
         IReadOnlyList<string> changed;
-        lock (_indexGate) changed = _index!.Absorb(files);
+        lock (_indexGate) changed = _index!.Absorb(device, files);
 
         _indexArrived.Release();
 
@@ -464,9 +557,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     // ------------------------------------------------------------ Start und Stopp
 
-    public async Task StartAsync(BepConnection connection, CancellationToken ct)
+    public async Task StartAsync(string device, BepConnection connection, CancellationToken ct)
     {
-        await PrepareAsync(connection, ct);
+        await PrepareAsync(device, connection, ct);
         await CommitAsync(ct);
     }
 
@@ -479,15 +572,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// fest. Zusaetzliche Kosten entstehen nicht, denn der Index kommt
     /// ohnehin, sobald wir den Ordner ankuendigen.
     /// </remarks>
-    public async Task PrepareAsync(BepConnection connection, CancellationToken ct)
+    public async Task PrepareAsync(string device, BepConnection connection, CancellationToken ct)
     {
-        _connection = connection;
+        _connections[device] = connection;
         State = ShareState.Wartet;
 
         // Eine neue Sitzung beginnt mit einem Index. Erst danach sind
         // Nachtraege moeglich, und die brauchen die Nummer ihres Vorgaengers.
-        _indexSent = false;
-        _lastSentSequence = 0;
+        // Das gilt je Gegenstelle: die anderen sind davon nicht beruehrt.
+        _indexSentTo[device] = false;
+        _lastSentTo[device] = 0;
 
         try
         {
@@ -579,7 +673,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _cache?.LeaveLimits();
         _mount?.Dispose();
         _mount = null;
-        _connection = null;
+        _connections.Clear();
         IsPaused = false;
         State = ShareState.Gestoppt;
     }
@@ -606,7 +700,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// Lokal wird also weiter indexiert -- das kostet nichts auf der Leitung
     /// und erspart beim Fortsetzen einen vollstaendigen Durchgang.
     /// </remarks>
-    public void DropConnection() => _connection = null;
+    public void DropConnection(string device)
+    {
+        _connections.TryRemove(device, out _);
+        _indexSentTo.TryRemove(device, out _);
+        _lastSentTo.TryRemove(device, out _);
+    }
 
     /// <summary>
     /// Nimmt eine neue Leitung an, ohne den Ordner neu aufzubauen.
@@ -620,11 +719,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// beginnt mit einem vollstaendigen Index, und Nachtraege brauchen die
     /// Nummer ihres Vorgaengers.
     /// </remarks>
-    public void Rebind(BepConnection connection)
+    public void Rebind(string device, BepConnection connection)
     {
-        _connection = connection;
-        _indexSent = false;
-        _lastSentSequence = 0;
+        _connections[device] = connection;
+        _indexSentTo[device] = false;
+        _lastSentTo[device] = 0;
 
         if (State == ShareState.Gestoppt) return;
         if (!IsPaused) State = ShareState.Bereit;
@@ -690,6 +789,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Ein Umbenennen ist fuer das Protokoll eine Loeschung und eine
             // neue Datei. Liegt eine Seite ausserhalb der Freigabe, bleibt
             // ihr Pfad leer und der Teil entfaellt.
+            // Die Zuordnung merken, bevor die Meldungen laufen. Ein
+            // Platzhalter traegt seinen Inhalt nicht bei sich; unter dem alten
+            // Namen steht aber seine Blockliste, und damit laesst er sich
+            // ankuendigen, ohne ihn erst zu holen.
+            if (before.Length > 0 && after.Length > 0
+                && NameOf(before) is { } alt && NameOf(after) is { } neu)
+            {
+                _renamedFrom[neu] = alt;
+            }
+
             if (before.Length > 0) NoteLocalDelete(before);
             if (after.Length > 0) NoteLocalChange(after);
         };
@@ -995,7 +1104,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private bool Produce(string localFilePath)
     {
-        if (_thumbnails is null || _index is null || _connection is null) return false;
+        if (_thumbnails is null || _index is null || _connections.IsEmpty) return false;
         if (!_app.GenerateThumbnails) return false;
         if (_thumbnails.KnownWithout(localFilePath)) return false;
 
@@ -1034,7 +1143,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     private async Task<bool> FetchThumbnailAsync(string relativePath, CancellationToken ct)
     {
-        if (_thumbnails is null || _index is null || _connection is null) return false;
+        if (_thumbnails is null || _index is null || _connections.IsEmpty) return false;
 
         // Ein Vorschaubild ist ein Dateikopf und damit Uebertragung.
         if (IsPaused) return false;
@@ -1050,8 +1159,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             if (_thumbnails.Has(local)) return true;
 
             var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, file.Size);
+            if (LineFor(file.Name) is not { } vorschauLeitung) return false;
+
             var head = await FileFetcher.FetchRangeAsync(
-                _connection, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
+                vorschauLeitung, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
                 .ConfigureAwait(false);
 
             NoteReceived(head.Length);
@@ -1169,7 +1280,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (IsPaused)
             throw new InvalidOperationException($"\"{FolderId}\" ist angehalten.");
-        if (_connection is null)
+        if (_connections.IsEmpty)
             throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
 
         if (!_index!.TryGet(relativePath, out var file))
@@ -1199,8 +1310,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             var progress = new Progress<int>(blocks =>
                 transfer.DoneBytes = already + Math.Min((long)blocks * blockSize, length));
 
+            // Geholt wird bei einer Gegenstelle, die den Inhalt fuehrt. Eine,
+            // die den Namen nur kennt, haette nichts zu liefern.
+            var leitung = LineFor(relativePath)
+                ?? throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
+
             var data = await FileFetcher.FetchRangeAsync(
-                _connection, FolderId, file, offset, length, _app.Parallelism, progress, ct)
+                leitung, FolderId, file, offset, length, _app.Parallelism, progress, ct)
                 .ConfigureAwait(false);
 
             transfer.DoneBytes = already + data.Length;
@@ -1313,7 +1429,133 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             return Deny(request, ErrorCode.InvalidFile, "unsere Bytes ergeben einen anderen Hash");
 
         NoteSent(data.Length);
+        NoteServed(request.Name, info.Length, data.Length);
         return (ErrorCode.NoError, data);
+    }
+
+    /// <summary>Die Dateien, die gerade zur Gegenstelle hinausgehen.</summary>
+    private readonly ConcurrentDictionary<string, TransferInfo> _outgoing = new(StringComparer.Ordinal);
+
+    /// <summary>So lange nach dem letzten Block gilt ein Schwung als laufend.</summary>
+    private const long BurstIdleMs = 3_000;
+
+    private readonly Lock _burstGate = new();
+    private long _burstDone;
+    private long _burstTotal;
+    private long _burstTicks;
+
+    /// <summary>Laeuft gerade eine Uebertragung, in welcher Richtung auch immer?</summary>
+    public bool Transferring => ActiveProgress.Total > 0;
+
+    /// <summary>
+    /// Was gerade laeuft, zusammengezaehlt.
+    /// </summary>
+    /// <remarks>
+    /// Der Rueckstand misst, ob die Indizes uebereinstimmen. Das ist eine
+    /// andere Frage als "laeuft gerade etwas": sobald die Gegenstelle unsere
+    /// Ankuendigung zurueckspiegelt, steht der Rueckstand auf null, waehrend
+    /// die Datei noch Block fuer Block hinausgeht.
+    ///
+    /// Gezaehlt wird der ganze Schwung und nicht jede Datei fuer sich. Zwischen
+    /// zwei Dateien ist die Liste der laufenden Auslieferungen fuer einen
+    /// Augenblick leer; wer daran ablaest, ob etwas laeuft, laesst den Balken
+    /// bei jeder Datei einmal verschwinden. Erst wenn eine Weile lang kein
+    /// Block mehr hinausging, faengt die Zaehlung von vorn an.
+    /// </remarks>
+    public (long Done, long Total) ActiveProgress
+    {
+        get
+        {
+            long done = 0, total = 0;
+            foreach (var t in _ranges.Values) { done += t.DoneBytes; total += t.TotalBytes; }
+
+            lock (_burstGate)
+            {
+                if (_outgoing.IsEmpty && Environment.TickCount64 - _burstTicks > BurstIdleMs)
+                {
+                    _burstDone = 0;
+                    _burstTotal = 0;
+                }
+
+                done += _burstDone;
+                total += _burstTotal;
+            }
+
+            return (done, total);
+        }
+    }
+
+    /// <summary>So lange darf eine Auslieferung ohne neuen Block dastehen.</summary>
+    private const long OutgoingIdleMs = 30_000;
+
+    /// <summary>
+    /// Fuehrt Buch ueber eine laufende Auslieferung.
+    /// </summary>
+    /// <remarks>
+    /// Der eingehende Weg klammert seine Stuecke selbst: die Cloud-Files-
+    /// Schicht sagt, wann ein Bereich beginnt und wann er endet. Hier gibt es
+    /// nichts dergleichen -- die Gegenstelle fragt Block fuer Block und sagt
+    /// weder vorher noch nachher etwas. Die Klammer entsteht deshalb hier: der
+    /// erste Block einer Datei oeffnet sie, der letzte schliesst sie, und was
+    /// dazwischen stehen bleibt, raeumt <see cref="SweepOutgoing"/> fort.
+    ///
+    /// Ohne diese Buchfuehrung lief jede Auslieferung ohne jede Anzeige durch.
+    /// Wer wissen wollte, ob gerade etwas hinausgeht, sah eine leere Liste.
+    /// </remarks>
+    private void NoteServed(string relativePath, long total, long bytes)
+    {
+        var frisch = false;
+
+        var transfer = _outgoing.GetOrAdd(relativePath, pfad =>
+        {
+            frisch = true;
+            var neu = new TransferInfo(FolderId, pfad, total, TransferDirection.Hinaus)
+            {
+                State = TransferState.Laeuft
+            };
+
+            TransferStarted?.Invoke(neu);
+            return neu;
+        });
+
+        lock (_burstGate)
+        {
+            if (frisch) _burstTotal += total;
+            _burstDone += bytes;
+            _burstTicks = Environment.TickCount64;
+        }
+
+        bool fertig;
+
+        // Mehrere Anfragen zu derselben Datei koennen gleichzeitig laufen.
+        lock (transfer)
+        {
+            transfer.DoneBytes = Math.Min(transfer.TotalBytes, transfer.DoneBytes + bytes);
+            transfer.Touched = Environment.TickCount64;
+            fertig = transfer.DoneBytes >= transfer.TotalBytes;
+        }
+
+        if (fertig) FinishOutgoing(relativePath, transfer);
+    }
+
+    /// <summary>Beendet Auslieferungen, zu denen nichts mehr nachkommt.</summary>
+    private void SweepOutgoing()
+    {
+        foreach (var (name, transfer) in _outgoing)
+        {
+            if (Environment.TickCount64 - transfer.Touched < OutgoingIdleMs) continue;
+            FinishOutgoing(name, transfer);
+        }
+    }
+
+    private void FinishOutgoing(string relativePath, TransferInfo transfer)
+    {
+        // Nur den eigenen Eintrag entfernen. Eine zweite Anfrage kann ihn
+        // inzwischen ersetzt haben.
+        if (!_outgoing.TryRemove(new KeyValuePair<string, TransferInfo>(relativePath, transfer))) return;
+
+        transfer.State = TransferState.Fertig;
+        TransferFinished?.Invoke(transfer);
     }
 
     private (ErrorCode Code, byte[] Data) Deny(BepRequest request, ErrorCode code, string reason)

@@ -32,6 +32,9 @@ public partial class MainWindow : Window
     private DeviceIdentity? _identity;
     private ThroughputMeter? _meter;
     private BepListener? _listener;
+
+    /// <summary>Die Ordner, einer je Ordner-Kennung.</summary>
+    private ShareRegistry? _registry;
     private LocalDiscovery? _local;
     private GlobalAnnouncer? _announcer;
     private TrayIcon? _tray;
@@ -185,9 +188,15 @@ public partial class MainWindow : Window
         App.ApplyLanguage(_config.Language);
 
         _peers.Clear();
+
+        // Eine Ablage fuer alle Gegenstellen. Ohne sie legte jede ihre eigenen
+        // Ordner an, und zwei Teilnehmer desselben Ordners haetten zwei
+        // Sync-Roots auf demselben Pfad.
+        _registry = new ShareRegistry(_runtime, _identity!, AppendLog);
+
         foreach (var peerConfig in _config.Peers)
         {
-            var host = new PeerHost(peerConfig, _runtime, _identity!, AppendLog);
+            var host = new PeerHost(peerConfig, _runtime, _identity!, AppendLog, _registry);
             host.StateChanged += _ => Dispatcher.Invoke(RefreshRows);
             host.OfferedChanged += () => Dispatcher.Invoke(RebuildRows);
             host.ShareAdded += WireShare;
@@ -246,8 +255,26 @@ public partial class MainWindow : Window
     /// </summary>
     private void RebuildRows()
     {
-        var selected = (_row?.Peer.Config.DeviceId, _row?.FolderId);
+        var selected = _row?.FolderId;
         _rows.Clear();
+
+        // Eine Zeile je Ordner, nicht je Paar aus Ordner und Gegenstelle.
+        // Nehmen zwei am selben Ordner teil, ist es ein Ordner -- mit einem
+        // Pfad, einer Auswahl und einem Index.
+        var nachOrdner = new Dictionary<string, ShareRow>(StringComparer.Ordinal);
+
+        void Aufnehmen(PeerItem peer, string folderId, string label, ShareHost? share)
+        {
+            if (nachOrdner.TryGetValue(folderId, out var vorhanden))
+            {
+                vorhanden.AddPeer(peer);
+                return;
+            }
+
+            var zeile = Wire(new ShareRow(peer, folderId, label, share));
+            nachOrdner[folderId] = zeile;
+            _rows.Add(zeile);
+        }
 
         foreach (var peer in _peers)
         {
@@ -256,16 +283,15 @@ public partial class MainWindow : Window
             foreach (var offer in peer.Host.Offered)
             {
                 seen.Add(offer.FolderId);
-                _rows.Add(Wire(new ShareRow(peer, offer.FolderId, offer.Label, peer.Host.ShareFor(offer.FolderId))));
+                Aufnehmen(peer, offer.FolderId, offer.Label, peer.Host.ShareFor(offer.FolderId));
             }
 
             // Konfigurierte Ordner, die die Gegenstelle (noch) nicht nennt.
             foreach (var share in _config.SharesOf(peer.Config).Where(s => !seen.Contains(s.FolderId)))
-                _rows.Add(Wire(new ShareRow(peer, share.FolderId, share.Label, peer.Host.ShareFor(share.FolderId))));
+                Aufnehmen(peer, share.FolderId, share.Label, peer.Host.ShareFor(share.FolderId));
         }
 
-        ShareGrid.SelectedItem = _rows.FirstOrDefault(
-            r => r.Peer.Config.DeviceId == selected.Item1 && r.FolderId == selected.Item2)
+        ShareGrid.SelectedItem = _rows.FirstOrDefault(r => r.FolderId == selected)
             ?? _rows.FirstOrDefault();
 
         RefreshRows();
@@ -581,17 +607,18 @@ public partial class MainWindow : Window
         return TrayStatus.Erledigt;
     }
 
-    private (long Read, long Written) CollectWire()
-    {
-        long read = 0, written = 0;
-        foreach (var peer in _peers)
-        {
-            var (r, w) = peer.Host.Wire;
-            read += r;
-            written += w;
-        }
-        return (read, written);
-    }
+    /// <summary>
+    /// Was ueber den Draht ging, seit das Programm laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Aus dem programmweiten Zaehler, nicht aus den Verbindungen der
+    /// Gegenstellen. Vorher wurde je Gegenstelle der Stand ihrer aktuellen
+    /// Verbindung gelesen -- und damit nur der einen. Bytes, die ueber eine
+    /// ersetzte, eine zusaetzlich angenommene oder eine gerade auslaufende
+    /// Verbindung gingen, tauchten in der Anzeige nie auf. Bei einer
+    /// Uebertragung von 156 MB standen dort 57 KB.
+    /// </remarks>
+    private (long Read, long Written) CollectWire() => WireTally.Totals;
 
     private void UpdateThroughput()
     {
@@ -761,6 +788,23 @@ public partial class MainWindow : Window
         kopfzeile.Setters.Add(new Setter(ContextMenuProperty, menu));
         _columnMenu = menu;
         ShareGrid.ColumnHeaderStyle = kopfzeile;
+
+        // Der Kopf steht ueber seinen Werten, nicht daneben. Zahlen und
+        // gezeichnete Symbole stehen in der Mitte ihrer Spalte; ein links
+        // ausgerichteter Kopf darueber sieht aus, als gehoerte er zur Spalte
+        // davor.
+        //
+        // Ausgenommen bleiben Name, Status und Ordner: dort steht Text, und
+        // Text liest sich an einer gemeinsamen linken Kante besser.
+        var mitte = new Style(typeof(DataGridColumnHeader), kopfzeile);
+        mitte.Setters.Add(new Setter(
+            Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Center));
+
+        foreach (var column in ShareGrid.Columns.Skip(2))
+        {
+            if (ReferenceEquals(column, ColPath)) continue;
+            column.HeaderStyle = mitte;
+        }
     }
 
     /// <summary>
@@ -1311,6 +1355,7 @@ public partial class MainWindow : Window
         {
             FolderId = row.FolderId,
             PeerDeviceId = row.Peer.Config.DeviceId,
+            PeerDeviceIds = [.. row.Peers.Select(p => p.Config.DeviceId)],
             Label = row.Label,
             LocalPath = Path.Combine(_config.SharesRootOrDefault, row.FolderId),
             Mode = ShareMode.OnDemand
@@ -1374,7 +1419,11 @@ public partial class MainWindow : Window
                 App.S("S.Menu.Unbind"), MessageBoxButton.OKCancel, MessageBoxImage.Warning)
             != MessageBoxResult.OK) return;
 
-        await _row.Peer.Host.UnbindAsync(_row.FolderId);
+        // Jede beteiligte Gegenstelle nimmt ihre Leitung heraus. Aufgeloest
+        // wird der Ordner dabei einmal, von der ersten -- die uebrigen finden
+        // ihn nicht mehr in der Ablage.
+        foreach (var teilnehmer in _row.Peers)
+            await teilnehmer.Host.UnbindAsync(_row.FolderId);
         if (share is not null) _config.Shares.Remove(share);
         Persist();
 
@@ -1397,7 +1446,7 @@ public partial class MainWindow : Window
         var share = _row?.Share?.Config;
         if (share is null) { Status(App.S("M.NoShareSelected")); return; }
 
-        var dialog = new ShareSettingsWindow(share, HomeDirectory, _row!.Name) { Owner = this };
+        var dialog = new ShareSettingsWindow(share, _config.Peers, HomeDirectory, _row!.Name) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
         Persist();

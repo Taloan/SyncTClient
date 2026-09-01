@@ -30,6 +30,8 @@ public sealed class ThroughputMeter : IDisposable
 
     private long _lastRead;
     private long _lastWritten;
+    private long _totalRead;
+    private long _totalWritten;
     private long _seconds;
     private bool _primed;
 
@@ -39,7 +41,16 @@ public sealed class ThroughputMeter : IDisposable
         _timer = new Timer(_ => Sample(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
-    /// <summary>Gesamtzaehler seit dem Start des Programms.</summary>
+    /// <summary>
+    /// Gesamtzaehler seit dem Start des Programms.
+    /// </summary>
+    /// <remarks>
+    /// Aufsummiert aus den Zuwaechsen, nicht aus dem Stand der Verbindungen.
+    /// Eine Verbindung zaehlt ab ihrem eigenen Aufbau; wird sie neu
+    /// aufgebaut, faengt sie bei null an. Uebernaehme man ihren Stand
+    /// unmittelbar, fiele die Summe mit, und alles vor der letzten Verbindung
+    /// waere aus der Anzeige verschwunden.
+    /// </remarks>
     public (long Read, long Written) Total { get; private set; }
 
     private void Sample()
@@ -50,21 +61,31 @@ public sealed class ThroughputMeter : IDisposable
 
             lock (_gate)
             {
-                Total = (read, written);
-
                 // Der erste Wert hat keinen Vorgaenger und ergaebe sonst einen
-                // Ausschlag in Hoehe des gesamten bisherigen Verkehrs.
+                // Ausschlag in Hoehe des gesamten bisherigen Verkehrs. Fuer die
+                // Summe zaehlt er trotzdem: was vor der ersten Messung lief,
+                // lief seit dem Start des Programms.
                 if (_primed)
                 {
+                    var zuRead = Math.Max(0, read - _lastRead);
+                    var zuWritten = Math.Max(0, written - _lastWritten);
+
                     var slot = (int)(_seconds % Capacity);
-                    _read[slot] = Math.Max(0, read - _lastRead);
-                    _written[slot] = Math.Max(0, written - _lastWritten);
+                    _read[slot] = zuRead;
+                    _written[slot] = zuWritten;
                     _seconds++;
+
+                    _totalRead += zuRead;
+                    _totalWritten += zuWritten;
                 }
                 else
                 {
                     _primed = true;
+                    _totalRead = read;
+                    _totalWritten = written;
                 }
+
+                Total = (_totalRead, _totalWritten);
 
                 _lastRead = read;
                 _lastWritten = written;

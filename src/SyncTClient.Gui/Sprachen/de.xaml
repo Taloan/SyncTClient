@@ -28,7 +28,6 @@
   <s:String x:Key="S.Col.Limit">Verbrauchs Limit</s:String>
   <s:String x:Key="S.Col.Mode">Modus</s:String>
   <s:String x:Key="S.Col.LastTransfer">Zuletzt übertragen</s:String>
-  <s:String x:Key="S.Col.Peer">Gegenstelle</s:String>
   <s:String x:Key="S.Col.FolderId">Ordner-ID</s:String>
   <s:String x:Key="S.Col.Folder">Ordner</s:String>
   <s:String x:Key="S.Main.MenuHint">Ein Rechtsklick auf einen Share öffnet das Menü mit den möglichen Aktionen.</s:String>
@@ -353,4 +352,11 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="C.Hidden">{0} Zweige ausgeblendet.</s:String>
   <s:String x:Key="C.Blocked">Nicht möglich: {0} Dateien erreichen die Platzhalter-Schwelle nicht.</s:String>
   <s:String x:Key="S.Share.TreeHint">Angekreuzt: liegt hier, als Platzhalter oder mit Inhalt.&#10;Nicht angekreuzt: wird trotzdem übertragen und hier gelöscht, sobald die Platzhalter-Schwelle erreicht ist.</s:String>
+  <s:String x:Key="S.Share.TabGeneral">Allgemein</s:String>
+  <s:String x:Key="S.Share.TabSharing">Teilen</s:String>
+  <s:String x:Key="S.Share.TabVersions">Versionierung</s:String>
+  <s:String x:Key="S.Share.TabContent">Inhalt</s:String>
+  <s:String x:Key="S.Share.SharedWith">Mit diesen Geräten geteilt</s:String>
+  <s:String x:Key="S.Share.SharedWithHint">Jedes angekreuzte Gerät führt denselben Ordner. Abwählen beendet den Abgleich mit diesem Gerät; die Dateien bleiben hier und dort liegen.</s:String>
+  <s:String x:Key="S.Share.NoPeers">Keine Gegenstellen eingetragen. Unter „Gegenstellen …“ lässt sich eine hinzufügen.</s:String>
 </ResourceDictionary>

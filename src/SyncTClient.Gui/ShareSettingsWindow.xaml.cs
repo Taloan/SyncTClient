@@ -11,16 +11,20 @@ public partial class ShareSettingsWindow : Window
 {
     private readonly ShareConfig _share;
     private readonly string _homeDirectory;
+    private readonly List<PeerChoice> _peers = [];
     private FolderNode? _tree;
     private bool _loading;
 
-    public ShareSettingsWindow(ShareConfig share, string homeDirectory, string title)
+    public ShareSettingsWindow(
+        ShareConfig share, IReadOnlyList<PeerConfig> peers, string homeDirectory, string title)
     {
         InitializeComponent();
 
         _share = share;
         _homeDirectory = homeDirectory;
         TitleText.Text = title;
+
+        LoadPeers(peers);
 
         // Das Label vergibt die Gegenstelle, und sie kann es aendern. Die
         // Kennung ist die Identitaet der Freigabe. Sie steht im Pfad, im
@@ -39,6 +43,28 @@ public partial class ShareSettingsWindow : Window
         _loading = false;
 
         LoadTree();
+    }
+
+    /// <summary>
+    /// Fuellt die Liste "Mit diesen Geraeten geteilt".
+    /// </summary>
+    /// <remarks>
+    /// Angekreuzt ist, was in der Freigabe steht. Eine Gegenstelle, die es
+    /// noch nicht tut, steht ebenfalls in der Liste -- sonst muesste man zum
+    /// Hinzufuegen erst woanders hin.
+    /// </remarks>
+    private void LoadPeers(IReadOnlyList<PeerConfig> peers)
+    {
+        foreach (var peer in peers)
+        {
+            var geteilt = _share.PeerDeviceIds.Contains(peer.DeviceId, StringComparer.OrdinalIgnoreCase)
+                          || peer.DeviceId.Equals(_share.PeerDeviceId, StringComparison.OrdinalIgnoreCase);
+
+            _peers.Add(new PeerChoice(peer.DeviceId, peer.Display, peer.ShortId, geteilt));
+        }
+
+        PeerList.ItemsSource = _peers;
+        NoPeersText.Visibility = _peers.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void LoadTree()
@@ -149,6 +175,17 @@ public partial class ShareSettingsWindow : Window
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.Conflict = (ConflictResolution)Math.Max(0, ConflictBox.SelectedIndex);
+
+        // Die Liste ist massgeblich. Der einzelne Eintrag bleibt daneben
+        // stehen, solange der Abgleich je Gegenstelle gefuehrt wird; er ist
+        // der erste der Liste.
+        _share.PeerDeviceIds = [.. _peers.Where(p => p.Shared).Select(p => p.DeviceId)];
+
+        if (_share.PeerDeviceIds.Count > 0
+            && !_share.PeerDeviceIds.Contains(_share.PeerDeviceId, StringComparer.OrdinalIgnoreCase))
+        {
+            _share.PeerDeviceId = _share.PeerDeviceIds[0];
+        }
         // Null Tage heisst: sofort loeschen, also gar nicht sichern.
         _share.KeepVersions = days > 0;
         _share.VersionDays = Math.Max(1, days);
@@ -178,4 +215,15 @@ public partial class ShareSettingsWindow : Window
             foreach (var path in AllPaths(child))
                 yield return path;
     }
+}
+
+/// <summary>Eine Gegenstelle in der Liste "Mit diesen Geraeten geteilt".</summary>
+public sealed class PeerChoice(string deviceId, string name, string shortId, bool shared)
+{
+    public string DeviceId { get; } = deviceId;
+    public string Name { get; } = name;
+    public string ShortId { get; } = shortId;
+
+    /// <summary>Schreibbar: das Kaestchen bindet darauf.</summary>
+    public bool Shared { get; set; } = shared;
 }
