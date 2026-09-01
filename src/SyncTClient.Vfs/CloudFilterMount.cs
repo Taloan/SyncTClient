@@ -212,6 +212,72 @@ public sealed class CloudFilterMount : IDisposable
         }
     }
 
+    /// <summary>
+    /// Macht aus jedem Platzhalter im Ordner wieder eine gewoehnliche Datei.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den Augenblick, in dem die Freigabe aufhoert. Ein Platzhalter
+    /// ohne angemeldete Wurzel ist fuer Windows kaputt: es findet den
+    /// Anbieter nicht mehr, der seinen Inhalt liefern koennte, und meldet
+    /// beim Lesen wie beim Loeschen "Die Clouddatei-Metadaten sind
+    /// beschaedigt und nicht lesbar" (0x8007016B). Der Ordner liess sich
+    /// danach von Hand nicht mehr entfernen.
+    ///
+    /// Aufgeloest wird, nicht geloescht. Eine geholte Datei behaelt ihren
+    /// Inhalt; ein leerer Platzhalter wird eine leere Datei, denn seine Bytes
+    /// lagen ohnehin nie hier.
+    ///
+    /// Eine Datei, die sich nicht oeffnen laesst, wird uebergangen. Das
+    /// Abmelden der Wurzel darf daran nicht scheitern.
+    /// </remarks>
+    public unsafe int RevertPlaceholders()
+    {
+        if (!Directory.Exists(_rootPath)) return 0;
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0
+        };
+
+        var aufgeloest = 0;
+
+        foreach (var info in new DirectoryInfo(_rootPath).EnumerateFiles("*", options))
+        {
+            var attribute = (uint)info.Attributes;
+
+            // Nur Platzhalter. Eine gewoehnliche Datei hat nichts aufzuloesen,
+            // und ein Handle darauf zu oeffnen kostet ohne Gewinn.
+            if ((attribute & (FileAttributeRecallOnDataAccess
+                              | FileAttributeRecallOnOpen
+                              | FileAttributeOffline)) == 0
+                && (attribute & 0x400) == 0)
+            {
+                continue;
+            }
+
+            try
+            {
+                using var handle = File.OpenHandle(
+                    info.FullName, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+
+                var result = PInvoke.CfRevertPlaceholder(
+                    handle, CF_REVERT_FLAGS.CF_REVERT_FLAG_NONE, null);
+
+                if (result.Succeeded) aufgeloest++;
+            }
+            catch (Exception)
+            {
+                // Gesperrt, verschwunden, kein Zugriff. Kein Grund, das
+                // Abmelden der Wurzel aufzuhalten.
+            }
+        }
+
+        if (aufgeloest > 0) _log?.Invoke($"{aufgeloest} Platzhalter aufgeloest.");
+        return aufgeloest;
+    }
+
     public void ProjectPlaceholders(Action<int, int>? progress = null)
     {
         var entries = _source.Enumerate();
