@@ -120,6 +120,15 @@ public static class ThumbnailProviderRegistration
     /// </remarks>
     public static void RegisterMenu(string libraryPath)
     {
+        // Woher das Symbol fuer den Menueeintrag kommt. Die Erweiterung laeuft
+        // im Datei-Manager und weiss nicht, wo dieses Programm liegt; in der
+        // DLL selbst steckt kein Symbol, sie ist ein reiner Anbieter.
+        if (Environment.ProcessPath is { } programm)
+        {
+            using var own = Registry.CurrentUser.CreateSubKey(@"Software\SyncTClient");
+            own.SetValue("Programm", programm);
+        }
+
         using (var clsid = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{MenuClassId}"))
         {
             clsid.SetValue(null, "SyncTClient");
@@ -145,7 +154,7 @@ public static class ThumbnailProviderRegistration
     /// </summary>
     /// <remarks>
     /// Nur moeglich, wenn die native DLL vorliegt. In einer veroeffentlichten
-    /// Fassung ist sie es nicht -- sie ist ein eigenes NativeAOT-Projekt, das
+    /// Version ist sie es nicht -- sie ist ein eigenes NativeAOT-Projekt, das
     /// niemand referenziert. Die Vorschauen haengen davon aber nicht ab: die
     /// Shell erreicht den Erzeuger ueber die Klasse, die der laufende Client
     /// anmeldet. Dieser Weg hier ist die Zugabe fuer den Fall, dass der

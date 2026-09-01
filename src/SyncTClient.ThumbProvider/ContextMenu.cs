@@ -52,6 +52,39 @@ internal partial interface IShellExtInit
     [PreserveSig] int Initialize(nint folderPidl, IDataObject? dataObject, nint progIdKey);
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct MENUITEMINFOW
+{
+    public uint cbSize;
+    public uint fMask;
+    public uint fType;
+    public uint fState;
+    public uint wID;
+    public nint hSubMenu;
+    public nint hbmpChecked;
+    public nint hbmpUnchecked;
+    public nint dwItemData;
+    public nint dwTypeData;
+    public uint cch;
+    public nint hbmpItem;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct BITMAPINFOHEADER
+{
+    public uint biSize;
+    public int biWidth;
+    public int biHeight;
+    public ushort biPlanes;
+    public ushort biBitCount;
+    public uint biCompression;
+    public uint biSizeImage;
+    public int biXPelsPerMeter;
+    public int biYPelsPerMeter;
+    public uint biClrUsed;
+    public uint biClrImportant;
+}
+
 [GeneratedComInterface]
 [Guid("000214e4-0000-0000-c000-000000000046")]
 internal partial interface IContextMenu
@@ -167,9 +200,96 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
             AppendMenuW(untermenue, MfString | grau, idFirst + 2, "Diesen Ordner ausblenden");
 
         InsertMenuW(menu, indexMenu, MfByPosition | MfPopup, untermenue, "SyncTClient");
+        SetzeSymbol(menu, indexMenu);
 
         // Anzahl der vergebenen Kennungen, als HRESULT nach Vorschrift.
         return unchecked((int)(0x00000000 | 3u));
+    }
+
+    // ------------------------------------------------------------ Symbol
+
+    private static nint _symbol;
+    private static bool _symbolVersucht;
+
+    private static unsafe void SetzeSymbol(nint menu, uint position)
+    {
+        var symbol = Symbol();
+        if (symbol == 0) return;
+
+        var info = new MENUITEMINFOW
+        {
+            cbSize = (uint)sizeof(MENUITEMINFOW),
+            fMask = MiimBitmap,
+            hbmpItem = symbol
+        };
+
+        SetMenuItemInfoW(menu, position, true, ref info);
+    }
+
+    /// <summary>
+    /// Das Programmsymbol, gezeichnet als Bitmap.
+    /// </summary>
+    /// <remarks>
+    /// Ein Menue nimmt kein Symbol entgegen, sondern eine Bitmap. Das Symbol
+    /// wird deshalb aus dem Programm geholt und auf eine Flaeche mit
+    /// Alphakanal gezeichnet. Ohne diesen Kanal stuende es auf einem
+    /// schwarzen Rechteck, denn ein Symbol traegt seine Durchsichtigkeit
+    /// selbst mit.
+    ///
+    /// Einmal gebaut und behalten. Der Datei-Manager haelt diese DLL, solange
+    /// er laeuft, und baut das Menue bei jedem Rechtsklick neu auf; das Bild
+    /// jedesmal neu zu zeichnen waere Arbeit fuer nichts. Die Bitmap bleibt
+    /// bis zum Ende des Prozesses stehen, das Menue verweist darauf.
+    /// </remarks>
+    private static unsafe nint Symbol()
+    {
+        if (_symbolVersucht) return _symbol;
+        _symbolVersucht = true;
+
+        var programm = Sync.Programm();
+        if (programm is null) return 0;
+
+        nint ikone = 0;
+        if (ExtractIconExW(programm, 0, null, &ikone, 1) == 0 || ikone == 0) return 0;
+
+        var screen = GetDC(0);
+        var dc = CreateCompatibleDC(screen);
+
+        try
+        {
+            // Die Groesse, die das System fuer kleine Symbole vorsieht. Bei
+            // hoher Punktdichte ist das mehr als sechzehn Punkte.
+            var kante = GetSystemMetrics(SmCxSmIcon);
+            if (kante <= 0) kante = 16;
+
+            var kopf = new BITMAPINFOHEADER
+            {
+                biSize = (uint)sizeof(BITMAPINFOHEADER),
+                biWidth = kante,
+
+                // Negativ: die erste Zeile im Speicher ist die oberste.
+                biHeight = -kante,
+                biPlanes = 1,
+                biBitCount = 32,
+                biCompression = 0
+            };
+
+            var bitmap = CreateDIBSection(dc, ref kopf, 0, out _, 0, 0);
+            if (bitmap == 0) return 0;
+
+            var vorher = SelectObject(dc, bitmap);
+            DrawIconEx(dc, 0, 0, ikone, kante, kante, 0, 0, DiNormal);
+            SelectObject(dc, vorher);
+
+            _symbol = bitmap;
+            return bitmap;
+        }
+        finally
+        {
+            DeleteDC(dc);
+            ReleaseDC(0, screen);
+            DestroyIcon(ikone);
+        }
     }
 
     public int InvokeCommand(nint invokeInfo)
@@ -223,6 +343,50 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
 
     [LibraryImport("user32.dll", EntryPoint = "MessageBoxW", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int MessageBoxW(nint owner, string text, string caption, uint type);
+
+    private const uint MiimBitmap = 0x00000080;
+    private const int SmCxSmIcon = 49;
+    private const uint DiNormal = 0x0003;
+
+    [LibraryImport("user32.dll", EntryPoint = "SetMenuItemInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetMenuItemInfoW(nint menu, uint item,
+        [MarshalAs(UnmanagedType.Bool)] bool byPosition, ref MENUITEMINFOW info);
+
+    [LibraryImport("shell32.dll", EntryPoint = "ExtractIconExW", StringMarshalling = StringMarshalling.Utf16)]
+    private static unsafe partial uint ExtractIconExW(string file, int index, nint* large, nint* small, uint icons);
+
+    [LibraryImport("user32.dll")]
+    private static partial int GetSystemMetrics(int index);
+
+    [LibraryImport("user32.dll")]
+    private static partial nint GetDC(nint window);
+
+    [LibraryImport("user32.dll")]
+    private static partial int ReleaseDC(nint window, nint dc);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DrawIconEx(nint dc, int x, int y, nint icon,
+        int width, int height, uint step, nint brush, uint flags);
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DestroyIcon(nint icon);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial nint CreateCompatibleDC(nint dc);
+
+    [LibraryImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool DeleteDC(nint dc);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial nint SelectObject(nint dc, nint handle);
+
+    [LibraryImport("gdi32.dll")]
+    private static partial nint CreateDIBSection(nint dc, ref BITMAPINFOHEADER header,
+        uint usage, out nint bits, nint section, uint offset);
 }
 
 /// <summary>Der Draht zum laufenden Client.</summary>
@@ -256,6 +420,21 @@ internal static class Sync
         }
 
         return _roots;
+    }
+
+    /// <summary>Wo das Programm liegt, dessen Symbol im Menue steht.</summary>
+    public static string? Programm()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\SyncTClient");
+            var pfad = key?.GetValue("Programm") as string;
+            return File.Exists(pfad) ? pfad : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     public static bool Inside(string path)
