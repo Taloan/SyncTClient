@@ -53,14 +53,29 @@ public static class CommandService
         }
     }
 
+    /// <summary>
+    /// Nach so vielen Fehlversuchen in Folge wird aufgegeben.
+    /// </summary>
+    /// <remarks>
+    /// Ein belegter Name geht nicht von selbst frei. Alle zwei Sekunden
+    /// dieselbe Zeile zu schreiben verdeckt jede andere Meldung und aendert
+    /// nichts.
+    /// </remarks>
+    private const int MaximumFehler = 3;
+
     private static void Serve(Action<string> log)
     {
+        var fehler = 0;
+
         while (true)
         {
             try
             {
                 using var pipe = Erzeugen();
                 pipe.WaitForConnection();
+
+                // Steht die Leitung, war es kein dauerhaftes Hindernis.
+                fehler = 0;
 
                 using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, leaveOpen: true);
                 using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
@@ -80,10 +95,16 @@ public static class CommandService
             }
             catch (Exception ex)
             {
+                if (++fehler > MaximumFehler)
+                {
+                    log($"Befehlsdienst: {ex.Message} -- aufgegeben. " +
+                        "Das Kontextmenue im Explorer bleibt ohne Wirkung.");
+                    return;
+                }
+
                 log($"Befehlsdienst: {ex.Message}");
 
-                // Nicht in einer engen Schleife scheitern. Ein dauerhaft
-                // belegter Name waere sonst hundert Meldungen je Sekunde.
+                // Nicht in einer engen Schleife scheitern.
                 Thread.Sleep(2000);
             }
         }
