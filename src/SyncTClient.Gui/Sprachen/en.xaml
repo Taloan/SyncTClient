@@ -393,6 +393,15 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Menu.Rebuild">Rebuild index</s:String>
   <s:String x:Key="M.Rebuilding">“{0}”: recomputing {1} files.</s:String>
   <s:String x:Key="M.Purged">“{0}”: {1} names taken out by patterns.</s:String>
+  <s:String x:Key="S.Open.Title">Outstanding files</s:String>
+  <s:String x:Key="S.Open.For">Outstanding – {0}</s:String>
+  <s:String x:Key="S.Open.Name">File</s:String>
+  <s:String x:Key="S.Open.Size">Size</s:String>
+  <s:String x:Key="S.Open.Reason">Reason</s:String>
+  <s:String x:Key="S.Open.Hint">Shows the outstanding files with size and reason.</s:String>
+  <s:String x:Key="S.Open.None">Nothing outstanding.</s:String>
+  <s:String x:Key="S.Open.All">{0} files, {1} outstanding.</s:String>
+  <s:String x:Key="S.Open.Some">The first {0} of {1} files, {2} outstanding.</s:String>
   <s:String x:Key="S.Detail.Awaiting">Waiting for the remote</s:String>
   <s:String x:Key="S.Detail.AwaitingHint">Files the remote names without holding the content itself. They cannot be fetched while no node holds them in full.</s:String>
 </ResourceDictionary>

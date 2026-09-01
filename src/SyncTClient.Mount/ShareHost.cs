@@ -577,6 +577,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public long OutstandingBytes { get; private set; }
 
     /// <summary>
+    /// Die offenen Namen einzeln, mit Groesse und Grund.
+    /// </summary>
+    /// <remarks>
+    /// Eine Zahl sagt, dass etwas aussteht. Sie sagt nicht, was -- und bei
+    /// vier offenen Dateien von 976 ist genau das die Frage. Gefuellt beim
+    /// Durchgang ueber den Ordner, gedeckelt, weil eine frisch verbundene
+    /// Freigabe jede ihrer Dateien offen hat.
+    /// </remarks>
+    public IReadOnlyList<OutstandingItem> OutstandingItems { get; private set; } = [];
+
+    /// <summary>
     /// Dateien, die die Gegenstelle nennt, aber selbst nicht haelt.
     /// </summary>
     /// <remarks>

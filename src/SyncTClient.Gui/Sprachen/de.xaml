@@ -385,6 +385,15 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Menu.Rebuild">Index neu aufbauen</s:String>
   <s:String x:Key="M.Rebuilding">„{0}“: {1} Dateien werden neu gerechnet.</s:String>
   <s:String x:Key="M.Purged">„{0}“: {1} Namen durch Muster ausgenommen.</s:String>
+  <s:String x:Key="S.Open.Title">Offene Dateien</s:String>
+  <s:String x:Key="S.Open.For">Offen – {0}</s:String>
+  <s:String x:Key="S.Open.Name">Datei</s:String>
+  <s:String x:Key="S.Open.Size">Größe</s:String>
+  <s:String x:Key="S.Open.Reason">Grund</s:String>
+  <s:String x:Key="S.Open.Hint">Zeigt die offenen Dateien mit Größe und Grund.</s:String>
+  <s:String x:Key="S.Open.None">Nichts offen.</s:String>
+  <s:String x:Key="S.Open.All">{0} Dateien, {1} offen.</s:String>
+  <s:String x:Key="S.Open.Some">Die ersten {0} von {1} Dateien, {2} offen.</s:String>
   <s:String x:Key="S.Detail.Awaiting">Wartet auf Gegenstelle</s:String>
   <s:String x:Key="S.Detail.AwaitingHint">Dateien, deren Namen die Gegenstelle nennt, ohne den Inhalt selbst zu halten. Sie lassen sich nicht holen, solange kein Knoten sie vollständig führt.</s:String>
 </ResourceDictionary>

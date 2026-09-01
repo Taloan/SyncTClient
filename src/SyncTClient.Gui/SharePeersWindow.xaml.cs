@@ -6,7 +6,12 @@ namespace SyncTClient.Gui;
 /// <summary>Zeigt, welche Gegenstellen diese Freigabe vorhalten und was ihnen gegenüber noch aussteht.</summary>
 public partial class SharePeersWindow : Window
 {
-    private sealed record Zeile(string Activity, string Name, string Address, string Outstanding);
+    /// <param name="HasItems">
+    /// Ob es etwas zu zeigen gibt. Ein Verweis, der ein leeres Fenster
+    /// oeffnet, ist ein gebrochenes Versprechen.
+    /// </param>
+    private sealed record Zeile(
+        string Activity, string Name, string Address, string Outstanding, bool HasItems);
 
     private readonly ShareRow _row;
 
@@ -56,8 +61,13 @@ public partial class SharePeersWindow : Window
                 _ => "Getrennt"
             };
 
-        return new Zeile(aktivitaet, host.Display, host.Config.Address, Offen(row));
+        return new Zeile(
+            aktivitaet, host.Display, host.Config.Address, Offen(row),
+            row.Share?.OutstandingItems.Count > 0);
     }
+
+    private void OnShowOutstanding(object sender, RoutedEventArgs e)
+        => new OutstandingWindow(_row) { Owner = this }.ShowDialog();
 
     /// <summary>
     /// Was gegenüber dieser Gegenstelle noch aussteht.
