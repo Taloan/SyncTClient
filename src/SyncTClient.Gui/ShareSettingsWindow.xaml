@@ -79,8 +79,22 @@
             <TreeView.ItemTemplate>
               <HierarchicalDataTemplate ItemsSource="{Binding Children}">
                 <StackPanel Orientation="Horizontal" Margin="0,1">
+                  <!-- Ein Zweig, in dem noch eine Datei die Schwelle nicht
+                       erreicht hat, laesst sich nicht abwaehlen. Der Tooltip
+                       nennt den Grund; ein Kaestchen, das sich nicht
+                       umstellen laesst, wirkt sonst kaputt. -->
                   <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                            IsThreeState="False" VerticalAlignment="Center" />
+                            IsThreeState="False" VerticalAlignment="Center">
+                    <CheckBox.Style>
+                      <Style TargetType="CheckBox">
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding Removable}" Value="False">
+                            <Setter Property="ToolTip" Value="{DynamicResource S2.Locked}" />
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </CheckBox.Style>
+                  </CheckBox>
                   <TextBlock Text="{Binding Name}" Margin="6,0,0,0" VerticalAlignment="Center" />
                   <TextBlock Text="{Binding Summary}" Margin="10,0,0,0"
                              Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center" />

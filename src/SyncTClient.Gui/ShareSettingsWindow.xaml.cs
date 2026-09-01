@@ -54,11 +54,14 @@ public partial class ShareSettingsWindow : Window
         {
             // WAL-Modus erlaubt das Mitlesen, auch waehrend der Ordner laeuft.
             using var index = new PersistentFolderIndex(databasePath, _share.FolderId);
-            var entries = index.EnumerateLight().Select(e => (e.Name, e.Size, e.IsDirectory)).ToList();
+            var entries = index.EnumerateLight()
+                .Select(e => (e.Name, e.Size, e.IsDirectory, e.HasContent))
+                .ToList();
 
             _tree = FolderNode.Build(entries);
             ApplySelection(_tree, _share);
             _tree.RecomputeUpwards();
+            Sperren(_tree);
 
             FolderTree.ItemsSource = new[] { _tree };
             TreeStatus.Text = App.S("S2.Summary", _tree.FileCount, Format.Bytes(_tree.TotalBytes));
@@ -67,6 +70,22 @@ public partial class ShareSettingsWindow : Window
         {
             TreeStatus.Text = $"Index nicht lesbar: {ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// Sagt, warum ein Zweig sich nicht abwaehlen laesst.
+    /// </summary>
+    /// <remarks>
+    /// Abwaehlen entfernt den Zweig aus dem Ordner. Erlaubt ist das nur, wenn
+    /// die Gegenstelle jede Datei darin vollstaendig fuehrt -- sonst waere es
+    /// kein Ausschliessen, sondern ein Loeschen der letzten Kopie.
+    /// </remarks>
+    private void Sperren(FolderNode node)
+    {
+        node.Refused = knoten =>
+            TreeStatus.Text = App.S("S2.Refused", knoten.Name, Format.Count(knoten.Blocking));
+
+        foreach (var child in node.Children) Sperren(child);
     }
 
     /// <summary>Uebertraegt die gespeicherte Auswahl auf den frisch gebauten Baum.</summary>

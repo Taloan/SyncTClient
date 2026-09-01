@@ -168,6 +168,11 @@ public sealed partial class ShareHost
     {
         if (NameOf(relativePath) is not { } name) return;
 
+        // Was nicht zur Auswahl gehoert, wird nie angekuendigt. Ohne diese
+        // Pruefung wuerde das Entfernen eines ausgeschlossenen Zweiges der
+        // Gegenstelle als Loeschung gemeldet -- und dort ausgefuehrt.
+        if (!_config.Includes(name)) return;
+
         // Was wir selbst gerade schreiben, ist keine Aenderung von aussen.
         if (IsHydrating(name)) return;
 
@@ -188,6 +193,7 @@ public sealed partial class ShareHost
     public void NoteLocalDelete(string relativePath)
     {
         if (NameOf(relativePath) is not { } name) return;
+        if (!_config.Includes(name)) return;
 
         _dirty.TryRemove(name, out _);
         _removed[name] = 0;
@@ -514,6 +520,91 @@ public sealed partial class ShareHost
         Outstanding = offen;
         OutstandingBytes = bytes;
         UpdateOutstandingPhase();
+    }
+
+    /// <summary>
+    /// Entfernt, was nicht mehr zur Auswahl gehoert.
+    /// </summary>
+    /// <remarks>
+    /// Erlaubt ist das Abwaehlen nur, wenn jede Datei des Zweiges die
+    /// Platzhalter-Schwelle erreicht hat -- die Gegenstelle fuehrt sie also
+    /// vollstaendig. Erst dann ist Entfernen kein Verlust, sondern eine
+    /// Freigabe von Platz.
+    ///
+    /// Angekuendigt wird davon nichts. Ein ausgeschlossener Name kommt gar
+    /// nicht erst in die Vermerke; sonst wuerde aus dem Abwaehlen hier ein
+    /// Loeschen bei der Gegenstelle.
+    /// </remarks>
+    public (int Files, long Bytes) PruneExcluded()
+    {
+        // Leere Liste heisst: alles gehoert dazu. Dann gibt es nichts zu tun.
+        if (_config.Included.Count == 0 || !Directory.Exists(_config.LocalPath)) return (0, 0);
+
+        var anzahl = 0;
+        long bytes = 0;
+
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = 0
+        };
+
+        foreach (var info in new DirectoryInfo(_config.LocalPath).EnumerateFiles("*", options))
+        {
+            if (NameOf(info.FullName) is not { } name) continue;
+            if (_config.Includes(name)) continue;
+
+            try
+            {
+                var laenge = info.Length;
+                info.Delete();
+
+                _cache?.Forget(name);
+                lock (_indexGate) _index?.ForgetLocal(name);
+
+                anzahl++;
+                bytes += laenge;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log($"[{FolderId}] \"{name}\" liess sich nicht entfernen: {ex.Message}");
+            }
+        }
+
+        LeereVerzeichnisse(_config.LocalPath);
+
+        if (anzahl > 0)
+            _log($"[{FolderId}] {anzahl} Dateien ausserhalb der Auswahl entfernt " +
+                 $"({bytes / (1024.0 * 1024.0):0.0} MB).");
+
+        return (anzahl, bytes);
+    }
+
+    /// <summary>Raeumt Verzeichnisse weg, in denen nichts mehr steht.</summary>
+    /// <remarks>
+    /// Von unten nach oben, denn ein Verzeichnis wird erst leer, nachdem sein
+    /// letztes Unterverzeichnis verschwunden ist. Die Wurzel bleibt: sie ist
+    /// die Freigabe selbst.
+    /// </remarks>
+    private void LeereVerzeichnisse(string wurzel)
+    {
+        foreach (var pfad in Directory.EnumerateDirectories(wurzel))
+        {
+            try
+            {
+                LeereVerzeichnisse(pfad);
+
+                if (NameOf(pfad) is { } name && !_config.Includes(name)
+                    && !Directory.EnumerateFileSystemEntries(pfad).Any())
+                    Directory.Delete(pfad);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // In Benutzung. Beim naechsten Mal.
+                _log($"[{FolderId}] \"{pfad}\" liess sich nicht entfernen: {ex.Message}");
+            }
+        }
     }
 
     // ------------------------------------------------------------ Hintergrundlauf

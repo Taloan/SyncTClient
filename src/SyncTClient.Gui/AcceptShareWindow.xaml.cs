@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -57,7 +57,12 @@ public partial class AcceptShareWindow : Window
         {
             // WAL-Modus erlaubt das Mitlesen, waehrend der Index noch waechst.
             using var index = new PersistentFolderIndex(databasePath, _share.FolderId);
-            var entries = index.EnumerateLight().Select(e => (e.Name, e.Size, e.IsDirectory)).ToList();
+            // Beim Uebernehmen liegt hier noch nichts, also ist auch nichts
+            // zu entfernen. Die Sperre gegen das Abwaehlen greift erst, wenn
+            // der Ordner steht.
+            var entries = index.EnumerateLight()
+                .Select(e => (e.Name, e.Size, e.IsDirectory, HasContent: true))
+                .ToList();
 
             _tree = FolderNode.Build(entries);
 

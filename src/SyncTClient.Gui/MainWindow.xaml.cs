@@ -1401,6 +1401,21 @@ public partial class MainWindow : Window
 
         Status(App.S("M.SavedScope", scope));
         RefreshRows();
+
+        // Bisher wurde die Auswahl nur aufgeschrieben. Sie galt fuer alles,
+        // was danach kam, und liess liegen, was schon dastand -- auch nach
+        // einem Neustart, denn kein Durchgang raeumt auf, was nicht mehr
+        // dazugehoert.
+        if (_row?.Share is not { } host) return;
+
+        _ = Task.Run(() =>
+        {
+            var (files, bytes) = host.PruneExcluded();
+            if (files == 0) return;
+
+            Dispatcher.Invoke(() =>
+                Status(App.S("M.Pruned", Format.Count(files), Format.Bytes(bytes))));
+        });
     }
 
     /// <summary>
