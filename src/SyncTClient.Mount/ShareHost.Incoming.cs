@@ -560,6 +560,37 @@ public sealed partial class ShareHost
     /// bleibt. Ausserhalb des Sync-Roots waere es ein Kopieren, und ein
     /// Platzhalter wuerde dabei aus dem Netz geholt.
     /// </remarks>
+    /// <summary>
+    /// Legt die Ablage an und setzt sie auf versteckt.
+    /// </summary>
+    /// <remarks>
+    /// Syncthing haelt es bei seinen eigenen Verwaltungsordnern genauso, und
+    /// aus demselben Grund: sie gehoeren nicht zum Inhalt der Freigabe. Wer
+    /// den Ordner oeffnet, will seine Dateien sehen und nicht den Keller, in
+    /// dem die ersetzten Fassungen liegen.
+    ///
+    /// Gesetzt wird nur beim Anlegen. Wer das Kaestchen spaeter selbst
+    /// entfernt, hat es so gewollt; die Vorgabe ein zweites Mal
+    /// durchzusetzen waere eine Bevormundung.
+    /// </remarks>
+    private void VersteckeWurzel()
+    {
+        var wurzel = LocalPathOf(VersionsFolder);
+        if (Directory.Exists(wurzel)) return;
+
+        try
+        {
+            var info = Directory.CreateDirectory(wurzel);
+            info.Attributes |= FileAttributes.Hidden;
+        }
+        catch (Exception ex)
+        {
+            // Die Ablage selbst legt der naechste Aufruf an. Ohne das
+            // Attribut ist sie sichtbar, aber sie tut, was sie soll.
+            _log($"[{FolderId}] \"{VersionsFolder}\" liess sich nicht verstecken: {ex.Message}");
+        }
+    }
+
     private bool KeepVersion(string name, string path)
     {
         if (!_config.KeepVersions) return false;
@@ -571,6 +602,7 @@ public sealed partial class ShareHost
             var stem = name[..^extension.Length];
 
             var target = LocalPathOf($"{VersionsFolder}/{stem}~{stamp}{extension}");
+            VersteckeWurzel();
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
             // Zweimal dieselbe Sekunde ist moeglich. Dann bekommt die zweite
