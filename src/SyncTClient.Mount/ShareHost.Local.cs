@@ -552,24 +552,26 @@ public sealed partial class ShareHost
                 {
                     if (isDirectory) continue;
 
+                    // Abgewaehltes zaehlt gar nicht -- weder als Rueckstand
+                    // noch im Nenner.
+                    //
+                    // Frueher galt es als offen, solange es hier noch lag und
+                    // "darauf wartete, hinauszugehen". Das kann es aber nicht
+                    // einloesen: entfernt wird nur, was die Gegenstelle
+                    // vollstaendig fuehrt, und gerade das tut sie bei diesen
+                    // Dateien nicht. Der Balken stand damit dauerhaft kurz vor
+                    // hundert -- wegen eines Zweiges, den jemand ausdruecklich
+                    // abgewaehlt hat.
+                    //
+                    // Was hier faelschlich liegt, meldet das Entfernen. Der
+                    // Abgleich hat damit nichts zu tun.
+                    if (!_config.Includes(name)) continue;
+
                     bekannt.Add(name);
                     gesamt++;
                     gesamtBytes += size;
                     vereint++;
                     vereintBytes += size;
-
-                    // Ausserhalb der Auswahl ist die Abwesenheit der
-                    // erwuenschte Zustand, nicht der Rueckstand. Offen ist ein
-                    // solcher Eintrag nur, solange er hier noch liegt und
-                    // darauf wartet, hinauszugehen.
-                    if (!_config.Includes(name))
-                    {
-                        if (!vorhanden.ContainsKey(name)) continue;
-
-                        offen++;
-                        bytes += size;
-                        continue;
-                    }
 
                     // Zwei Gruende, dass etwas aussteht. Der erste ist unser
                     // eigener: der Eintrag steht hier noch nicht so da.
