@@ -67,7 +67,8 @@
          in einem Film, aus demselben Grund. -->
     <DataTemplate x:Key="Uebertragung">
       <Grid Margin="0,2" Height="24" ToolTip="{Binding RelativePath}">
-        <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}" />
+        <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}"
+                     Template="{StaticResource BalkenVorlage}" Background="{DynamicResource Feld}" Foreground="{DynamicResource Ein}" />
 
         <DockPanel Margin="6,0">
           <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" FontSize="11"
@@ -359,6 +360,12 @@
                              IsIndeterminate="{Binding Indeterminate, Mode=OneWay}">
                   <ProgressBar.Style>
                     <Style TargetType="ProgressBar">
+                      <!-- Ein eigener Stil ohne BasedOn tritt an die Stelle
+                           des abgeleiteten, statt darauf aufzusetzen. Die
+                           Vorlage muss deshalb hier noch einmal stehen. -->
+                      <Setter Property="Template" Value="{StaticResource BalkenVorlage}" />
+                      <Setter Property="Background" Value="{DynamicResource Feld}" />
+                      <Setter Property="Foreground" Value="{DynamicResource Ein}" />
                       <Setter Property="Visibility" Value="Collapsed" />
                       <Style.Triggers>
                         <DataTrigger Binding="{Binding Busy}" Value="True">
@@ -674,7 +681,8 @@
                     <TextBlock Grid.Column="0" Text="{Binding Drive}" Style="{StaticResource Beschriftung}"
                                VerticalAlignment="Center" Margin="0,0,6,0" />
                     <ProgressBar Grid.Column="1" Height="8" Minimum="0" Maximum="100"
-                                 Value="{Binding Percent, Mode=OneWay}" VerticalAlignment="Center" />
+                                 Value="{Binding Percent, Mode=OneWay}" VerticalAlignment="Center"
+                                 Template="{StaticResource BalkenVorlage}" Background="{DynamicResource Feld}" Foreground="{DynamicResource Ein}" />
                     <TextBlock Grid.Column="2" Text="{Binding Text}" Style="{StaticResource Beschriftung}"
                                VerticalAlignment="Center" Margin="6,0,0,0" />
                   </Grid>
