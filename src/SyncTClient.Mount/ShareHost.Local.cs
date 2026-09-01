@@ -483,6 +483,7 @@ public sealed partial class ShareHost
         }
 
         LastScan = DateTime.Now;
+        _mitInhalt = mitInhalt;
 
         // Erst die Bilanz nachziehen, dann messen: die Anzeige des belegten
         // Platzes haengt daran, und der naechste Takt entscheidet auf dieser
@@ -517,6 +518,9 @@ public sealed partial class ShareHost
     /// hat. Ein eigener Lauf ueber den Index mit einem Zugriff je Datei waere
     /// dieselbe Auskunft zum doppelten Preis.
     /// </remarks>
+    /// <summary>Was beim letzten Durchgang wirklich Inhalt hielt.</summary>
+    private Dictionary<string, (long Bytes, DateTimeOffset LastAccess)> _mitInhalt = [];
+
     private void MeasureOutstanding(Dictionary<string, (long Size, long ModifiedS)> vorhanden)
     {
         var offen = 0;
@@ -569,7 +573,15 @@ public sealed partial class ShareHost
                     // haelt sie aber nicht. Der Platzhalter steht dann zwar
                     // richtig da, ist aber nicht zu fuellen -- abgeglichen ist
                     // das nicht.
-                    if (!fehlt && hatInhalt) continue;
+                    //
+                    // Und der dritte gilt nur bei "vollstaendig lokal": dort
+                    // ist ein Platzhalter kein erwuenschter Zustand, sondern
+                    // eine Zusage, die nicht eingehalten ist. Bei on-demand
+                    // waere er der Normalfall.
+                    var leer = _config.Mode == ShareMode.AlwaysLocal
+                               && !_mitInhalt.ContainsKey(name);
+
+                    if (!fehlt && hatInhalt && !leer) continue;
 
                     offen++;
                     bytes += size;
