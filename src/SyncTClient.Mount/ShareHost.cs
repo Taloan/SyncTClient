@@ -756,9 +756,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Platzhalter bekommen. Der Index kann Namen fuehren, die eine
             // aeltere Fassung hereingelassen hat.
             var uhr = System.Diagnostics.Stopwatch.StartNew();
-            PurgeIgnored();
 
-            await ProjectAsync();
+            // Ausdruecklich auf einen eigenen Faden.
+            //
+            // Der Aufruf kommt ueber das Verbinden aus der Oberflaeche, und
+            // was hier folgt, ist rechnende Arbeit mit einem Zugriff auf das
+            // Dateisystem je Eintrag: das Aufraeumen des Index, das Anlegen
+            // der Verzeichnisse, das Pruefen jedes Platzhalters. Bei
+            // fuenfundvierzigtausend Dateien sind das zwoelf bis siebzehn
+            // Sekunden, in denen das Fenster nichts zeichnet und auf keinen
+            // Klick antwortet.
+            await Task.Run(async () =>
+            {
+                PurgeIgnored();
+                await ProjectAsync().ConfigureAwait(false);
+            }).ConfigureAwait(false);
             _log($"[{FolderId}] Platzhalter vorbereitet in {uhr.ElapsedMilliseconds} ms.");
             State = ShareState.Bereit;
 
