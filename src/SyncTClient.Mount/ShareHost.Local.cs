@@ -779,9 +779,22 @@ public sealed partial class ShareHost
             {
                 LeereVerzeichnisse(pfad);
 
-                if (NameOf(pfad) is { } name && !_config.Includes(name, isDirectory: true)
-                    && !Directory.EnumerateFileSystemEntries(pfad).Any())
-                    Directory.Delete(pfad);
+                if (NameOf(pfad) is not { } name) continue;
+                if (_config.Includes(name, isDirectory: true)) continue;
+                if (Directory.EnumerateFileSystemEntries(pfad).Any()) continue;
+
+                // Unter der Sperre, und die Vermerke gleich hinterher fort.
+                //
+                // Sonst meldet der Beobachter das Entfernen als Loeschung, und
+                // die geht hinaus: die Vorkehrung, die das fuer Dateien
+                // verhindert, fragt MayEvict -- und das ist fuer ein
+                // Verzeichnis immer falsch, es hat weder Groesse noch Bloecke.
+                // Die Gegenstelle loeschte daraufhin das Verzeichnis samt
+                // allem, was wir gerade hineingeschickt haben.
+                using (HoldHydration(name)) Directory.Delete(pfad);
+
+                _removed.TryRemove(name, out _);
+                _dirty.TryRemove(name, out _);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
