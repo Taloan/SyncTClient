@@ -984,6 +984,18 @@ public sealed partial class ShareHost
         // Ein Platzhalter hat den Inhalt nicht. Angekuendigt wird nur, was
         // vollstaendig hier liegt -- ausser er ist gerade hierher verschoben
         // worden. Dann kennen wir seine Bloecke, auch ohne sie zu haben.
+        //
+        // Der Gegenstelle sieht das nach einem unvollstaendigen Knoten aus:
+        // Syncthing rechnet die Vollstaendigkeit eines Geraets aus dem Index,
+        // den es ankuendigt, und zeigt uns dauerhaft mit wenigen Prozent. Das
+        // ist der Preis, und er ist richtig bezahlt.
+        //
+        // Denn die Platzhalter-Schwelle ist eine gegenseitige Zusage. Wer eine
+        // Datei ankuendigt, sagt damit: bei mir ist sie zu holen. Andere geben
+        // daraufhin ihren Speicherplatz frei. Kuendigten wir an, was wir nicht
+        // halten, gaebe ein anderer Knoten seine Kopie im Vertrauen auf eine
+        // auf, die es nicht gibt -- und bei Schwelle 1 waere die letzte echte
+        // Kopie fort, ohne dass eine Seite einen Fehler saehe.
         if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
         {
             // Der Vermerk aus dem Rueckruf ist der schnelle Weg. Fehlt er --
