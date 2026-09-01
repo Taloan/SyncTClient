@@ -1,4 +1,4 @@
-// Cloud Filter API (cldapi.dll) -- die Platzhalter-Schnittstelle von Windows.
+﻿// Cloud Filter API (cldapi.dll) -- die Platzhalter-Schnittstelle von Windows.
 // CsWin32 erzeugt daraus die P/Invokes und Strukturen.
 
 CfRegisterSyncRoot
@@ -8,6 +8,7 @@ CfDisconnectSyncRoot
 CfCreatePlaceholders
 CfExecute
 CfDehydratePlaceholder
+CfHydratePlaceholder
 CfUpdatePlaceholder
 CfGetPlaceholderStateFromFileInfo
 CfUpdateSyncProviderStatus

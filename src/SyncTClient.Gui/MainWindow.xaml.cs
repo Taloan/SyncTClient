@@ -238,11 +238,13 @@ public partial class MainWindow : Window
         //
         // Eine Anzeige, die eine Sekunde spaeter nachzieht, ist niemandem im
         // Weg. Eine, die den Abgleich anhaelt, schon.
-        share.StateChanged += _ => Dispatcher.BeginInvoke(RefreshRows);
-        share.SyncProgressChanged += () => Dispatcher.BeginInvoke(RefreshRows);
+        // Zustand, Fortschritt und Cache melden sich nicht mehr einzeln. Der
+        // Sekundentakt zieht sie ohnehin nach, und schneller kann niemand
+        // lesen. Nur die Uebertragungsliste braucht die Meldung: ein Eintrag,
+        // der erst eine Sekunde spaeter erscheint, hat seine Datei
+        // moeglicherweise schon hinter sich.
         share.TransferStarted += t => Dispatcher.BeginInvoke(() => AddTransfer(t));
         share.TransferFinished += _ => Dispatcher.BeginInvoke(TrimTransfers);
-        share.CacheChanged += () => Dispatcher.BeginInvoke(RefreshRows);
         share.LimitReached += hit => Dispatcher.BeginInvoke(() => ShowLimit(hit));
 
         // Die Tabelle enthaelt fuer diesen Ordner noch keine Zeile. Er wurde
@@ -572,6 +574,15 @@ public partial class MainWindow : Window
     /// <summary>So oft wird nachgesehen, ob die Grenzen noch eingehalten sind.</summary>
     private static readonly TimeSpan EnforceInterval = TimeSpan.FromMinutes(1);
 
+    /// <remarks>
+    /// Hier und nirgends sonst werden die Zeilen nachgezogen.
+    ///
+    /// Frueher stiess jede Meldung einer Freigabe sofort einen vollstaendigen
+    /// Neuaufbau an. Waehrend "vollstaendig lokal" tausend Dateien holt, sind
+    /// das tausend Durchlaeufe -- jeder ueber alle Zeilen, alle Gegenstellen,
+    /// den Cache und die Vorschauen -- und alle auf dem einen Faden, den die
+    /// Oberflaeche hat. Der Abgleich wartete mit.
+    /// </remarks>
     private void Tick()
     {
         RefreshRows();
