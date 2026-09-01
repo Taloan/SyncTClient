@@ -1170,6 +1170,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private async Task AdoptLocalAsync()
     {
+        // Ausdruecklich auf einen eigenen Faden, und nicht bloss "await".
+        //
+        // Der Aufruf kommt ueber das Verbinden aus der Oberflaeche, und beides
+        // hier ist rechnende Arbeit ohne Wartepunkt: der Durchgang ueber den
+        // Ordner und das Rechnen der Blocklisten. Bei sechzig Gigabyte sind
+        // das anderthalb Minuten, in denen das Fenster nichts zeichnet und auf
+        // keinen Klick antwortet -- es sieht aus, als sei es abgestuerzt.
+        await Task.Run(AufnehmenAsync).ConfigureAwait(false);
+    }
+
+    private async Task AufnehmenAsync()
+    {
         ScanLocal(quiet: true);
         if (_dirty.IsEmpty) return;
 
@@ -1179,7 +1191,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         try
         {
-            await PublishAsync(CancellationToken.None);
+            await PublishAsync(
+                CancellationToken.None,
+                fertig => SetPhase(SyncPhase.Index, fertig, anzahl));
         }
         catch (Exception ex)
         {
