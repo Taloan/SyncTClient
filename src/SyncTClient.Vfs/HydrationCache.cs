@@ -109,6 +109,60 @@ public sealed class HydrationCache
     }
 
     /// <summary>
+    /// Macht aus einer gewoehnlichen Datei einen gefuellten Platzhalter.
+    /// </summary>
+    /// <remarks>
+    /// Das Gegenstueck zum Freigeben: dieselbe Umwandlung, nur ohne
+    /// Dehydrieren. Die Datei behaelt ihren Inhalt und gilt fortan als
+    /// abgeglichen -- Windows zeigt den gruenen Haken statt der Wolke.
+    ///
+    /// Gebraucht fuer "vollstaendig lokal". Der Weg ueber den Rueckruf steht
+    /// dort nicht offen: er wird nur bedient, wenn ein fremder Prozess die
+    /// Datei oeffnet. Oeffnet der Anbieter sie selbst, meldet CfExecute
+    /// Erfolg und schreibt nichts.
+    /// </remarks>
+    public bool MarkInSync(string relativePath)
+    {
+        try
+        {
+            using var handle = File.OpenHandle(
+                FullPath(relativePath), FileMode.Open, FileAccess.ReadWrite,
+                FileShare.ReadWrite | FileShare.Delete);
+
+            return Kennzeichnen(handle, relativePath);
+        }
+        catch (Exception ex)
+        {
+            _log?.Invoke($"  \"{relativePath}\" liess sich nicht als abgeglichen kennzeichnen: {ex.Message}");
+            return false;
+        }
+    }
+
+    private unsafe bool Kennzeichnen(SafeFileHandle handle, string relativePath)
+    {
+        var identity = Marshal.StringToHGlobalUni(relativePath);
+        try
+        {
+            var result = PInvoke.CfConvertToPlaceholder(
+                handle,
+                (void*)identity,
+                (uint)((relativePath.Length + 1) * sizeof(char)),
+                CF_CONVERT_FLAGS.CF_CONVERT_FLAG_MARK_IN_SYNC,
+                null,
+                null);
+
+            if (!result.Failed) return true;
+
+            _log?.Invoke($"  \"{relativePath}\" liess sich nicht kennzeichnen: 0x{(uint)result.Value:X8}");
+            return false;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(identity);
+        }
+    }
+
+    /// <summary>
     /// Fordert Windows auf, diesen Platzhalter zu fuellen.
     /// </summary>
     /// <remarks>
