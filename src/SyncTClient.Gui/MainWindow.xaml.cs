@@ -1556,13 +1556,10 @@ public partial class MainWindow : Window
 
         Status(App.S("M.Connecting", row.Name, draft.LocalPath));
 
-        // Und derselbe Fortschritt noch einmal fuer den zweiten Schritt. Er
-        // ist bei einem Ordner, der hier schon liegt, der laengere von beiden:
-        // jede vorhandene Datei wird gelesen und gerechnet.
-        var uebernahme = new ProgressWindow(row.Name) { Owner = this };
-        uebernahme.Verfolge(host);
-        uebernahme.Show();
-
+        // Ohne eigenes Fenster. Ab hier steht der Ordner in der Uebersicht,
+        // und seine Zeile zeigt dieselbe Phase mit demselben Balken. Ein
+        // zweites Fenster daneben sagt nichts Neues und verdeckt die Zeile,
+        // die es sagt.
         try
         {
             await row.Peer.Host.CommitAsync(host, _cts.Token);
@@ -1571,10 +1568,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             Status(App.S("M.ConnectFailed", ex.Message));
-        }
-        finally
-        {
-            uebernahme.Close();
         }
 
         RebuildRows();
