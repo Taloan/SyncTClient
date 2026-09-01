@@ -64,7 +64,11 @@
 
         <DockPanel Margin="0,14,0,6" MinHeight="26">
           <TextBlock DockPanel.Dock="Left" Text="{DynamicResource S.Share.TreeQuestion}"
-                     FontWeight="SemiBold" VerticalAlignment="Center" />
+                     FontWeight="SemiBold" VerticalAlignment="Center">
+            <TextBlock.ToolTip>
+              <TextBlock Text="{DynamicResource S.Share.TreeHint}" TextWrapping="Wrap" MaxWidth="440" />
+            </TextBlock.ToolTip>
+          </TextBlock>
           <Button DockPanel.Dock="Right" Content="{DynamicResource S.None}" Padding="10,3" Click="OnSelectNone" Margin="0" />
           <Button DockPanel.Dock="Right" Content="{DynamicResource S.All}" Padding="10,3" Click="OnSelectAll" Margin="0,0,6,0" />
           <TextBlock x:Name="TreeStatus" VerticalAlignment="Center" Margin="10,0"
