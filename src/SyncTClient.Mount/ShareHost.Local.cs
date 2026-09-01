@@ -525,6 +525,8 @@ public sealed partial class ShareHost
     {
         var offen = 0;
         long bytes = 0;
+        var wartend = 0;
+        long wartendBytes = 0;
         var gesamt = 0;
         long gesamtBytes = 0;
         var vereint = 0;
@@ -582,6 +584,21 @@ public sealed partial class ShareHost
                                && !_mitInhalt.ContainsKey(name);
 
                     if (!fehlt && hatInhalt && !leer) continue;
+
+                    // Eine Datei, die die Gegenstelle selbst nicht haelt, ist
+                    // nicht abgeglichen -- aber auch nicht zu beschaffen. Sie
+                    // getrennt zu zaehlen ist der Unterschied zwischen "es
+                    // fehlt noch etwas" und "hier ist nichts mehr zu tun".
+                    //
+                    // Zusammengezaehlt stand der Balken sonst fuer immer kurz
+                    // vor hundert und der Zustand auf "gleicht ab", ohne dass
+                    // irgendein Handgriff daran etwas geaendert haette.
+                    if (!fehlt && !hatInhalt)
+                    {
+                        wartend++;
+                        wartendBytes += size;
+                        continue;
+                    }
 
                     offen++;
                     bytes += size;
@@ -642,7 +659,8 @@ public sealed partial class ShareHost
         if (offen != Outstanding || IndexFiles == 0)
             _log($"[{FolderId}] Rueckstand: {offen} von {vereint} Dateien, " +
                  $"{bytes / (1024.0 * 1024.0):0.0} von {vereintBytes / (1024.0 * 1024.0):0.0} MB " +
-                 $"(Gegenstelle {gesamt}, hier {vorhanden.Count}).");
+                 $"(Gegenstelle {gesamt}, hier {vorhanden.Count}" +
+                 (wartend > 0 ? $", {wartend} ohne Inhalt bei der Gegenstelle" : "") + ").");
 
         LocalFiles = vorhanden.Count;
         LocalBytes = vorhandenBytes;
@@ -652,6 +670,8 @@ public sealed partial class ShareHost
         SyncTotalBytes = vereintBytes;
         Outstanding = offen;
         OutstandingBytes = bytes;
+        Awaiting = wartend;
+        AwaitingBytes = wartendBytes;
         UpdateOutstandingPhase();
     }
 

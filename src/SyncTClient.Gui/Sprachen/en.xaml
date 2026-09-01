@@ -378,4 +378,6 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Main.Incoming">↓ IN</s:String>
   <s:String x:Key="S.Menu.Rebuild">Rebuild index</s:String>
   <s:String x:Key="M.Rebuilding">“{0}”: recomputing {1} files.</s:String>
+  <s:String x:Key="S.Detail.Awaiting">Waiting for the remote</s:String>
+  <s:String x:Key="S.Detail.AwaitingHint">Files the remote names without holding the content itself. They cannot be fetched while no node holds them in full.</s:String>
 </ResourceDictionary>

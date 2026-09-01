@@ -563,6 +563,22 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public long OutstandingBytes { get; private set; }
 
     /// <summary>
+    /// Dateien, die die Gegenstelle nennt, aber selbst nicht haelt.
+    /// </summary>
+    /// <remarks>
+    /// Nicht abgeglichen und nicht zu beschaffen. Sie zaehlen nicht zum
+    /// Rueckstand: sonst stuende der Balken fuer immer kurz vor hundert und
+    /// der Zustand auf "gleicht ab", ohne dass irgendein Handgriff daran
+    /// etwas aendern koennte.
+    ///
+    /// Genannt werden sie trotzdem. Verschweigen hiesse zu behaupten, alles
+    /// sei da.
+    /// </remarks>
+    public int Awaiting { get; private set; }
+
+    public long AwaitingBytes { get; private set; }
+
+    /// <summary>
     /// Was im Ordner steht, Platzhalter eingerechnet.
     /// </summary>
     /// <remarks>
