@@ -1279,7 +1279,12 @@ public sealed partial class ShareHost
     /// <summary>
     /// Bewertet die Vermerke und schickt, was uebrig bleibt.
     /// </summary>
-    private async Task PublishAsync(CancellationToken ct)
+    /// <param name="fortschritt">
+    /// Wird nach jedem betrachteten Namen gerufen. Das Rechnen der Blocklisten
+    /// ist der teure Teil eines uebernommenen Ordners -- bei sechzig Gigabyte
+    /// anderthalb Minuten. Ohne diese Meldung steht die Anzeige derweil still.
+    /// </param>
+    private async Task PublishAsync(CancellationToken ct, Action<int>? fortschritt = null)
     {
         if (_connections.IsEmpty || _index is null) return;
         if (IsPaused) return;
@@ -1292,9 +1297,12 @@ public sealed partial class ShareHost
         var batch = new List<BepFileInfo>();
         var bytes = 0;
 
+        var betrachtet = 0;
+
         foreach (var name in _dirty.Keys.OrderBy(n => n, StringComparer.Ordinal))
         {
             ct.ThrowIfCancellationRequested();
+            fortschritt?.Invoke(++betrachtet);
 
             // Waehrend der Sammelfrist kann eine Hydration begonnen haben.
             if (IsHydrating(name)) continue;
