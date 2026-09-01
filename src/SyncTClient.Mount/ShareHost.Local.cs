@@ -757,9 +757,12 @@ public sealed partial class ShareHost
         {
             LeereVerzeichnisse(_config.LocalPath);
 
-            _log($"[{FolderId}] {anzahl} Dateien uebertragen und hier entfernt " +
-                 $"({bytes / (1024.0 * 1024.0):0.0} MB) -- sie sollen auf diesem " +
-                 "Geraet nicht liegen.");
+            // Nicht "uebertragen": eine Datei, deren Bloecke die Gegenstelle
+            // schon hatte, ist nie ueber die Leitung gegangen. Gesagt wird,
+            // was feststeht -- sie liegt dort, also nicht mehr hier.
+            _log($"[{FolderId}] {anzahl} Dateien liegen auf der Gegenstelle und " +
+                 $"wurden hier entfernt ({bytes / (1024.0 * 1024.0):0.0} MB) -- " +
+                 "sie sollen auf diesem Geraet nicht liegen.");
         }
 
         return (anzahl, bytes);
