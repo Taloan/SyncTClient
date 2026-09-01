@@ -218,14 +218,29 @@ public sealed partial class ShareHost
     {
         var info = new System.IO.FileInfo(path);
 
-        // Was schon so dasteht, wird nicht angefasst. Das trifft nach jeder
-        // erneuten Ankuendigung derselben Datei zu, und ein Neuanlegen wuerde
-        // einen geholten Inhalt ohne Not wegwerfen.
+        // Was schon so dasteht, wird nicht angefasst -- gleiche Groesse,
+        // gleiche Sekunde, fertig.
+        //
+        // Ob es ein Platzhalter ist oder eine gewoehnliche Datei, spielt dabei
+        // keine Rolle. Frueher stand hier die Bedingung "und ist ein
+        // Platzhalter", und damit traf sie auf einen Ordner, der schon
+        // dieselben Daten enthielt, nie zu: jede Datei wurde geloescht, durch
+        // einen Platzhalter ersetzt und danach wieder heruntergeladen. Wer ein
+        // gewachsenes Verzeichnis uebernimmt, laedt so seinen eigenen Bestand
+        // ein zweites Mal aus dem Netz.
+        //
+        // Es ist dieselbe Heuristik, nach der auch der Durchgang ueber den
+        // Ordner entscheidet: Groesse und Sekunde. Der Beweis waere ein Hash
+        // ueber alles, und den kostet keine der beiden Stellen.
         if (info.Exists
-            && IsPlaceholder(path)
             && info.Length == theirs.Size
             && new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds() == theirs.ModifiedS)
         {
+            // Der Eintrag gehoert ab jetzt der Gegenstelle. Ohne diesen
+            // Schnitt gilt die vorhandene Datei als eigene Aenderung und wird
+            // angekuendigt -- eine Fassung, die dieselben Bytes traegt, aber
+            // einen anderen Versionsvektor.
+            lock (_indexGate) _index!.ForgetLocal(name);
             return;
         }
 
