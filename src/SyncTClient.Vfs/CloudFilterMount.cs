@@ -230,9 +230,24 @@ public sealed class CloudFilterMount : IDisposable
     /// Eine Datei, die sich nicht oeffnen laesst, wird uebergangen. Das
     /// Abmelden der Wurzel darf daran nicht scheitern.
     /// </remarks>
-    public unsafe int RevertPlaceholders()
+    public int RevertPlaceholders()
     {
-        if (!Directory.Exists(_rootPath)) return 0;
+        var aufgeloest = RevertPlaceholdersIn(_rootPath);
+        if (aufgeloest > 0) _log?.Invoke($"{aufgeloest} Platzhalter aufgeloest.");
+        return aufgeloest;
+    }
+
+    /// <summary>
+    /// Dasselbe fuer einen beliebigen Ordner, ohne laufende Freigabe.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den Rest, der uebrig bleibt, wenn eine Bindung frueher einmal ohne
+    /// dieses Aufloesen geloest wurde. Ein solcher Ordner laesst sich sonst
+    /// nicht einmal von Hand entfernen.
+    /// </remarks>
+    public static unsafe int RevertPlaceholdersIn(string root)
+    {
+        if (!Directory.Exists(root)) return 0;
 
         var options = new EnumerationOptions
         {
@@ -243,7 +258,7 @@ public sealed class CloudFilterMount : IDisposable
 
         var aufgeloest = 0;
 
-        foreach (var info in new DirectoryInfo(_rootPath).EnumerateFiles("*", options))
+        foreach (var info in new DirectoryInfo(root).EnumerateFiles("*", options))
         {
             var attribute = (uint)info.Attributes;
 
@@ -274,7 +289,6 @@ public sealed class CloudFilterMount : IDisposable
             }
         }
 
-        if (aufgeloest > 0) _log?.Invoke($"{aufgeloest} Platzhalter aufgeloest.");
         return aufgeloest;
     }
 

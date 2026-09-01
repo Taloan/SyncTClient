@@ -119,6 +119,13 @@
   <s:String x:Key="S.Settings.MinFree">Minimum free space (GB)</s:String>
   <s:String x:Key="S.Settings.LimitsHint">Two limits apply; whichever is reached first takes effect. When a limit is exceeded, the space of the files that went unopened longest is freed — across all shares. Pinned files and shares in “keep fully local” mode are kept. For free space, 0 means no limit.</s:String>
   <s:String x:Key="S.Settings.ClearCache">Clear cache now …</s:String>
+  <s:String x:Key="S.Settings.RepairGroup">Left-over placeholders</s:String>
+  <s:String x:Key="S.Settings.RepairHint">A folder whose binding was released can leave placeholders behind. Windows then finds no provider for their content and accepts them neither for reading nor for deleting — “The cloud file metadata is corrupt and unreadable”. Reverting turns them into ordinary files; nothing is deleted.</s:String>
+  <s:String x:Key="S.Settings.Revert">Revert placeholders in a folder …</s:String>
+  <s:String x:Key="S.Settings.RevertAsk">Revert every placeholder below “{0}”?&#10;&#10;Fetched files keep their content. An empty placeholder becomes an empty file — its bytes were never here anyway. Nothing is deleted.</s:String>
+  <s:String x:Key="S.Settings.RevertRunning">Reverting …</s:String>
+  <s:String x:Key="S.Settings.RevertDone">{0} placeholders reverted. The folder can now be treated like any other.</s:String>
+  <s:String x:Key="S.Settings.RevertInUse">This folder belongs to a configured share. There, placeholders are not a left-over but the normal state.</s:String>
   <s:String x:Key="S.Settings.DataGroup">DATA</s:String>
   <s:String x:Key="S.Settings.DataDir">Data directory</s:String>
   <s:String x:Key="S.Settings.DataDirHint">This directory holds the device certificate and the index; the thumbnails are stored in the cache directory. A change takes effect at the next start. Existing data is not moved, and if there is no certificate at the new location, a new device ID is created.</s:String>
