@@ -1971,6 +1971,14 @@ public partial class MainWindow : Window
 
         _tray?.Dispose();
 
+        // Das Zustandsfenster wird versteckt, nicht geschlossen -- es soll
+        // beim naechsten Klick sofort dastehen. Ein verstecktes Fenster zaehlt
+        // aber als offenes, und solange eines offen ist, endet die Anwendung
+        // nicht. Ohne diese Zeile blieb der Prozess nach "Beenden" liegen,
+        // ohne Fenster und ohne Symbol.
+        _status?.Close();
+        _status = null;
+
         _refresh.Stop();
         _meter?.Dispose();
         SaveColumns();
@@ -1985,5 +1993,10 @@ public partial class MainWindow : Window
             try { await peer.Host.DisposeAsync(); }
             catch { /* Fehler beim Beenden werden nicht mehr behandelt */ }
         }
+
+        // Und zum Schluss ausdruecklich. Dieser Rueckruf ist async void: die
+        // Anwendung schliesst das Fenster, sobald er zum ersten Mal wartet,
+        // und was danach noch offen ist, kennt sie nicht mehr.
+        Application.Current?.Shutdown();
     }
 }

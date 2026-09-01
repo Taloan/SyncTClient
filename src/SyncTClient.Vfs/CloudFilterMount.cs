@@ -160,6 +160,25 @@ public sealed class CloudFilterMount : IDisposable
     /// Freigaben dauert dieser Lauf lange. Ohne Rueckmeldung wirkt das Fenster
     /// waehrenddessen wie abgestuerzt.
     /// </param>
+    /// <summary>Liegt diese Datei bereits in genau dieser Fassung?</summary>
+    private bool StehtSchonDa(VirtualEntry entry)
+    {
+        try
+        {
+            var info = new FileInfo(Path.Combine(
+                _rootPath, entry.RelativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+            return info.Exists
+                   && info.Length == entry.Size
+                   && new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds()
+                      == entry.LastWrite.ToUnixTimeSeconds();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     public void ProjectPlaceholders(Action<int, int>? progress = null)
     {
         var entries = _source.Enumerate();
@@ -192,8 +211,22 @@ public sealed class CloudFilterMount : IDisposable
                 Path.Combine(_rootPath, directory.Replace('/', Path.DirectorySeparatorChar)));
         }
 
+        // Was schon so dasteht, bekommt keinen Platzhalter.
+        //
+        // CfCreatePlaceholders legt an, was der Eintrag nennt -- ob dort eine
+        // gewoehnliche Datei liegt, prueft es nicht. In einem Ordner, der die
+        // Daten bereits enthaelt, wurde damit jede Datei durch einen leeren
+        // Platzhalter ersetzt und im Modus "vollstaendig lokal" gleich wieder
+        // heruntergeladen. Der eigene Bestand war zu diesem Zeitpunkt schon
+        // aufgenommen und nachweislich gleich; das Anlegen hat ihn wieder
+        // fortgenommen.
+        //
+        // Groesse und Sekunde entscheiden nur ueber das Ueberspringen. Wer
+        // abweicht, bekommt seinen Platzhalter und wird danach als Konflikt
+        // oder als Aenderung behandelt.
         var files = entries
             .Where(e => !e.IsDirectory && !string.IsNullOrEmpty(e.RelativePath))
+            .Where(e => !StehtSchonDa(e))
             .GroupBy(e => ParentOf(e.RelativePath))
             .ToDictionary(g => g.Key, g => g.ToList());
 
