@@ -301,6 +301,13 @@ public sealed partial class ShareHost
         // angekuendigt noch beim Durchgang betrachtet.
         if (IsVersionsPath(name)) return null;
 
+        // Und dasselbe fuer die Muster. Hier, weil jeder Weg von einem Pfad
+        // zu einem Namen hier vorbeikommt: der Durchgang ueber den Ordner,
+        // das Ankuendigen, das Holen, das Entfernen. Was hier ausfaellt, wird
+        // von keinem davon angefasst -- auch nicht geloescht, denn ein Muster
+        // sagt "gehoert nicht dazu" und nicht "darf weg".
+        if (_config.IsIgnored(name)) return null;
+
         foreach (var part in name.Split('/'))
             if (part.Length == 0 || part == "." || part == "..")
                 return null;
@@ -532,6 +539,11 @@ public sealed partial class ShareHost
         // gemeint sind -- und bei zwei Ordnern mit derselben Groesse raet man
         // falsch.
         var wartendeNamen = new List<string>();
+
+        // Und dasselbe fuer den Rueckstand selbst. "2 von 976 Dateien" laesst
+        // nicht erkennen, welche zwei -- und wenn zwei Dateien dauerhaft
+        // stehen bleiben, ist genau das die Frage.
+        var offeneNamen = new List<string>();
         var gesamt = 0;
         long gesamtBytes = 0;
         var vereint = 0;
@@ -551,6 +563,12 @@ public sealed partial class ShareHost
                 foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in _index.EnumerateLight())
                 {
                     if (isDirectory) continue;
+
+                    // Ein Muster nimmt den Namen ganz aus dem Abgleich. Der
+                    // Index sollte ihn gar nicht mehr fuehren; bis der
+                    // Durchgang aufgeraeumt hat, zaehlt er hier jedenfalls
+                    // nicht mit.
+                    if (_config.IsIgnored(name)) continue;
 
                     // Abgewaehltes zaehlt gar nicht -- weder als Rueckstand
                     // noch im Nenner.
@@ -628,6 +646,8 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += size;
+                    if (offeneNamen.Count < 5)
+                        offeneNamen.Add($"{name} ({size} B, {(fehlt ? "steht hier nicht so da" : "ohne Inhalt")})");
                 }
 
                 // Die andere Richtung: was hier liegt und noch nicht
@@ -667,6 +687,8 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += eintrag.Size;
+                    if (offeneNamen.Count < 5)
+                        offeneNamen.Add($"{name} ({eintrag.Size} B, nicht angekuendigt)");
                 }
             }
         }
@@ -686,7 +708,9 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] Rueckstand: {offen} von {vereint} Dateien, " +
                  $"{bytes / (1024.0 * 1024.0):0.0} von {vereintBytes / (1024.0 * 1024.0):0.0} MB " +
                  $"(Gegenstelle {gesamt}, hier {vorhanden.Count}" +
-                 (wartend > 0 ? $", {wartend} ohne Inhalt bei der Gegenstelle" : "") + ").");
+                 (wartend > 0 ? $", {wartend} ohne Inhalt bei der Gegenstelle" : "") + ")." +
+                 (offeneNamen.Count > 0 ? " Offen: " + string.Join(", ", offeneNamen) +
+                     (offen > offeneNamen.Count ? $" und {offen - offeneNamen.Count} weitere" : "") + "." : ""));
 
         LocalFiles = vorhanden.Count;
         LocalBytes = vorhandenBytes;
@@ -731,6 +755,73 @@ public sealed partial class ShareHost
         // Minute: der Rueckstand hat sich gerade geaendert.
         _lastScan = DateTime.MinValue;
         Wake();
+    }
+
+    /// <summary>
+    /// Raeumt weg, was ein Muster aus dem Abgleich genommen hat.
+    /// </summary>
+    /// <remarks>
+    /// Ein Muster wirkt ab dem Moment, in dem es dasteht -- fuer alles, was
+    /// danach kommt. Was schon im Index steht und schon im Ordner liegt,
+    /// bliebe ohne diesen Durchgang stehen: im Baum sichtbar, im Rueckstand
+    /// gezaehlt, obwohl niemand mehr etwas damit vorhat.
+    ///
+    /// Dateien mit Inhalt werden dabei nicht angefasst. Ein Muster sagt "das
+    /// gehoert nicht zum Abgleich", nicht "das darf weg" -- wer <c>*.jpg</c>
+    /// tippt, um kuenftige Bilder herauszuhalten, will nicht seine
+    /// vorhandenen verlieren. Sie bleiben als gewoehnliche Dateien liegen.
+    ///
+    /// Ein leerer Platzhalter geht dagegen fort. Er haelt nichts, und ohne
+    /// Abgleich kann er auch nie wieder etwas halten: er waere ein Name, der
+    /// beim Anklicken einen Fehler ergibt.
+    /// </remarks>
+    public (int Entfernt, int Geblieben) PurgeIgnored()
+    {
+        if (_config.Ignored.Count == 0) return (0, 0);
+
+        List<string> namen;
+        lock (_indexGate)
+        {
+            if (_index is null) return (0, 0);
+            namen = [.. _index.AllNames().Where(_config.IsIgnored)];
+        }
+
+        if (namen.Count == 0) return (0, 0);
+
+        var entfernt = 0;
+        var geblieben = 0;
+
+        foreach (var name in namen)
+        {
+            try
+            {
+                var path = LocalPathOf(name);
+
+                if (File.Exists(path))
+                {
+                    var info = new System.IO.FileInfo(path);
+                    var leer = ((uint)info.Attributes
+                                & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0;
+
+                    if (leer) File.Delete(path);
+                    else geblieben++;
+                }
+
+                lock (_indexGate) _index?.Forget(name);
+                entfernt++;
+            }
+            catch (Exception ex)
+            {
+                _log($"[{FolderId}] \"{name}\" liess sich nicht ausnehmen: {Herkunft(ex)}");
+            }
+        }
+
+        _log($"[{FolderId}] {entfernt} Namen durch Muster ausgenommen" +
+             (geblieben > 0 ? $", {geblieben} davon liegen weiter im Ordner" : "") + ".");
+
+        _lastScan = DateTime.MinValue;
+        Wake();
+        return (entfernt, geblieben);
     }
 
     /// <summary>

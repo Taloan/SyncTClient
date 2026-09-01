@@ -169,6 +169,31 @@
           </Border>
         </DockPanel>
       </TabItem>
+
+      <!-- =============================================== Ignorieren -->
+      <TabItem Header="{DynamicResource S.Share.TabIgnore}">
+        <DockPanel Margin="10">
+          <TextBlock DockPanel.Dock="Top" Text="{DynamicResource S.Share.IgnoreQuestion}"
+                     FontWeight="SemiBold" Margin="0,0,0,6">
+            <TextBlock.ToolTip>
+              <TextBlock Text="{DynamicResource S.Share.IgnoreHint}" TextWrapping="Wrap" MaxWidth="440" />
+            </TextBlock.ToolTip>
+          </TextBlock>
+
+          <!-- Die Schreibweise unter dem Feld, nicht darueber: gelesen wird
+               sie beim Tippen, und dabei schaut man nach unten. -->
+          <TextBlock DockPanel.Dock="Bottom" Text="{DynamicResource S.Share.IgnoreSyntax}"
+                     Foreground="{DynamicResource Gedaempft}" FontSize="11"
+                     TextWrapping="Wrap" Margin="0,8,0,0" />
+
+          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1">
+            <TextBox x:Name="IgnoreBox" BorderThickness="0" AcceptsReturn="True" AcceptsTab="False"
+                     FontFamily="Consolas" FontSize="12" Padding="6"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                     SpellCheck.IsEnabled="False" />
+          </Border>
+        </DockPanel>
+      </TabItem>
     </TabControl>
   </DockPanel>
 </Window>

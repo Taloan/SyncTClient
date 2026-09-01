@@ -518,6 +518,20 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>Nimmt einen Stapel Index-Eintraege auf, den der PeerHost zugestellt hat.</summary>
     public void Absorb(string device, IEnumerable<BepFileInfo> files)
     {
+        // Was ein Muster trifft, kommt nicht in den Index. Erst beim
+        // Anwenden zu pruefen waere zu spaet: der Eintrag stuende im Baum,
+        // zaehlte im Rueckstand und muesste an jeder einzelnen Stelle wieder
+        // herausgerechnet werden.
+        //
+        // Dasselbe fuer die Verwaltung der Gegenstelle -- ihre
+        // Ordnerkennzeichnung, ihre Sicherung, ihre Musterliste. Sie stand
+        // bisher im Index, ohne dass je etwas daraus wurde: angewendet wurde
+        // sie nicht, gezaehlt aber schon.
+        files = files.Where(f => !IsVersionsPath(f.Name));
+
+        if (_config.Ignored.Count > 0)
+            files = files.Where(f => !_config.IsIgnored(f.Name));
+
         // Der Hintergrundlauf schreibt in dieselbe Datenbank. Sie haengt an
         // einer einzigen Verbindung und vertraegt keine zwei Schreiber.
         IReadOnlyList<string> changed;
@@ -1569,6 +1583,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public IReadOnlyList<VirtualEntry> Enumerate()
         => _index!.EnumerateLight()
+            .Where(e => !_config.IsIgnored(e.Name))
             .Where(e => _config.Includes(e.Name, e.IsDirectory))
             .Select(e => new VirtualEntry(
                 e.Name, e.Size, DateTimeOffset.FromUnixTimeSeconds(e.ModifiedS), e.IsDirectory))

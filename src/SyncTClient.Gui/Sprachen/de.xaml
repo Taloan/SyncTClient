@@ -20,6 +20,8 @@
   <s:String x:Key="S.Col.Progress">Fortschritt</s:String>
   <s:String x:Key="S.Col.Copies">Quellen</s:String>
   <s:String x:Key="S.Col.Received">Empfangen</s:String>
+  <s:String x:Key="S.Col.GlobalFiles">Globale Dateien</s:String>
+  <s:String x:Key="S.Col.GlobalSize">Globale Größe</s:String>
   <s:String x:Key="S.Col.Size">Größe</s:String>
   <s:String x:Key="S.Col.LocalFiles">Lokale Dateien</s:String>
   <s:String x:Key="S.Col.LocalSize">Lokale Größe</s:String>
@@ -354,6 +356,10 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Share.TabSharing">Teilen</s:String>
   <s:String x:Key="S.Share.TabVersions">Versionierung</s:String>
   <s:String x:Key="S.Share.TabContent">Inhalt</s:String>
+  <s:String x:Key="S.Share.TabIgnore">Ignorieren</s:String>
+  <s:String x:Key="S.Share.IgnoreQuestion">Was gehört nicht zu dieser Freigabe?</s:String>
+  <s:String x:Key="S.Share.IgnoreHint">Der Baum unter „Inhalt“ sagt, welche Zweige auf diesem Gerät liegen sollen; was dort nicht angekreuzt ist, wird trotzdem übertragen.&#10;&#10;Ein Muster hier nimmt den Namen ganz aus dem Abgleich: er wird nicht angekündigt, nicht heruntergeladen und nicht angelegt. Das gilt auch für Dateien, die es heute noch nicht gibt.&#10;&#10;Die Liste gilt für dieses Gerät und wird nicht übertragen.</s:String>
+  <s:String x:Key="S.Share.IgnoreSyntax">Ein Muster je Zeile.&#10;*  beliebig viele Zeichen innerhalb eines Namens   ·   **  auch über Ordnergrenzen   ·   ?  genau ein Zeichen   ·   !  Ausnahme   ·   //  Kommentar&#10;Ohne / meint das Muster den Namen auf jeder Ebene, mit / den Pfad ab der Wurzel. Ein getroffener Ordner nimmt alles unter sich mit.&#10;Es entscheidet das erste Muster, das zutrifft — eine Ausnahme gehört deshalb über die Zeile, von der sie ausnimmt.&#10;Vorhandene Dateien mit Inhalt bleiben liegen. Leere Platzhalter verschwinden.</s:String>
   <s:String x:Key="S.Share.SharedWith">Mit diesen Geräten geteilt</s:String>
   <s:String x:Key="S.Share.SharedWithHint">Jedes angekreuzte Gerät führt denselben Ordner. Abwählen beendet den Abgleich mit diesem Gerät; die Dateien bleiben hier und dort liegen.</s:String>
   <s:String x:Key="S.Share.NoPeers">Keine Gegenstellen eingetragen. Unter „Gegenstellen …“ lässt sich eine hinzufügen.</s:String>
@@ -370,6 +376,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Main.Incoming">↓ HEREIN</s:String>
   <s:String x:Key="S.Menu.Rebuild">Index neu aufbauen</s:String>
   <s:String x:Key="M.Rebuilding">„{0}“: {1} Dateien werden neu gerechnet.</s:String>
+  <s:String x:Key="M.Purged">„{0}“: {1} Namen durch Muster ausgenommen.</s:String>
   <s:String x:Key="S.Detail.Awaiting">Wartet auf Gegenstelle</s:String>
   <s:String x:Key="S.Detail.AwaitingHint">Dateien, deren Namen die Gegenstelle nennt, ohne den Inhalt selbst zu halten. Sie lassen sich nicht holen, solange kein Knoten sie vollständig führt.</s:String>
 </ResourceDictionary>

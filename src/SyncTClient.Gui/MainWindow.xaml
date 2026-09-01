@@ -453,18 +453,32 @@
         </DataGridTextColumn>
 
 
+        <!-- Erst die beiden der Gegenstelle, dann die beiden von hier.
+             Dateien und Groesse gehoeren je Seite zusammen; abwechselnd
+             gestellt las man viermal dieselben zwei Woerter und musste am
+             Symbol erkennen, welche Seite gerade gemeint ist. -->
+        <DataGridTextColumn x:Name="ColFiles" ElementStyle="{StaticResource ZelleMitte}" Width="90" Visibility="Collapsed"
+                            Binding="{Binding FilesText}" SortMemberPath="FilesValue">
+          <DataGridTextColumn.Header>
+            <StackPanel Orientation="Horizontal" Background="Transparent"
+                        ToolTip="{DynamicResource S.Col.GlobalFiles}">
+              <Control Template="{StaticResource Netzzeichen}" Width="18" Height="16"
+                       VerticalAlignment="Center" Margin="0,0,4,0" />
+              <TextBlock Text="{DynamicResource S.Col.Files}" VerticalAlignment="Center" />
+            </StackPanel>
+          </DataGridTextColumn.Header>
+        </DataGridTextColumn>
         <DataGridTextColumn x:Name="ColSize" ElementStyle="{StaticResource ZelleMitte}" Width="95"
                             Binding="{Binding SizeText}" SortMemberPath="SizeValue">
           <DataGridTextColumn.Header>
             <StackPanel Orientation="Horizontal" Background="Transparent"
-                        ToolTip="{DynamicResource S.Col.Size}">
+                        ToolTip="{DynamicResource S.Col.GlobalSize}">
               <Control Template="{StaticResource Netzzeichen}" Width="18" Height="16"
                        VerticalAlignment="Center" Margin="0,0,4,0" />
               <TextBlock Text="{DynamicResource S.Col.Size}" VerticalAlignment="Center" />
             </StackPanel>
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
-
         <DataGridTextColumn x:Name="ColLocalFiles" ElementStyle="{StaticResource ZelleMitte}" Width="85"
                             Binding="{Binding LocalFilesText}" SortMemberPath="LocalFilesValue">
           <DataGridTextColumn.Header>
@@ -481,7 +495,6 @@
             </StackPanel>
           </DataGridTextColumn.Header>
         </DataGridTextColumn>
-
         <DataGridTextColumn x:Name="ColLocalSize" ElementStyle="{StaticResource ZelleMitte}" Width="95" Visibility="Collapsed"
                             Binding="{Binding LocalSizeText}" SortMemberPath="LocalSizeValue">
           <DataGridTextColumn.Header>
@@ -495,17 +508,6 @@
                          Fill="{DynamicResource Sekundaer}" />
               </Canvas>
               <TextBlock Text="{DynamicResource S.Col.Size}" VerticalAlignment="Center" />
-            </StackPanel>
-          </DataGridTextColumn.Header>
-        </DataGridTextColumn>
-        <DataGridTextColumn x:Name="ColFiles" ElementStyle="{StaticResource ZelleMitte}" Width="90" Visibility="Collapsed"
-                            Binding="{Binding FilesText}" SortMemberPath="FilesValue">
-          <DataGridTextColumn.Header>
-            <StackPanel Orientation="Horizontal" Background="Transparent"
-                        ToolTip="{DynamicResource S.Col.Files}">
-              <Control Template="{StaticResource Netzzeichen}" Width="18" Height="16"
-                       VerticalAlignment="Center" Margin="0,0,4,0" />
-              <TextBlock Text="{DynamicResource S.Col.Files}" VerticalAlignment="Center" />
             </StackPanel>
           </DataGridTextColumn.Header>
         </DataGridTextColumn>

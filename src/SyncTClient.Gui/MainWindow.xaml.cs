@@ -1619,6 +1619,13 @@ public partial class MainWindow : Window
 
         _ = Task.Run(() =>
         {
+            // Zuerst die Muster: was sie treffen, gehoert gar nicht mehr zum
+            // Abgleich und braucht auch nicht mehr geprueft zu werden, ob es
+            // hier liegen darf.
+            var (ausgenommen, _) = host.PurgeIgnored();
+            if (ausgenommen > 0)
+                Dispatcher.BeginInvoke(() => Status(App.S("M.Purged", _row.Name, ausgenommen)));
+
             var (files, bytes) = host.PruneExcluded();
 
             // Und der Gegenweg: was wieder dazugehoert, muss auch wieder
