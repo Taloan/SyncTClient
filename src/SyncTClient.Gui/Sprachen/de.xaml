@@ -135,9 +135,7 @@
   <s:String x:Key="S.Settings.Light">Hell</s:String>
   <s:String x:Key="S.Settings.Dark">Dunkel</s:String>
   <s:String x:Key="S.Accept.NotEmptyTitle">Der Ordner ist nicht leer</s:String>
-  <s:String x:Key="S.Accept.NotEmpty">In diesem Ordner sind bereits Dateien vorhanden.
-
-Diese Dateien bleiben erhalten und werden zum Inhalt dieses Shares. Zur Gegenstelle übertragen werden sie vorerst nicht, weil der Schreibweg noch fehlt.
+  <s:String x:Key="S.Accept.NotEmpty">Die vorhandenen Dateien bleiben erhalten und gehören ab dann zu diesem Share.
 
 Diesen Ordner trotzdem verwenden?</s:String>
 
@@ -226,10 +224,10 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="R.Error">Fehler</s:String>
   <s:String x:Key="R.Stopped">gestoppt</s:String>
   <s:String x:Key="R.NotConnected">nicht verbunden</s:String>
-  <s:String x:Key="R.PhaseIndex">Index wird gelesen</s:String>
-  <s:String x:Key="R.PhasePlaceholders">Platzhalter werden angelegt</s:String>
-  <s:String x:Key="R.PhaseCache">Cache wird abgeglichen</s:String>
-  <s:String x:Key="R.PhaseContent">Inhalte werden heruntergeladen</s:String>
+  <s:String x:Key="R.PhaseIndex">Index</s:String>
+  <s:String x:Key="R.PhasePlaceholders">Platzhalter</s:String>
+  <s:String x:Key="R.PhaseCache">Cache</s:String>
+  <s:String x:Key="R.PhaseContent">lädt herunter</s:String>
   <s:String x:Key="R.PhaseWaiting">wartet</s:String>
   <s:String x:Key="R.NotConnectedHint">Noch nicht verbunden.</s:String>
   <s:String x:Key="R.CopiesNone">Kein erreichbarer Knoten führt diesen Share. Platzhalter lassen sich gerade nicht öffnen. Ob Speicherplatz freigegeben werden darf, richtet sich weiterhin nach der zuletzt empfangenen Ankündigung, nicht nach der Erreichbarkeit.</s:String>

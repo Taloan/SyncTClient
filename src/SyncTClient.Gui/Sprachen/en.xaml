@@ -143,9 +143,7 @@
   <s:String x:Key="S.Settings.Light">Light</s:String>
   <s:String x:Key="S.Settings.Dark">Dark</s:String>
   <s:String x:Key="S.Accept.NotEmptyTitle">The folder is not empty</s:String>
-  <s:String x:Key="S.Accept.NotEmpty">This folder already contains files.
-
-These files are kept and become the content of this share. They are not sent to the remote device for now, because the write path is not implemented yet.
+  <s:String x:Key="S.Accept.NotEmpty">The files already there are kept and become part of this share.
 
 Use this folder anyway?</s:String>
 
@@ -234,10 +232,10 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="R.Error">error</s:String>
   <s:String x:Key="R.Stopped">stopped</s:String>
   <s:String x:Key="R.NotConnected">not connected</s:String>
-  <s:String x:Key="R.PhaseIndex">reading the index</s:String>
-  <s:String x:Key="R.PhasePlaceholders">creating placeholders</s:String>
-  <s:String x:Key="R.PhaseCache">reconciling the cache</s:String>
-  <s:String x:Key="R.PhaseContent">downloading contents</s:String>
+  <s:String x:Key="R.PhaseIndex">index</s:String>
+  <s:String x:Key="R.PhasePlaceholders">placeholders</s:String>
+  <s:String x:Key="R.PhaseCache">cache</s:String>
+  <s:String x:Key="R.PhaseContent">downloading</s:String>
   <s:String x:Key="R.PhaseWaiting">waiting</s:String>
   <s:String x:Key="R.NotConnectedHint">Not connected yet.</s:String>
   <s:String x:Key="R.CopiesNone">No reachable node carries this share. Placeholders cannot be opened right now. Whether space may be freed still follows the last announcement received, not reachability.</s:String>

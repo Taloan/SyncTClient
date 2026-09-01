@@ -1,4 +1,4 @@
-<Application x:Class="SyncTClient.Gui.App"
+﻿<Application x:Class="SyncTClient.Gui.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              StartupUri="MainWindow.xaml">
@@ -7,4 +7,33 @@
        Ein solcher Stil tritt an die Stelle des Themas, statt darauf
        aufzusetzen. Die Knöpfe fielen damit auf ihr altes Aussehen zurück und
        blieben hell in einem dunklen Fenster. -->
+
+  <Application.Resources>
+    <!-- Der Fortschrittsbalken von Windows 11 hat eine feste Hoehe von vier
+         Punkten. Er ignoriert die Hoehe, die man ihm gibt, und zeichnet
+         seinen Strich in der Mitte der Zeile, quer durch jeden Text, der
+         darauf liegen soll.
+
+         Diese Vorlage ersetzt ihn durch das Einfachste, was ein Balken sein
+         kann: eine Spur und eine Fuellung. Beide nehmen die Hoehe, die das
+         Fenster vorgibt. Die Fuellung breit zu machen ist Sache des
+         Steuerelements; es sucht dafuer die Teile mit genau diesen Namen. -->
+    <ControlTemplate x:Key="BalkenVorlage" TargetType="ProgressBar">
+      <Grid>
+        <Border Background="{TemplateBinding Background}" CornerRadius="3" />
+        <Border x:Name="PART_Track" />
+        <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="3"
+                Background="{TemplateBinding Foreground}" />
+      </Grid>
+
+      <ControlTemplate.Triggers>
+        <!-- Ohne bekannten Umfang gibt es nichts zu fuellen. Eine gedaempfte
+             volle Spur sagt "es laeuft" und behauptet keinen Stand. -->
+        <Trigger Property="IsIndeterminate" Value="True">
+          <Setter TargetName="PART_Indicator" Property="HorizontalAlignment" Value="Stretch" />
+          <Setter TargetName="PART_Indicator" Property="Opacity" Value="0.35" />
+        </Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+  </Application.Resources>
 </Application>

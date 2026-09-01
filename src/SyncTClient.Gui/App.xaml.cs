@@ -209,6 +209,14 @@ public partial class App : Application
     /// </remarks>
     private static void ApplyControlStyles()
     {
+        // Der Balken zuerst: die Vorlage haengt an keiner Farbe des Themas
+        // und gilt fuer jedes Fenster, das einen zeigt.
+        if (Current.TryFindResource("BalkenVorlage") is ControlTemplate balken)
+            Derive(typeof(ProgressBar),
+                (Control.TemplateProperty, balken),
+                (Control.BackgroundProperty, Current.TryFindResource("Feld") ?? Brushes.Gray),
+                (Control.ForegroundProperty, Current.TryFindResource("Ein") ?? Brushes.SteelBlue));
+
         Derive(typeof(Button),
             (Control.PaddingProperty, new Thickness(12, 5, 12, 5)),
             (FrameworkElement.MarginProperty, new Thickness(0, 0, 6, 0)));
