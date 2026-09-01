@@ -10,8 +10,11 @@
     <DockPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Save}" Padding="14,4" Click="OnSave" Margin="0" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Cancel}" Padding="14,4" IsCancel="True" Margin="0,0,6,0" />
+
+      <!-- Leer, bis es etwas zu sagen gibt. Der Platz gehoert den Meldungen,
+           die eine Eingabe betreffen. -->
       <TextBlock x:Name="SaveHint" Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center"
-                 TextWrapping="Wrap" Text="{DynamicResource S.Share.SaveHint}" />
+                 TextWrapping="Wrap" />
     </DockPanel>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
