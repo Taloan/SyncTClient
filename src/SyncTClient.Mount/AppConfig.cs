@@ -20,26 +20,33 @@ public enum ShareMode
 public enum ConflictResolution
 {
     /// <summary>
-    /// Beide Fassungen bleiben. Die unterlegene wird umbenannt.
+    /// Beide Versionen bleiben. Umbenannt wird die lokale.
     /// </summary>
     /// <remarks>
-    /// Der Name folgt dem Muster von Syncthing:
-    /// <c>name.sync-conflict-JJJJMMTT-HHMMSS-KURZID.endung</c>. Ein eigenes
-    /// Muster wuerde dazu fuehren, dass beide Seiten fuer denselben Konflikt
-    /// verschiedene Dateien anlegen.
+    /// Welche der beiden umbenannt wird, ist keine Bewertung, sondern eine
+    /// Festlegung: es ist immer die hiesige. Die Gegenstelle behaelt den
+    /// Namen, weil sie ihn auch bei allen anderen Knoten behaelt -- wuerde
+    /// jeder Knoten die fremde Version umbenennen, entstuenden aus einem
+    /// Konflikt so viele Dateien wie es Knoten gibt.
+    ///
+    /// Der Name folgt dem Muster von Syncthing, an der Stelle der Kurzkennung
+    /// steht aber der Geraetename:
+    /// <c>name.sync-conflict-JJJJMMTT-HHMMSS-GERAET.endung</c>. Eine
+    /// Kurzkennung waere zwar auf beiden Seiten dieselbe, sagt aber niemandem,
+    /// an welchem Geraet die Version entstand.
     /// </remarks>
     KeepBoth,
 
-    /// <summary>Die zuletzt geaenderte Fassung gewinnt.</summary>
+    /// <summary>Die zuletzt geaenderte Version gewinnt.</summary>
     Newer,
 
-    /// <summary>Die aeltere Fassung gewinnt.</summary>
+    /// <summary>Die aeltere Version gewinnt.</summary>
     Older,
 
-    /// <summary>Die hiesige Fassung gewinnt.</summary>
+    /// <summary>Die hiesige Version gewinnt.</summary>
     Local,
 
-    /// <summary>Die Fassung der Gegenstelle gewinnt.</summary>
+    /// <summary>Die Version der Gegenstelle gewinnt.</summary>
     Remote
 }
 
@@ -102,16 +109,15 @@ public sealed class ShareConfig
     /// Was geschieht, wenn beide Seiten dieselbe Datei geaendert haben.
     /// </summary>
     /// <remarks>
-    /// Ausser bei <see cref="ConflictResolution.KeepBoth"/> wird die
-    /// unterlegene Fassung geloescht. Wirksam wird die Einstellung mit der
-    /// Konfliktbehandlung; bis dahin gibt es keine lokalen Aenderungen, die
-    /// in einen Konflikt geraten koennten.
+    /// Ausser bei <see cref="ConflictResolution.KeepBoth"/> bleibt nur eine
+    /// Version im Ordner. Die andere wird unter <c>.stversions</c> abgelegt,
+    /// sofern <see cref="KeepVersions"/> eingeschaltet ist.
     /// </remarks>
     public ConflictResolution Conflict { get; set; } = ConflictResolution.KeepBoth;
 
     /// <summary>
-    /// Ersetzte und geloeschte Fassungen werden aufgehoben, statt sofort
-    /// fortzufallen.
+    /// Ersetzte und geloeschte Versionen werden gesichert, statt sofort
+    /// geloescht zu werden.
     /// </summary>
     /// <remarks>
     /// Sie liegen im Ordner ".stversions" innerhalb der Freigabe. Dieser
@@ -121,22 +127,23 @@ public sealed class ShareConfig
     /// </remarks>
     public bool KeepVersions { get; set; } = true;
 
-    /// <summary>Wie lange eine aufgehobene Fassung liegen bleibt, in Tagen.</summary>
+    /// <summary>Wie lange eine gesicherte Version erhalten bleibt, in Tagen.</summary>
     public int VersionDays { get; set; } = 7;
 
     /// <summary>
     /// Wie viele andere Knoten eine Datei vollstaendig fuehren muessen, bevor
-    /// wir unsere Kopie verdraengen duerfen.
+    /// ihr Speicherplatz hier freigegeben werden darf.
     /// </summary>
     /// <remarks>
-    /// Beim Verdraengen werden die lokalen Bytes geloescht. Die Datei liegt
-    /// danach nur noch auf den anderen Knoten und muss on-demand von dort
-    /// geholt werden. Bei einer einzigen Gegenstelle, dem Normalfall gegen
-    /// einen Server, ist 1 die sinnvolle Vorgabe. Wer mehrere Knoten hat und
-    /// seine Dateien nicht von einem einzigen Geraet abhaengig machen will,
-    /// setzt 2.
+    /// Beim Freigeben werden die lokalen Bytes geloescht; die Datei bleibt als
+    /// Platzhalter stehen und wird beim naechsten Oeffnen wieder geladen. Sie
+    /// liegt danach nur noch auf den anderen Knoten. Bei einer einzigen
+    /// Gegenstelle, dem Normalfall gegen einen Server, ist 1 die sinnvolle
+    /// Vorgabe. Wer mehrere Knoten hat und seine Dateien nicht von einem
+    /// einzigen Geraet abhaengig machen will, setzt 2.
     ///
-    /// 0 schaltet die Pruefung ab und verdraengt wie frueher.
+    /// Kleiner als 1 ist nicht zulaessig: dann koennte der letzte Inhalt einer
+    /// Datei im Netz verschwinden.
     /// </remarks>
     public int MinimumCopies { get; set; } = 1;
 
@@ -298,8 +305,8 @@ public sealed class AppConfig
     /// Bytes lokal vorhaelt. Begrenzt wird deshalb die Summe dieser Dateien,
     /// nicht ein Verzeichnis.
     ///
-    /// 0 wuerde "unbegrenzt" bedeuten: es wird nichts verdraengt, und jede
-    /// einmal geoeffnete Datei bleibt lokal liegen. Nach einigen Monaten waere
+    /// 0 wuerde "unbegrenzt" bedeuten: es wird nie Speicherplatz freigegeben, und jede
+    /// einmal geoeffnete Datei bleibt lokal erhalten. Nach einigen Monaten waere
     /// der Bestand eine Vollkopie, und es wuerde nichts mehr on-demand
     /// geholt. Die Oberflaeche laesst darum nur ganze Gigabyte ab 1 zu.
     /// </remarks>
@@ -501,7 +508,7 @@ public sealed class AppConfig
         "LYXKCHX-VI3NYZR-ALCJBHF-WMZYSPK-QG6QJA3-MPFYMSO-U56GTUK-NA2MIAW";
 
     /// <summary>
-    /// Aeltere Fassungen kannten genau einen Server. Beim Laden wird er
+    /// Aeltere Versionen kannten genau einen Server. Beim Laden wird er
     /// uebernommen, sofern er nicht ohnehin der alte Vorgabewert war.
     /// </summary>
     public string? DiscoveryServer { get; set; }
@@ -515,7 +522,7 @@ public sealed class AppConfig
     public IEnumerable<string> AnnounceServers => DiscoveryServers.Where(SyncTClient.Bep.GlobalDiscovery.AllowsAnnounce);
 
     /// <summary>
-    /// Aeltere Fassungen kannten genau eine Gegenstelle. Beim Laden wird sie in
+    /// Aeltere Versionen kannten genau eine Gegenstelle. Beim Laden wird sie in
     /// die Liste ueberfuehrt, damit bestehende Konfigurationen weiterlaufen.
     /// </summary>
     public PeerConfig? Peer { get; set; }
@@ -580,7 +587,7 @@ public sealed class AppConfig
     /// je nach Startverzeichnis ein anderes Datenverzeichnis und damit einen
     /// anderen Index und ein anderes Geraetezertifikat.
     ///
-    /// Die Oberflaeche loest den Pfad fuer ihre Laufzeitfassung selbst auf und
+    /// Die Oberflaeche loest den Pfad fuer ihre Laufzeitversion selbst auf und
     /// laesst den Eintrag in der Datei relativ, weil sie die Datei
     /// zurueckschreibt. Die Konsole schreibt nicht zurueck und darf den
     /// Eintrag deshalb hier ersetzen.
@@ -597,7 +604,7 @@ public sealed class AppConfig
     ///
     /// Sonst <c>%LOCALAPPDATA%\SyncTClient</c>. Unter <c>C:\Program Files</c>
     /// darf ein gewoehnlicher Benutzer nicht schreiben; eine installierte
-    /// Fassung koennte dort weder Zertifikat noch Index anlegen.
+    /// Version koennte dort weder Zertifikat noch Index anlegen.
     ///
     /// Bewusst <em>Local</em> und nicht das wandernde <c>%APPDATA%</c>: das
     /// Geraetezertifikat ist die Kennung genau dieses Rechners. Wanderte es

@@ -20,14 +20,15 @@ namespace SyncTClient.Vfs;
 /// Bytes sind falsch. Das ist eine Frage der Korrektheit und geschieht
 /// unabhaengig von jeder Groesse.
 ///
-/// <b>Verdraengung</b>: der Cache ist voll, es muss etwas weichen. Ohne
+/// <b>Speicherplatz freigeben</b>: ein Limit ist erreicht, und eine Datei
+/// muss ihren Inhalt abgeben. Ohne
 /// diesen zweiten Mechanismus waechst der Cache unbegrenzt. Fotos aendern
 /// sich nie, ein einmal geoeffnetes Bild von 2019 wuerde also nie entfernt,
 /// und "on-demand herunterladen" ergaebe nach einigen Monaten eine
 /// Vollkopie.
 ///
 /// Angeheftete Dateien, im Explorer "Immer auf diesem Geraet behalten", sind
-/// von der Verdraengung ausgenommen.
+/// davon ausgenommen: ihr Inhalt bleibt erhalten.
 /// </remarks>
 public sealed class HydrationCache
 {
@@ -74,7 +75,7 @@ public sealed class HydrationCache
     /// <remarks>
     /// Der Cache speichert nur Groesse und Zugriffszeit. Ob eine Datei die
     /// letzte Kopie im Netz ist, weiss allein die Freigabe, denn sie sieht die
-    /// Indizes der Gegenstellen. Beim Verdraengen werden die lokalen Bytes
+    /// Indizes der Gegenstellen. Beim Freigeben werden die lokalen Bytes
     /// geloescht. Das ist nur zulaessig, wenn sie sich erneut beschaffen
     /// lassen.
     ///
@@ -147,7 +148,7 @@ public sealed class HydrationCache
         return dropped;
     }
 
-    // ------------------------------------------------------------ Verdraengung
+    // -------------------------------------------------- Speicherplatz freigeben
 
     /// <summary>
     /// Sorgt dafuer, dass das gemeinsame Limit wieder eingehalten wird.
@@ -178,7 +179,7 @@ public sealed class HydrationCache
     }
 
     /// <summary>
-    /// Schreibt die Buchfuehrung nach einer Verdraengungsrunde fort.
+    /// Schreibt die Buchfuehrung fort, nachdem Speicherplatz freigegeben wurde.
     /// </summary>
     public void Persist() => Save();
 
@@ -290,9 +291,9 @@ public sealed class HydrationCache
             // hingeschrieben wird.
             if (IsInSync(handle) == false)
             {
-                _log?.Invoke($"  \"{relativePath}\" ist lokal geaendert und bleibt liegen " +
-                             $"({reason}). Der Schreibweg fehlt noch -- die Aenderung erreicht " +
-                             "die Gegenstelle nicht.");
+                _log?.Invoke($"  \"{relativePath}\" ist lokal geaendert und bleibt erhalten " +
+                             $"({reason}). Der Speicherplatz wird erst freigegeben, wenn die " +
+                             "Aenderung bei der Gegenstelle angekommen ist.");
                 return false;
             }
 
@@ -405,7 +406,7 @@ public sealed class HydrationCache
             }
 
             // Kein Wort je Datei. Beim Aufraeumen sind es hunderte auf einmal,
-            // und sie verdraengen im Protokollfenster alles, was etwas sagt.
+            // und sie ueberdecken im Protokollfenster alles, was etwas sagt.
             // Die Bilanz am Ende nennt Anzahl und Menge.
             return true;
         }

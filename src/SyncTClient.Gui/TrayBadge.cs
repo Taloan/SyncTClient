@@ -28,7 +28,7 @@ public enum TrayStatus
 /// PNG-komprimierten Einträge, und genau darüber holt der Infobereich sein
 /// Bild.
 ///
-/// Die geladenen Symbole bleiben liegen. Der Zustand wird im Sekundentakt
+/// Die geladenen Symbole werden behalten. Der Zustand wird im Sekundentakt
 /// geprüft; jedes Mal neu zu laden hieße, im Sekundentakt Handles zu erzeugen
 /// und wieder einzusammeln.
 /// </remarks>
@@ -61,7 +61,7 @@ public sealed class TrayBadge : IDisposable
     /// <remarks>
     /// Der Umweg über die Ressource statt über die Programmdatei hat einen
     /// Grund: nur so lässt sich die Größe auswählen. Aus einer .exe liefert
-    /// Windows die Fassung, die es für richtig hält, und das ist auf einem
+    /// Windows die Version, die es für richtig hält, und das ist auf einem
     /// hoch aufgelösten Bildschirm die falsche.
     /// </remarks>
     private static Icon? Laden(string name, int size)

@@ -133,7 +133,7 @@ public sealed class PersistentFolderIndex : IDisposable
     /// wuerde die Gegenstelle bei jeder Verbindung von vorn anfangen lassen.
     ///
     /// Neu bestimmt wird sie nur absichtlich, naemlich wenn die eigene
-    /// Buchfuehrung verloren ging und nicht mehr feststeht, welche Fassung
+    /// Buchfuehrung verloren ging und nicht mehr feststeht, welche Version
     /// bereits angekuendigt wurde.
     /// </remarks>
     public ulong OwnIndexId
@@ -266,7 +266,7 @@ public sealed class PersistentFolderIndex : IDisposable
         return next;
     }
 
-    /// <summary>Unsere eigene Fassung dieser Datei, sofern wir eine kennen.</summary>
+    /// <summary>Unsere eigene Version dieser Datei, sofern wir eine kennen.</summary>
     public bool TryGetLocal(string name, out BepFileInfo file)
     {
         using var gate = _gate.EnterScope();
@@ -284,7 +284,7 @@ public sealed class PersistentFolderIndex : IDisposable
         return false;
     }
 
-    /// <summary>Schreibt unsere eigene Fassung fort.</summary>
+    /// <summary>Schreibt unsere eigene Version fort.</summary>
     /// <param name="state">
     /// 0 sauber, 1 geaendert und noch nicht angekuendigt, 2 angekuendigt und
     /// noch nicht von der Gegenstelle bestaetigt.

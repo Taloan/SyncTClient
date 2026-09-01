@@ -2,16 +2,16 @@ using Vector = SyncTClient.Bep.Proto.Vector;
 
 namespace SyncTClient.Bep;
 
-/// <summary>Wie zwei Fassungen derselben Datei zueinander stehen.</summary>
+/// <summary>Wie zwei Versionen derselben Datei zueinander stehen.</summary>
 public enum VersionOrder
 {
     /// <summary>Beide Seiten kennen denselben Stand.</summary>
     Gleich,
 
-    /// <summary>Die erste Fassung enthaelt alles aus der zweiten und mehr.</summary>
+    /// <summary>Die erste Version enthaelt alles aus der zweiten und mehr.</summary>
     Neuer,
 
-    /// <summary>Die zweite Fassung enthaelt alles aus der ersten und mehr.</summary>
+    /// <summary>Die zweite Version enthaelt alles aus der ersten und mehr.</summary>
     Aelter,
 
     /// <summary>
@@ -24,7 +24,7 @@ public enum VersionOrder
 /// Vergleicht Versionsvektoren, wie das Protokoll sie fuehrt.
 /// </summary>
 /// <remarks>
-/// Ein Vektor haelt je Geraet einen Zaehler. Eine Fassung enthaelt eine
+/// Ein Vektor haelt je Geraet einen Zaehler. Eine Version enthaelt eine
 /// andere, wenn sie fuer jedes dort genannte Geraet mindestens denselben
 /// Zaehlerstand fuehrt. Enthalten beide einander, ist es derselbe Stand;
 /// enthaelt keine die andere, wurde an zwei Stellen unabhaengig geaendert.

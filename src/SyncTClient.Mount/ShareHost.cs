@@ -239,7 +239,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (_index is null) return 0;
 
-        // Auch hier die Sperre. Der Aufruf kommt aus der Verdraengung, und die
+        // Auch hier die Sperre. Der Aufruf kommt aus dem Freigeben von Speicherplatz, und das
         // laeuft in einem anderen Faden als der Hintergrundlauf.
         lock (_indexGate)
             return _index.TryGet(relativePath, out var file) && HasContent(file) ? 1 : 0;
@@ -247,7 +247,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>
     /// Ob eine Datei nach der Ankuendigung der Gegenstelle wiederbeschaffbar
-    /// ist. Das ist die Bedingung dafuer, die lokale Kopie zu verdraengen.
+    /// ist. Nur dann darf ihr Speicherplatz hier freigegeben werden.
     /// </summary>
     private bool MayEvict(string relativePath)
     {
@@ -331,8 +331,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Ordner steht, muss jeder genannte Name angewendet werden: angelegt,
         // ersetzt oder entfernt. Das geschieht im Hintergrundlauf, nicht hier.
         //
-        // Nur was dabei liegen bleibt, ist Redebedarf. Eine Gegenstelle, die
-        // ueber ausgeschlossene Namen oder alte Fassungen redet, sagt nichts,
+        // Nur was dabei an Arbeit uebrig bleibt, ist Redebedarf. Eine Gegenstelle, die
+        // ueber ausgeschlossene Namen oder alte Versionen redet, sagt nichts,
         // was uns fehlt -- und "gleicht ab" waere dann genauso falsch wie
         // vorher "abgeglichen".
         if (QueueIncoming(changed) > 0) PeerBusy();
@@ -657,8 +657,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
-        // "Vollstaendig lokal" nimmt am Limit nicht teil. Dort darf nichts
-        // verdraengt werden, sonst gilt die Zusage nicht.
+        // "Vollstaendig lokal" nimmt am Limit nicht teil. Dort darf kein
+        // Speicherplatz freigegeben werden, sonst gilt die Zusage nicht.
         var limits = _config.Mode == ShareMode.AlwaysLocal ? null : _app.Cache;
         if (limits is not null) limits.Log ??= _log;
 
@@ -737,7 +737,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Shell von der Klasse, die der laufende Client anmeldet -- frueher
             // stieg diese Methode ohne DLL vorzeitig aus, und damit fielen
             // auch der Eintrag am Sync-Root und der Erzeuger selbst weg. In
-            // einer veroeffentlichten Fassung waeren so gar keine Vorschauen
+            // einer veroeffentlichten Version waeren so gar keine Vorschauen
             // entstanden.
             if (ThumbnailProviderRegistration.FindLibrary() is { } library)
             {
@@ -1085,7 +1085,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public async Task EnforceLimitsAsync()
     {
-        // Angehalten wird kein Platz freigegeben. Verdraengen loescht lokalen
+        // Angehalten wird kein Platz freigegeben. Das Freigeben loescht lokalen
         // Inhalt, und genau davor soll das Anhalten schuetzen.
         if (IsPaused) return;
 
@@ -1290,12 +1290,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.Asynchronous);
 
             // Zwischen der Pruefung oben und dieser Stelle kann die Datei
-            // verdraengt worden sein. Das Oeffnen allein holt sie noch nicht,
+            // freigegeben worden sein. Das Oeffnen allein holt sie noch nicht,
             // erst das Lesen wuerde es. Deshalb wird hier noch einmal
             // geprueft, solange das guenstig ist. Sonst wird die Datei vom
             // Server heruntergeladen, nur um sie zurueckzugeben.
             if (IsPlaceholder(local))
-                return Deny(request, ErrorCode.NoSuchFile, "wurde inzwischen verdraengt");
+                return Deny(request, ErrorCode.NoSuchFile, "liegt hier nicht mehr vor");
 
             stream.Seek(request.Offset, SeekOrigin.Begin);
             await stream.ReadExactlyAsync(data, ct).ConfigureAwait(false);
@@ -1359,7 +1359,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>
     /// Loest die Bindung vollstaendig: Sync-Root abmelden, Vorschaubilder
-    /// verwerfen, Index loeschen. Die lokalen Dateien bleiben liegen. Ueber
+    /// verwerfen, Index loeschen. Die lokalen Dateien bleiben erhalten. Ueber
     /// sie entscheidet der Aufrufer.
     /// </summary>
     public async Task UnbindAsync()

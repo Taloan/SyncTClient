@@ -324,7 +324,7 @@ public sealed class CloudFilterMount : IDisposable
 
             // Windows leitet die Ueberlagerungssymbole (Wolke, Kringel,
             // gruener Haken) aus dem Anheft-Zustand ab. Ohne ihn zeigt es gar
-            // keines. "Nicht angeheftet" bedeutet, dass die Datei verdraengt
+            // keines. "Nicht angeheftet" bedeutet, dass der Speicherplatz der Datei freigegeben
             // werden darf. Das ist hier der Normalfall.
             for (var i = 0; i < (int)processed && i < entries.Count; i++)
             {
@@ -350,7 +350,7 @@ public sealed class CloudFilterMount : IDisposable
     /// <remarks>
     /// "Angeheftet" ist das Versprechen aus dem Kontextmenue von Windows:
     /// immer auf diesem Geraet behalten. Es wird eingehalten -- eine
-    /// angeheftete Datei ist von der Verdraengung ausgenommen.
+    /// angeheftete Datei behaelt ihren Inhalt, auch wenn eine Grenze erreicht ist.
     ///
     /// "Nicht angeheftet" ist der Normalfall dieser Freigabe. Windows leitet
     /// daraus auch die Ueberlagerungssymbole ab: ohne Anheft-Zustand zeigt es
