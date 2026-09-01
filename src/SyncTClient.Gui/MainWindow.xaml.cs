@@ -82,6 +82,8 @@ public partial class MainWindow : Window
     private MenuItem _menuOpen = new();
     private MenuItem _menuSettings = new();
     private MenuItem _menuUnbind = new();
+    private MenuItem _menuRescan = new();
+    private MenuItem _menuResync = new();
 
     public MainWindow()
     {
@@ -814,9 +816,6 @@ public partial class MainWindow : Window
     /// Eine Knopfleiste über der Tabelle bot dieselben Befehle. Die Knöpfe
     /// galten für die ausgewählte Zeile, standen aber nicht bei ihr.
     /// </remarks>
-    private MenuItem _menuRescan = null!;
-    private MenuItem _menuResync = null!;
-
     private void BuildRowMenu()
     {
         _menuConnect = Eintrag("S.Menu.Connect", OnAcceptFolder);
