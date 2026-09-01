@@ -47,10 +47,32 @@ public sealed partial class ShareHost
 
     private DateTime _lastVersionSweep = DateTime.MinValue;
 
-    /// <summary>Gehoert der Name zu unserer eigenen Sicherung?</summary>
-    internal static bool IsVersionsPath(string name)
-        => name.Equals(VersionsFolder, StringComparison.OrdinalIgnoreCase)
-           || name.StartsWith(VersionsFolder + "/", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Die Kennzeichnung, an der Syncthing einen eingehaengten Ordner erkennt.</summary>
+    /// <remarks>
+    /// Sie gehoert dem Programm auf dieser Seite und beschreibt seinen
+    /// Zustand. Uebertragen ergaebe sie keinen Sinn: die Gegenstelle hat ihre
+    /// eigene, und beide meinen etwas anderes.
+    /// </remarks>
+    public const string MarkerFolder = ".stfolder";
+
+    /// <summary>
+    /// Gehoert der Name zur Verwaltung und nicht zum Inhalt?
+    /// </summary>
+    /// <remarks>
+    /// Die eigene Sicherung und die Ordnerkennzeichnung. Syncthing haelt es
+    /// genauso -- beide sind Buchfuehrung eines Geraets ueber sich selbst und
+    /// haben auf der Leitung nichts verloren.
+    ///
+    /// Der Ordner eines anderen Programms -- etwa ".sync" von Resilio --
+    /// steht hier nicht. Er ist Inhalt dieses Ordners, und ob er
+    /// mitgenommen wird, entscheidet niemand ausser dem, dem er gehoert.
+    /// </remarks>
+    public static bool IsVersionsPath(string name)
+        => Unterhalb(name, VersionsFolder) || Unterhalb(name, MarkerFolder);
+
+    private static bool Unterhalb(string name, string ordner)
+        => name.Equals(ordner, StringComparison.OrdinalIgnoreCase)
+           || name.StartsWith(ordner + "/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Vermerkt, dass diese Namen neu zu betrachten sind.</summary>
     /// <summary>Nimmt Namen entgegen und meldet, wie viele neu dazukamen.</summary>

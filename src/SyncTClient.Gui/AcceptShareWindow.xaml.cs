@@ -60,7 +60,11 @@ public partial class AcceptShareWindow : Window
             // Beim Uebernehmen liegt hier noch nichts, also ist auch nichts
             // zu entfernen. Die Sperre gegen das Abwaehlen greift erst, wenn
             // der Ordner steht.
+            // Was zur Verwaltung gehoert, steht nicht zur Wahl. Es wird
+            // ohnehin nie uebertragen; im Baum waere es ein Kaestchen,
+            // das nichts bewirkt.
             var entries = index.EnumerateLight()
+                .Where(e => !ShareHost.IsVersionsPath(e.Name))
                 .Select(e => (e.Name, e.Size, e.IsDirectory, HasContent: true))
                 .ToList();
 
