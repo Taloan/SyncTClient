@@ -367,7 +367,15 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Share.TabIgnore">Ignore</s:String>
   <s:String x:Key="S.Share.IgnoreQuestion">What does not belong to this folder?</s:String>
   <s:String x:Key="S.Share.IgnoreHint">The tree under “Content” says which branches are to be kept on this device; what is unticked there is still transferred.&#10;&#10;A pattern here takes the name out of synchronisation altogether: it is not announced, not downloaded and not created. That holds for files which do not exist yet.&#10;&#10;The list belongs to this device and is not transferred.</s:String>
-  <s:String x:Key="S.Share.IgnoreSyntax">One pattern per line.&#10;*  any characters within a name   ·   **  across folder boundaries too   ·   ?  exactly one character   ·   !  exception   ·   //  comment&#10;Without / the pattern means the name at any level, with / the path from the root. A folder that matches takes everything below it.&#10;The first pattern that matches decides — an exception therefore belongs above the line it excepts from.&#10;Existing files with content stay where they are. Empty placeholders go.</s:String>
+  <s:String x:Key="S.Ig.Star">any number of characters within a name</s:String>
+  <s:String x:Key="S.Ig.StarStar">any number of characters, across folder boundaries too</s:String>
+  <s:String x:Key="S.Ig.Question">exactly one character</s:String>
+  <s:String x:Key="S.Ig.Bang">at the start of a line: exception — what this line matches stays in</s:String>
+  <s:String x:Key="S.Ig.Comment">at the start of a line: comment</s:String>
+  <s:String x:Key="S.Ig.Root">A pattern without / means the name at any level, one with / the path from the root of the folder.</s:String>
+  <s:String x:Key="S.Ig.Below">If a pattern matches a folder, everything below it is meant as well.</s:String>
+  <s:String x:Key="S.Ig.First">The first pattern that matches decides. An exception therefore belongs above the line it excepts from — below it, it never comes into play.</s:String>
+  <s:String x:Key="S.Ig.Keep">Existing files with content stay where they are; they merely stop taking part in synchronisation. Empty placeholders go.</s:String>
   <s:String x:Key="S.Share.SharedWith">Shared with these devices</s:String>
   <s:String x:Key="S.Share.SharedWithHint">Every device ticked carries the same folder. Unticking ends synchronisation with that device; the files stay here and there.</s:String>
   <s:String x:Key="S.Share.NoPeers">No remote devices configured. One can be added under “Remote devices …”.</s:String>

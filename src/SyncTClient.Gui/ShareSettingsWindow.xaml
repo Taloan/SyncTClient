@@ -180,18 +180,71 @@
             </TextBlock.ToolTip>
           </TextBlock>
 
-          <!-- Die Schreibweise unter dem Feld, nicht darueber: gelesen wird
-               sie beim Tippen, und dabei schaut man nach unten. -->
-          <TextBlock DockPanel.Dock="Bottom" Text="{DynamicResource S.Share.IgnoreSyntax}"
-                     Foreground="{DynamicResource Gedaempft}" FontSize="11"
-                     TextWrapping="Wrap" Margin="0,8,0,0" />
-
-          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1">
+          <!-- Das Feld nimmt nur so viel Hoehe, wie eine Musterliste
+               ueblicherweise braucht. Der Rest gehoert der Erklaerung: das
+               Feld fuellt man einmal, die Schreibweise liest man jedes Mal. -->
+          <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" Height="150">
             <TextBox x:Name="IgnoreBox" BorderThickness="0" AcceptsReturn="True" AcceptsTab="False"
                      FontFamily="Consolas" FontSize="12" Padding="6"
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                      SpellCheck.IsEnabled="False" />
           </Border>
+
+          <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,12,0,0">
+            <StackPanel>
+
+              <!-- Ein Zeichen je Zeile, das Zeichen in derselben Schrift wie
+                   im Feld darueber. In einem Fliesstext hintereinander waren
+                   die Sternchen von den Trennpunkten nicht zu unterscheiden. -->
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                  <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="*" FontFamily="Consolas" FontSize="13"
+                           MinWidth="46" Margin="4,0,10,4" Foreground="{DynamicResource Text}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{DynamicResource S.Ig.Star}"
+                           TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource Sekundaer}" />
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="**" FontFamily="Consolas" FontSize="13"
+                           MinWidth="46" Margin="4,0,10,4" Foreground="{DynamicResource Text}" />
+                <TextBlock Grid.Row="1" Grid.Column="1" Text="{DynamicResource S.Ig.StarStar}"
+                           TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource Sekundaer}" />
+
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="?" FontFamily="Consolas" FontSize="13"
+                           MinWidth="46" Margin="4,0,10,4" Foreground="{DynamicResource Text}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{DynamicResource S.Ig.Question}"
+                           TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource Sekundaer}" />
+
+                <TextBlock Grid.Row="3" Grid.Column="0" Text="!" FontFamily="Consolas" FontSize="13"
+                           MinWidth="46" Margin="4,0,10,4" Foreground="{DynamicResource Text}" />
+                <TextBlock Grid.Row="3" Grid.Column="1" Text="{DynamicResource S.Ig.Bang}"
+                           TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource Sekundaer}" />
+
+                <TextBlock Grid.Row="4" Grid.Column="0" Text="//" FontFamily="Consolas" FontSize="13"
+                           MinWidth="46" Margin="4,0,10,4" Foreground="{DynamicResource Text}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Text="{DynamicResource S.Ig.Comment}"
+                           TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{DynamicResource Sekundaer}" />
+              </Grid>
+
+              <TextBlock Text="{DynamicResource S.Ig.Root}" TextWrapping="Wrap" Margin="0,10,0,0"
+                         Foreground="{DynamicResource Sekundaer}" />
+              <TextBlock Text="{DynamicResource S.Ig.Below}" TextWrapping="Wrap" Margin="0,6,0,0"
+                         Foreground="{DynamicResource Sekundaer}" />
+              <TextBlock Text="{DynamicResource S.Ig.First}" TextWrapping="Wrap" Margin="0,6,0,0"
+                         Foreground="{DynamicResource Sekundaer}" />
+              <TextBlock Text="{DynamicResource S.Ig.Keep}" TextWrapping="Wrap" Margin="0,6,0,0"
+                         Foreground="{DynamicResource Sekundaer}" />
+            </StackPanel>
+          </ScrollViewer>
         </DockPanel>
       </TabItem>
     </TabControl>

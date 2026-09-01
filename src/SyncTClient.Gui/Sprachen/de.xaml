@@ -359,7 +359,15 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Share.TabIgnore">Ignorieren</s:String>
   <s:String x:Key="S.Share.IgnoreQuestion">Was gehört nicht zu dieser Freigabe?</s:String>
   <s:String x:Key="S.Share.IgnoreHint">Der Baum unter „Inhalt“ sagt, welche Zweige auf diesem Gerät liegen sollen; was dort nicht angekreuzt ist, wird trotzdem übertragen.&#10;&#10;Ein Muster hier nimmt den Namen ganz aus dem Abgleich: er wird nicht angekündigt, nicht heruntergeladen und nicht angelegt. Das gilt auch für Dateien, die es heute noch nicht gibt.&#10;&#10;Die Liste gilt für dieses Gerät und wird nicht übertragen.</s:String>
-  <s:String x:Key="S.Share.IgnoreSyntax">Ein Muster je Zeile.&#10;*  beliebig viele Zeichen innerhalb eines Namens   ·   **  auch über Ordnergrenzen   ·   ?  genau ein Zeichen   ·   !  Ausnahme   ·   //  Kommentar&#10;Ohne / meint das Muster den Namen auf jeder Ebene, mit / den Pfad ab der Wurzel. Ein getroffener Ordner nimmt alles unter sich mit.&#10;Es entscheidet das erste Muster, das zutrifft — eine Ausnahme gehört deshalb über die Zeile, von der sie ausnimmt.&#10;Vorhandene Dateien mit Inhalt bleiben liegen. Leere Platzhalter verschwinden.</s:String>
+  <s:String x:Key="S.Ig.Star">beliebig viele Zeichen innerhalb eines Namens</s:String>
+  <s:String x:Key="S.Ig.StarStar">beliebig viele Zeichen, auch über Ordnergrenzen hinweg</s:String>
+  <s:String x:Key="S.Ig.Question">genau ein Zeichen</s:String>
+  <s:String x:Key="S.Ig.Bang">am Zeilenanfang: Ausnahme — was diese Zeile trifft, bleibt dabei</s:String>
+  <s:String x:Key="S.Ig.Comment">am Zeilenanfang: Kommentar</s:String>
+  <s:String x:Key="S.Ig.Root">Ein Muster ohne / meint den Namen auf jeder Ebene, eines mit / den Pfad ab der Wurzel der Freigabe.</s:String>
+  <s:String x:Key="S.Ig.Below">Trifft ein Muster einen Ordner, ist alles darunter mitgemeint.</s:String>
+  <s:String x:Key="S.Ig.First">Es entscheidet das erste Muster, das zutrifft. Eine Ausnahme gehört deshalb über die Zeile, von der sie ausnimmt — darunter kommt sie nie zum Zug.</s:String>
+  <s:String x:Key="S.Ig.Keep">Vorhandene Dateien mit Inhalt bleiben liegen; sie nehmen nur nicht mehr am Abgleich teil. Leere Platzhalter verschwinden.</s:String>
   <s:String x:Key="S.Share.SharedWith">Mit diesen Geräten geteilt</s:String>
   <s:String x:Key="S.Share.SharedWithHint">Jedes angekreuzte Gerät führt denselben Ordner. Abwählen beendet den Abgleich mit diesem Gerät; die Dateien bleiben hier und dort liegen.</s:String>
   <s:String x:Key="S.Share.NoPeers">Keine Gegenstellen eingetragen. Unter „Gegenstellen …“ lässt sich eine hinzufügen.</s:String>
