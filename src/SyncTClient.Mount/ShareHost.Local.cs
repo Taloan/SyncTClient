@@ -742,6 +742,11 @@ public sealed partial class ShareHost
         var anzahl = 0;
         long bytes = 0;
 
+        // Was abgewaehlt ist und trotzdem liegen bleibt, weil eine der
+        // Sicherungen es verbietet. Ohne diese Liste steht ein abgewaehlter
+        // Zweig weiter im Ordner und niemand sagt warum.
+        var geblieben = new List<string>();
+
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
@@ -758,7 +763,7 @@ public sealed partial class ShareHost
             // nur, was die Platzhalter-Schwelle erreicht hat. Ein Fehler in der
             // Auswahl kostet dann Platz und keine Daten -- und genau so ein
             // Fehler hat einmal genuegt.
-            if (!MayEvict(name)) continue;
+            if (!MayEvict(name)) { geblieben.Add(name); continue; }
 
             // Und nur, was in genau dieser Fassung angekuendigt ist.
             //
@@ -766,10 +771,10 @@ public sealed partial class ShareHost
             // fuehrt -- nicht, ob sie diesen Inhalt fuehrt. Wer sich darauf
             // verlaesst, loescht eine lokale Aenderung, die noch niemand
             // gesehen hat, weil zufaellig derselbe Name drueben liegt.
-            if (!Angekuendigt(name, info)) continue;
+            if (!Angekuendigt(name, info)) { geblieben.Add(name); continue; }
 
             // Und der Beweis dafuer, gerechnet und nicht geschaetzt.
-            if (!InhaltStimmt(name, info)) continue;
+            if (!InhaltStimmt(name, info)) { geblieben.Add(name); continue; }
 
             // Und die dritte: eine eben erst angekuendigte Datei bleibt
             // liegen, bis die Gegenstelle Gelegenheit hatte, sie zu holen.
@@ -814,6 +819,15 @@ public sealed partial class ShareHost
         if (anzahl > 0)
         {
             LeereVerzeichnisse(_config.LocalPath);
+
+        // Die Regel ist richtig -- entfernt wird nur, was anderswo
+        // vollstaendig liegt --, aber sie muss sich erklaeren. Sonst sieht
+        // eine Abwahl aus, als haette sie nicht gewirkt.
+        if (geblieben.Count > 0)
+            _log($"[{FolderId}] {geblieben.Count} abgewaehlte Dateien bleiben liegen: " +
+                 string.Join(", ", geblieben.Take(5).Select(n => $"\"{n}\"")) +
+                 (geblieben.Count > 5 ? $" und {geblieben.Count - 5} weitere" : "") +
+                 " -- die Gegenstelle fuehrt sie nicht, Entfernen waere die letzte Kopie.");
 
             // Nicht "uebertragen": eine Datei, deren Bloecke die Gegenstelle
             // schon hatte, ist nie ueber die Leitung gegangen. Gesagt wird,
