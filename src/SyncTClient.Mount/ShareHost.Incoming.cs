@@ -156,7 +156,19 @@ public sealed partial class ShareHost
         // Gegenstelle uebernommen haben.
         using var hold = HoldHydration(name);
 
-        if (mine is not null && !mine.Deleted)
+        // Eine Aenderung, die noch nicht angekuendigt ist, steht in keinem
+        // Versionsvektor. Der Vergleich saehe unsere alte Fassung und gaebe
+        // der Gegenstelle recht -- und der ungesagte Inhalt waere fort, ohne
+        // dass je ein Konflikt gemeldet wurde. Er ist einer: beide Seiten
+        // haben geaendert, ohne voneinander zu wissen.
+        var ungesagt = mine is not null && !mine.Deleted && NochNichtGesagt(name);
+
+        if (ungesagt && !theirs.Deleted)
+        {
+            bilanz.Konflikte++;
+            if (!ResolveConflict(name, path, mine!, theirs)) return;
+        }
+        else if (mine is not null && !mine.Deleted)
         {
             switch (VersionVectors.Compare(mine.Version, theirs.Version))
             {

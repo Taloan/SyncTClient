@@ -713,6 +713,14 @@ public sealed partial class ShareHost
             // Fehler hat einmal genuegt.
             if (!MayEvict(name)) continue;
 
+            // Und nur, was in genau dieser Fassung angekuendigt ist.
+            //
+            // MayEvict fragt, ob die Gegenstelle eine Datei dieses Namens
+            // fuehrt -- nicht, ob sie diesen Inhalt fuehrt. Wer sich darauf
+            // verlaesst, loescht eine lokale Aenderung, die noch niemand
+            // gesehen hat, weil zufaellig derselbe Name drueben liegt.
+            if (!Angekuendigt(name, info)) continue;
+
             // Und die dritte: eine eben erst angekuendigte Datei bleibt
             // liegen, bis die Gegenstelle Gelegenheit hatte, sie zu holen.
             //
@@ -766,6 +774,46 @@ public sealed partial class ShareHost
         }
 
         return (anzahl, bytes);
+    }
+
+    /// <summary>
+    /// Steht diese Datei in genau dieser Fassung im eigenen Bestand?
+    /// </summary>
+    /// <remarks>
+    /// Der eigene Bestand haelt fest, was angekuendigt wurde. Weichen Groesse
+    /// oder Zeit davon ab, liegt hier eine Aenderung, die noch niemand kennt
+    /// -- und die darf weder entfernt noch stillschweigend ueberschrieben
+    /// werden.
+    /// </remarks>
+    private bool Angekuendigt(string name, System.IO.FileInfo info)
+    {
+        lock (_indexGate)
+        {
+            if (_index is null || !_index.TryGetLocal(name, out var eigene)) return false;
+
+            return !eigene.Deleted
+                   && eigene.Size == info.Length
+                   && eigene.ModifiedS == new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds();
+        }
+    }
+
+    /// <summary>
+    /// Liegt hier eine Aenderung, die noch nicht angekuendigt ist?
+    /// </summary>
+    /// <remarks>
+    /// Ein Platzhalter zaehlt nicht: er haelt keinen Inhalt und kann nichts
+    /// Ungesagtes enthalten.
+    /// </remarks>
+    internal bool NochNichtGesagt(string name)
+    {
+        var path = ResolveInside(name);
+        if (path is null) return false;
+
+        var info = new System.IO.FileInfo(path);
+        if (!info.Exists) return false;
+        if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) return false;
+
+        return !Angekuendigt(name, info);
     }
 
     /// <summary>Raeumt Verzeichnisse weg, in denen nichts mehr steht.</summary>
