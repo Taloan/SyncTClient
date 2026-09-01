@@ -257,7 +257,10 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
             {
                 // Ebenfalls abgerundet: hundert Prozent neben offenen Bytes
                 // ist ein Widerspruch in derselben Zeile.
-                var anteil = Share.OutstandingBytes > 0 ? Math.Min(99, Math.Floor(Percent)) : Percent;
+                // Auch bei null offenen Bytes: was aussteht, kann eine
+                // leere Datei sein. Hundert Prozent neben "gleicht ab" ist
+                // derselbe Widerspruch, nur ohne Bytes.
+                var anteil = Share.Outstanding > 0 ? Math.Min(99, Math.Floor(Percent)) : Percent;
                 return App.S("R.SyncPercent", $"{anteil:0}", Format.Bytes(Share.OutstandingBytes));
             }
 

@@ -990,6 +990,43 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// abgeglichen. Stueckweise, damit eine grosse Datei nicht vollstaendig
     /// im Arbeitsspeicher steht.
     /// </remarks>
+    /// <summary>
+    /// Legt eine Datei ohne Inhalt an -- als richtige Datei, nicht als
+    /// Platzhalter.
+    /// </summary>
+    /// <remarks>
+    /// Denselben Weg wie eine geholte Datei: erst daneben, dann an die
+    /// Stelle. Ein Abbruch unterwegs laesst den Platzhalter stehen.
+    /// </remarks>
+    private void LeereDateiAnlegen(string path, string name, BepFileInfo file)
+    {
+        using var hold = HoldHydration(name);
+
+        var temp = path + ".synct-neu";
+
+        try
+        {
+            using (new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None)) { }
+
+            File.SetLastWriteTimeUtc(temp, DateTimeOffset.FromUnixTimeSeconds(file.ModifiedS).UtcDateTime);
+
+            if (File.Exists(path)) File.Delete(path);
+            File.Move(temp, path);
+
+            _cache?.NoteContent(name, 0);
+            _cache?.MarkInSync(name);
+
+            var uebernommen = file.Clone();
+            uebernommen.Sequence = 0;
+            Store(uebernommen, StateClean);
+        }
+        catch (Exception)
+        {
+            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
+            throw;
+        }
+    }
+
     private async Task MaterialiseAsync(string path, CancellationToken ct)
     {
         if (NameOf(path) is not { } name) return;
@@ -998,7 +1035,26 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         lock (_indexGate)
             if (_index is null || !_index.TryGet(name, out file!)) return;
 
-        if (file.Deleted || file.Blocks.Count == 0) return;
+        if (file.Deleted) return;
+
+        // Eine Datei ohne Bytes hat nichts zu holen -- und wer nichts holt,
+        // braucht dafuer auch keine Verbindung. Sie entsteht hier an Ort und
+        // Stelle.
+        //
+        // Als Platzhalter kann sie nie fertig werden: das Fuellen holt
+        // Bloecke, und es gibt keine. Sie galt damit dauerhaft als nicht
+        // abgeglichen. Der Zustand stand fuer immer auf "gleicht ab", der
+        // Balken auf hundert Prozent neben null offenen Bytes -- ein
+        // Rueckstand, an dem kein Handgriff etwas geaendert haette.
+        if (file.Size == 0)
+        {
+            LeereDateiAnlegen(path, name, file);
+            return;
+        }
+
+        // Ohne Bloecke, aber mit Groesse: die Gegenstelle fuehrt den Namen
+        // und haelt den Inhalt nicht. Hier ist nichts zu beschaffen.
+        if (file.Blocks.Count == 0) return;
 
         var leitung = LineFor(name)
             ?? throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
@@ -1163,10 +1219,19 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         // "Vollstaendig lokal bereithalten" bedeutet, auf jede Datei einmal
         // zuzugreifen. Der erste Lesezugriff loest die Hydration aus.
+        // Leere Dateien gehoeren dazu. Sie waren hier ausgenommen, weil es
+        // nichts zu laden gibt -- aber "nichts zu laden" heisst nicht "schon
+        // da": als Platzhalter blieben sie fuer immer leer.
+        //
+        // Und dieselben drei Merkmale wie beim Durchgang ueber den Ordner.
+        // Ob eine Datei Inhalt haelt, darf nicht an zwei Stellen
+        // unterschiedlich beantwortet werden.
         var pending = Enumerate()
-            .Where(e => !e.IsDirectory && e.Size > 0)
+            .Where(e => !e.IsDirectory)
             .Select(e => LocalPathOf(e.RelativePath))
-            .Where(p => File.Exists(p) && ((uint)new System.IO.FileInfo(p).Attributes & RecallOnDataAccess) != 0)
+            .Where(p => File.Exists(p)
+                        && ((uint)new System.IO.FileInfo(p).Attributes
+                            & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
             .ToList();
 
         if (pending.Count == 0) return;
