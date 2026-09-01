@@ -25,7 +25,19 @@
               SelectionChanged="OnSelected">
       <DataGrid.Columns>
         <DataGridTextColumn Header="{DynamicResource S.Col.Name}" Width="200" Binding="{Binding Display}" />
-        <DataGridTextColumn Header="{DynamicResource S.Peers.State}" Width="150" Binding="{Binding StateText}" />
+        <!-- Der Zustand ist meist ein Wort und im Fehlerfall ein Satz. Die
+             Spalte kann nicht beides breit genug sein; der vollstaendige Text
+             steht deshalb im Tooltip, und die Spalte laesst sich ziehen. -->
+        <DataGridTextColumn Header="{DynamicResource S.Peers.State}" Width="150"
+                            Binding="{Binding StateText}">
+          <DataGridTextColumn.ElementStyle>
+            <Style TargetType="TextBlock">
+              <Setter Property="VerticalAlignment" Value="Center" />
+              <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+              <Setter Property="ToolTip" Value="{Binding StateText}" />
+            </Style>
+          </DataGridTextColumn.ElementStyle>
+        </DataGridTextColumn>
         <DataGridTextColumn Header="{DynamicResource S.Peers.Address}" Width="*" Binding="{Binding Detail}" />
       </DataGrid.Columns>
     </DataGrid>

@@ -54,9 +54,36 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Haelt fest, dass dieses Programm laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Ein zweiter Client waere kein Duplikat, sondern ein Widerspruch: er
+    /// belegt denselben Port, denselben Pipe-Namen und dieselbe Geraete-ID.
+    /// Die Gegenstelle wirft die zweite Verbindung weg, und das Protokoll
+    /// fuellt sich mit Meldungen, deren Ursache nirgends steht.
+    ///
+    /// Je Benutzer, nicht je Sitzung: zwei angemeldete Benutzer duerfen ihren
+    /// eigenen Client haben, denn sie haben eigene Ordner und eigene
+    /// Zertifikate.
+    /// </remarks>
+    private static Mutex? _einmal;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _einmal = new Mutex(true, @"Local\SyncTClient.Instanz", out var alleine);
+
+        if (!alleine)
+        {
+            MessageBox.Show(
+                S("M.AlreadyRunning"), "SyncTClient",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+
+            Shutdown();
+            return;
+        }
 
         // Ein Fehler in einem Rueckruf der Oberflaeche beendete bisher das
         // ganze Programm -- ein Klick auf einen Verweis in der Tabelle
