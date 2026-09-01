@@ -733,7 +733,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         try
         {
+            var wartete = System.Diagnostics.Stopwatch.StartNew();
             await WaitForIndexAsync(ct);
+            _log($"[{FolderId}] Index der Gegenstelle da nach {wartete.ElapsedMilliseconds} ms.");
         }
         catch (Exception ex)
         {
@@ -753,9 +755,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Vor dem Anlegen: was nicht mehr dazugehoert, soll auch keinen
             // Platzhalter bekommen. Der Index kann Namen fuehren, die eine
             // aeltere Fassung hereingelassen hat.
+            var uhr = System.Diagnostics.Stopwatch.StartNew();
             PurgeIgnored();
 
             await ProjectAsync();
+            _log($"[{FolderId}] Platzhalter vorbereitet in {uhr.ElapsedMilliseconds} ms.");
             State = ShareState.Bereit;
 
             await ApplyModeAsync(ct);
@@ -899,6 +903,20 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     // ------------------------------------------------------------ Platzhalter
 
+    /// <summary>
+    /// Die Fassung der Sync-Wurzel, wie sie in der Registrierung steht.
+    /// </summary>
+    /// <remarks>
+    /// Sie entscheidet, ob beim Start neu angemeldet wird. Wer an den
+    /// Eigenschaften einer Wurzel etwas aendert -- Name, Symbol, Gruppierung,
+    /// eine der Richtlinien --, zaehlt sie hoch. Sonst bleibt es beim
+    /// Bestand, und die Aenderung kommt nie an.
+    ///
+    /// 0.2: ShowSiblingsAsGroup, damit alle Freigaben unter einem Knoten im
+    /// Explorer stehen.
+    /// </remarks>
+    private const string SyncRootFassung = "0.2";
+
     private async Task ProjectAsync()
     {
         _log($"[{FolderId}] registriere Sync-Root: {_config.LocalPath}");
@@ -908,7 +926,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Vorschau-Erweiterung eingetragen wird. Ausserdem erscheint der
         // Ordner mit Namen und Symbol in der Navigationsleiste des Explorers.
         var name = string.IsNullOrWhiteSpace(_config.Label) ? FolderId : _config.Label;
-        _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
+        var uhr = System.Diagnostics.Stopwatch.StartNew();
+        _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", SyncRootFassung);
+        _log($"[{FolderId}] Sync-Root angemeldet in {uhr.ElapsedMilliseconds} ms.");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
         // "Vollstaendig lokal" nimmt am Limit nicht teil. Dort darf kein
@@ -929,8 +949,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Der Eintrag muss stehen, bevor die Shell den Sync-Root uebernimmt.
         // Sie liest seine Eigenschaften beim Anmelden. Deshalb wird danach
         // noch einmal angemeldet, damit sie den Vorschau-Erzeuger erfasst.
+        uhr.Restart();
         RegisterThumbnailProvider();
-        _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", "0.1");
+        _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", SyncRootFassung);
+        _log($"[{FolderId}] Vorschau-Erweiterung und zweite Anmeldung in {uhr.ElapsedMilliseconds} ms.");
 
         _mount = new CloudFilterMount(_config.LocalPath, this, _log);
 
