@@ -219,6 +219,12 @@ public sealed partial class ShareHost
 
         var neu = !info.Exists;
 
+        // "Immer auf diesem Geraet behalten" haengt als Attribut an der Datei.
+        // Gleich wird sie fortgenommen und neu angelegt; ohne dieses Merken
+        // waere das Versprechen nach der naechsten Aenderung der Gegenstelle
+        // stillschweigend aufgehoben.
+        var angeheftet = !neu && IsPinnedFile(path);
+
         if (!neu)
         {
             // Nur was Inhalt hat, ist es wert gesichert zu werden. Ein
@@ -236,11 +242,20 @@ public sealed partial class ShareHost
             return;
         }
 
+        if (angeheftet) _mount.SetPinned(path, true);
+
         // Unser eigener Eintrag ist damit hinfaellig. Was hier liegt, ist ab
         // jetzt die Fassung der Gegenstelle.
         lock (_indexGate) _index!.ForgetLocal(name);
 
         if (neu) bilanz.Angelegt++; else bilanz.Ersetzt++;
+    }
+
+    /// <summary>Ob diese Datei "immer auf diesem Geraet" bleiben soll.</summary>
+    private static bool IsPinnedFile(string path)
+    {
+        try { return ((uint)new System.IO.FileInfo(path).Attributes & 0x0008_0000) != 0; }
+        catch (Exception) { return false; }
     }
 
     private void RemoveLocally(string name, string path, Bilanz bilanz)

@@ -342,18 +342,29 @@ public sealed class CloudFilterMount : IDisposable
     }
 
 
+    private unsafe void MarkUnpinned(string fullPath) => SetPinned(fullPath, false);
+
     /// <summary>
-    /// Setzt den Anheft-Zustand auf "nicht angeheftet". Angeheftete Dateien
-    /// haelt Windows immer lokal. Die Dateien dieser Freigabe sollen bei
-    /// Bedarf geholt und wieder verdraengt werden koennen.
+    /// Setzt den Anheft-Zustand.
     /// </summary>
-    private unsafe void MarkUnpinned(string fullPath)
+    /// <remarks>
+    /// "Angeheftet" ist das Versprechen aus dem Kontextmenue von Windows:
+    /// immer auf diesem Geraet behalten. Es wird eingehalten -- eine
+    /// angeheftete Datei ist von der Verdraengung ausgenommen.
+    ///
+    /// "Nicht angeheftet" ist der Normalfall dieser Freigabe. Windows leitet
+    /// daraus auch die Ueberlagerungssymbole ab: ohne Anheft-Zustand zeigt es
+    /// gar keines.
+    /// </remarks>
+    public unsafe void SetPinned(string fullPath, bool pinned)
     {
         try
         {
             using var handle = File.OpenHandle(fullPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
             var result = PInvoke.CfSetPinState(
-                handle, CF_PIN_STATE.CF_PIN_STATE_UNPINNED, CF_SET_PIN_FLAGS.CF_SET_PIN_FLAG_NONE, null);
+                handle,
+                pinned ? CF_PIN_STATE.CF_PIN_STATE_PINNED : CF_PIN_STATE.CF_PIN_STATE_UNPINNED,
+                CF_SET_PIN_FLAGS.CF_SET_PIN_FLAG_NONE, null);
 
             if (result.Failed)
                 _log?.Invoke($"  Anheft-Zustand fuer \"{Path.GetFileName(fullPath)}\": 0x{(uint)result.Value:X8}");
