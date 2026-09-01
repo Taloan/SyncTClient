@@ -1206,7 +1206,7 @@ public sealed partial class ShareHost
     /// Ein Platzhalter haelt seinen Inhalt nicht, aber wir kennen ihn: die
     /// Blockliste steht unter dem alten Namen im Bestand. Sie wird
     /// uebernommen, und damit ist die Datei unter dem neuen Namen angekuendigt,
-    /// ohne dass ein einziges Byte ueber die Leitung geht -- die Gegenstelle
+    /// ohne dass ein einziges Byte ueber die Verbindung geht -- die Gegenstelle
     /// hat die Bloecke bereits und schreibt die Datei aus ihrer eigenen Kopie.
     ///
     /// Die Groesse muss uebereinstimmen. Sonst ist es nicht dieselbe Datei,
@@ -1524,7 +1524,7 @@ public sealed partial class ShareHost
     /// hat, bekommt einen, die uebrigen einen Nachtrag mit der Nummer ihres
     /// eigenen Vorgaengers.
     ///
-    /// Scheitert eine Leitung, laufen die uebrigen weiter. Der Ausfall einer
+    /// Scheitert eine Verbindung, laufen die uebrigen weiter. Der Ausfall einer
     /// Gegenstelle ist kein Grund, den anderen nichts zu sagen.
     /// </remarks>
     private async Task FlushAsync(List<BepFileInfo> batch, CancellationToken ct)
@@ -1564,14 +1564,15 @@ public sealed partial class ShareHost
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
             {
-                // Und die Leitung herausnehmen. Ein geschlossener Socket wird
+                // Und die Verbindung herausnehmen. Ein geschlossener Socket wird
                 // nicht dadurch besser, dass man ihn weiter beschreibt -- ohne
                 // dies scheiterte jede Ankuendigung von nun an, immer mit
                 // derselben Zeile. Der PeerHost haengt beim Verbinden eine
                 // neue ein.
                 DropConnection(device);
+                LineLost?.Invoke(device);
 
-                _log($"[{FolderId}] Ankuendigung scheiterte, Leitung herausgenommen: {ex.Message}");
+                _log($"[{FolderId}] Ankuendigung fehlgeschlagen, Verbindung verworfen: {ex.Message}");
             }
         }
 

@@ -456,7 +456,7 @@ public partial class MainWindow : Window
     /// Angehalten heisst: keine Uebertragung und keine Aenderung im Ordner.
     /// Die Platzhalter bleiben stehen und der Ordner bleibt eingehaengt.
     ///
-    /// Die Leitung wird nur hier getrennt und wieder aufgebaut, nicht in
+    /// Die Verbindung wird nur hier getrennt und wieder aufgebaut, nicht in
     /// <see cref="ApplyPause"/>: das laeuft im Sekundentakt mit, und ein
     /// Verbindungsaufbau je Sekunde waere keiner.
     /// </remarks>
@@ -493,15 +493,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Trennt beim Anhalten die Leitungen und baut sie beim Fortsetzen wieder
+    /// Trennt beim Anhalten die Verbindungen und baut sie beim Fortsetzen wieder
     /// auf.
     /// </summary>
     /// <remarks>
     /// "Alles anhalten" soll heissen: kein Datenverkehr. Die Ankuendigungen
     /// der Gegenstelle sind zwar klein, aber sie sind Verkehr, und wer wegen
-    /// einer knappen Leitung anhaelt, hat kein Interesse an Ausnahmen.
+    /// einer knappen Verbindung anhaelt, hat kein Interesse an Ausnahmen.
     ///
-    /// Eine einzelne angehaltene Freigabe trennt dagegen nichts: die Leitung
+    /// Eine einzelne angehaltene Freigabe trennt dagegen nichts: die Verbindung
     /// gehoert der Gegenstelle und nicht dem Ordner, und die uebrigen Ordner
     /// derselben Gegenstelle laufen weiter.
     /// </remarks>
@@ -1525,7 +1525,7 @@ public partial class MainWindow : Window
                 App.S("S.Menu.Unbind"), MessageBoxButton.OKCancel, MessageBoxImage.Warning)
             != MessageBoxResult.OK) return;
 
-        // Jede beteiligte Gegenstelle nimmt ihre Leitung heraus. Aufgeloest
+        // Jede beteiligte Gegenstelle nimmt ihre Verbindung heraus. Aufgeloest
         // wird der Ordner dabei einmal, von der ersten -- die uebrigen finden
         // ihn nicht mehr in der Ablage.
         foreach (var teilnehmer in _row.Peers)

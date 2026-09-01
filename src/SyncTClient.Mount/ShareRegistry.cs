@@ -14,7 +14,7 @@ namespace SyncTClient.Mount;
 /// waeren der sichtbare Teil des Schadens.
 ///
 /// Ein Ordner ist ein Ordner: ein Pfad, eine Auswahl, ein Index. Wer daran
-/// teilnimmt, haengt seine Leitung ein und wieder aus.
+/// teilnimmt, haengt seine Verbindung ein und wieder aus.
 /// </remarks>
 public sealed class ShareRegistry(AppConfig app, DeviceIdentity identity, Action<string> log)
 {

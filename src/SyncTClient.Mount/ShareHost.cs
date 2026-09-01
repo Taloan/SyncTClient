@@ -105,7 +105,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private readonly SemaphoreSlim _indexArrived = new(0);
 
     /// <summary>
-    /// Die Leitungen zu den beteiligten Gegenstellen, je Geraet eine.
+    /// Die Verbindungen zu den beteiligten Gegenstellen, je Geraet eine.
     /// </summary>
     /// <remarks>
     /// Ein Ordner gehoert nicht einer Gegenstelle, sondern hat Teilnehmer.
@@ -114,11 +114,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private readonly ConcurrentDictionary<string, BepConnection> _connections =
         new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Irgendeine Leitung. Fuer alles, was jede beantworten kann.</summary>
+    /// <summary>Irgendeine Verbindung. Fuer alles, was jede beantworten kann.</summary>
     private BepConnection? AnyLine => _connections.Values.FirstOrDefault();
 
     /// <summary>
-    /// Die Leitung zu einer Gegenstelle, die diese Datei fuehrt.
+    /// Die Verbindung zu einer Gegenstelle, die diese Datei fuehrt.
     /// </summary>
     /// <remarks>
     /// Bei irgendeiner zu fragen waere ein Fehlschlag mit Ansage: eine
@@ -179,6 +179,19 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public bool IsPaused { get; private set; }
 
     public event Action<ShareState>? StateChanged;
+    /// <summary>
+    /// Eine Verbindung liess sich nicht mehr beschreiben. Der Parameter ist das
+    /// Geraet.
+    /// </summary>
+    /// <remarks>
+    /// Ein geschlossener Socket faellt beim Schreiben auf, nicht unbedingt
+    /// beim Lesen: ein halb offener Anschluss laesst den Leser warten, bis
+    /// eine Zeitschranke greift. Wer schreibt, merkt es sofort -- und der
+    /// PeerHost muss es erfahren, sonst gilt die Gegenstelle weiter als
+    /// verbunden, waehrend sie es nicht ist.
+    /// </remarks>
+    public event Action<string>? LineLost;
+
     public event Action<TransferInfo>? TransferStarted;
     public event Action<TransferInfo>? TransferFinished;
 
@@ -735,12 +748,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
-    /// Nimmt die Leitung weg, ohne den Ordner aufzugeben.
+    /// Nimmt die Verbindung weg, ohne den Ordner aufzugeben.
     /// </summary>
     /// <remarks>
     /// Der Unterschied zu <see cref="StopAsync"/>: der Sync-Root bleibt
     /// eingehaengt, der Cache angemeldet und der Hintergrundlauf am Leben.
-    /// Lokal wird also weiter indexiert -- das kostet nichts auf der Leitung
+    /// Lokal wird also weiter indexiert -- das kostet nichts auf der Verbindung
     /// und erspart beim Fortsetzen einen vollstaendigen Durchgang.
     /// </remarks>
     public void DropConnection(string device)
@@ -751,14 +764,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
-    /// Nimmt eine neue Leitung an, ohne den Ordner neu aufzubauen.
+    /// Nimmt eine neue Verbindung an, ohne den Ordner neu aufzubauen.
     /// </summary>
     /// <remarks>
     /// Nach dem Fortsetzen steht der Ordner noch genauso da wie vorher. Ihn
     /// erneut anzulegen hiesse, Sync-Root und Platzhalter ein zweites Mal
     /// aufzubauen, waehrend die ersten noch stehen.
     ///
-    /// Zurueckgesetzt wird nur, was zur Sitzung gehoert: eine neue Leitung
+    /// Zurueckgesetzt wird nur, was zur Sitzung gehoert: eine neue Verbindung
     /// beginnt mit einem vollstaendigen Index, und Nachtraege brauchen die
     /// Nummer ihres Vorgaengers.
     /// </remarks>
@@ -1207,10 +1220,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             if (_thumbnails.Has(local)) return true;
 
             var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, file.Size);
-            if (LineFor(file.Name) is not { } vorschauLeitung) return false;
+            if (LineFor(file.Name) is not { } vorschauVerbindung) return false;
 
             var head = await FileFetcher.FetchRangeAsync(
-                vorschauLeitung, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
+                vorschauVerbindung, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
                 .ConfigureAwait(false);
 
             NoteReceived(head.Length);

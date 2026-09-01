@@ -74,7 +74,7 @@ public static class CommandService
                 using var pipe = Erzeugen();
                 pipe.WaitForConnection();
 
-                // Steht die Leitung, war es kein dauerhaftes Hindernis.
+                // Kam eine Verbindung zustande, war es kein dauerhaftes Hindernis.
                 fehler = 0;
 
                 using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, leaveOpen: true);

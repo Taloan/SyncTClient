@@ -101,6 +101,43 @@ public sealed class PeerHost : IAsyncDisposable
     public event Action<PeerState>? StateChanged;
     public event Action? OfferedChanged;
 
+    /// <summary>
+    /// Nimmt einen Ordner in die eigene Liste und hoert auf seine Verbindungen.
+    /// </summary>
+    /// <remarks>
+    /// Nur beim ersten Mal wird das Ereignis abonniert. Ein Ordner kann
+    /// mehrfach durch diese Stelle laufen -- beim Fortsetzen etwa --, und
+    /// zwei Abonnements meldeten denselben Ausfall zweimal.
+    /// </remarks>
+    private void Uebernehmen(ShareHost host)
+    {
+        if (_shares.TryAdd(host.FolderId, host)) host.LineLost += OnLineLost;
+        else _shares[host.FolderId] = host;
+    }
+
+    /// <summary>
+    /// Eine Verbindung zu dieser Gegenstelle ist geschlossen. Also ist die Gegenstelle
+    /// getrennt, auch wenn der Leser es noch nicht bemerkt hat.
+    /// </summary>
+    /// <remarks>
+    /// Ohne diesen Schluss stuende die Gegenstelle weiter als verbunden da,
+    /// waehrend jede Ankuendigung scheitert -- und weil sie als verbunden
+    /// gilt, versucht auch niemand, neu zu verbinden.
+    /// </remarks>
+    private void OnLineLost(string device)
+    {
+        if (!string.Equals(device, DeviceId, StringComparison.OrdinalIgnoreCase)) return;
+        if (State != PeerState.Verbunden) return;
+
+        _log($"[{Display}] Verbindung geschlossen, gilt als getrennt.");
+
+        _ = Task.Run(async () =>
+        {
+            try { await DisconnectAsync(); }
+            catch (Exception ex) { _log($"[{Display}] Trennen: {ex.Message}"); }
+        });
+    }
+
     public ShareHost? ShareFor(string folderId)
         => _shares.TryGetValue(folderId, out var share) ? share : null;
 
@@ -327,7 +364,7 @@ public sealed class PeerHost : IAsyncDisposable
         foreach (var share in shares)
         {
             // Nach einem Anhalten steht der Ordner noch. Dann bekommt er nur
-            // die neue Leitung; ihn ein zweites Mal aufzubauen hiesse,
+            // die neue Verbindung; ihn ein zweites Mal aufzubauen hiesse,
             // Sync-Root und Platzhalter neben die bestehenden zu setzen.
             if (_shares.TryGetValue(share.FolderId, out var bestehend))
             {
@@ -336,7 +373,7 @@ public sealed class PeerHost : IAsyncDisposable
             }
 
             var host2 = _registry.GetOrAdd(share, out var frisch);
-            _shares[share.FolderId] = host2;
+            Uebernehmen(host2);
 
             // Nur ein neu entstandener Ordner ist anzumelden. Ein zweiter
             // Teilnehmer findet einen fertigen vor, der schon in der Tabelle
@@ -349,7 +386,7 @@ public sealed class PeerHost : IAsyncDisposable
 
         foreach (var share in _shares.Values)
         {
-            // Ein Ordner, der schon steht, ist mit der neuen Leitung fertig.
+            // Ein Ordner, der schon steht, ist mit der neuen Verbindung fertig.
             if (share.State != ShareState.Gestoppt) continue;
 
             try { await share.StartAsync(DeviceId, connection, token); }
@@ -525,7 +562,7 @@ public sealed class PeerHost : IAsyncDisposable
             _verkehrSeit = DateTime.UtcNow;
         }
 
-        _log($"[{Display}] Leitung: {zeile}.");
+        _log($"[{Display}] Verbindung: {zeile}.");
     }
 
     private static string Benennung(MessageType typ) => typ switch
@@ -579,6 +616,7 @@ public sealed class PeerHost : IAsyncDisposable
         if (_connection is null) throw new InvalidOperationException("nicht verbunden.");
 
         var host = _registry.GetOrAdd(share, out _);
+        Uebernehmen(host);
         _shares[share.FolderId] = host;
 
         // Erneut ankuendigen, jetzt mit dem neuen Ordner.
@@ -631,7 +669,7 @@ public sealed class PeerHost : IAsyncDisposable
     {
         if (!_shares.TryRemove(folderId, out var share)) return;
 
-        // Die eigene Leitung geht in jedem Fall.
+        // Die eigene Verbindung wird in jedem Fall abgegeben.
         share.DropConnection(DeviceId);
 
         // Aufgeloest wird der Ordner genau einmal. Nehmen mehrere Gegenstellen
@@ -651,13 +689,13 @@ public sealed class PeerHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Legt die Leitung still und laesst die Ordner stehen.
+    /// Legt die Verbindung still und laesst die Ordner stehen.
     /// </summary>
     /// <remarks>
     /// Fuer das Anhalten. Trennen wuerde die Sync-Roots aushaengen; dann
     /// haengt der Explorer an jedem Platzhalter, den jemand anfasst, und der
     /// Hintergrundlauf hoerte auf, lokal zu indexieren. Angehalten soll
-    /// heissen: keine Leitung -- nicht: kein Ordner.
+    /// heissen: keine Verbindung -- nicht: kein Ordner.
     /// </remarks>
     public async Task SuspendAsync()
     {
@@ -675,7 +713,7 @@ public sealed class PeerHost : IAsyncDisposable
 
         _readLoop = null;
         State = PeerState.Getrennt;
-        _log($"[{Display}] Leitung getrennt, Ordner bleiben eingehaengt.");
+        _log($"[{Display}] Verbindung getrennt, Ordner bleiben eingehaengt.");
     }
 
     public async Task DisconnectAsync()
