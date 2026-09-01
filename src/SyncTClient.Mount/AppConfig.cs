@@ -161,7 +161,13 @@ public sealed class ShareConfig
     [JsonIgnore]
     public string Display => string.IsNullOrWhiteSpace(Label) ? FolderId : $"{Label} ({FolderId})";
 
-    public bool Includes(string relativePath)
+    /// <param name="isDirectory">
+    /// Ob der Name ein Verzeichnis meint. Fuer "Dateien in X" ist das der
+    /// Unterschied zwischen dazugehoeren und nicht: ein Unterverzeichnis
+    /// liegt genauso unmittelbar in X wie eine Datei, gehoert aber nicht zu
+    /// dessen losen Dateien.
+    /// </param>
+    public bool Includes(string relativePath, bool isDirectory = false)
     {
         if (Included.Count == 0) return true;
 
@@ -176,7 +182,9 @@ public sealed class ShareConfig
             {
                 var ordner = prefix == "*" ? "" : prefix[..^2];
 
-                if (ParentOf(relativePath).Equals(ordner, StringComparison.OrdinalIgnoreCase)) return true;
+                if (!isDirectory
+                    && ParentOf(relativePath).Equals(ordner, StringComparison.OrdinalIgnoreCase))
+                    return true;
 
                 // Der Ordner selbst und alles darueber muss sichtbar bleiben,
                 // sonst ist das Ausgewaehlte im Explorer nicht erreichbar.

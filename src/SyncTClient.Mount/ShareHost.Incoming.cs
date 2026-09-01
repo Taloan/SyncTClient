@@ -144,6 +144,11 @@ public sealed partial class ShareHost
             mine = _index.TryGetLocal(name, out var eigene) ? eigene : null;
         }
 
+        // Die entscheidende Pruefung, denn hier wird angelegt. Erst hier ist
+        // bekannt, ob der Name ein Verzeichnis meint -- und "Dateien in X"
+        // umfasst die losen Dateien von X, nicht seine Unterverzeichnisse.
+        if (!_config.Includes(name, theirs.Type == FileInfoType.Directory)) return;
+
         var path = LocalPathOf(name);
 
         // Solange hier geschrieben wird, ist jede Meldung darueber unsere
