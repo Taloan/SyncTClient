@@ -829,20 +829,25 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _mount.FileDeleted += NoteLocalDelete;
         _mount.FileRenamed += (before, after) =>
         {
-            // Ein Umbenennen ist fuer das Protokoll eine Loeschung und eine
-            // neue Datei. Liegt eine Seite ausserhalb der Freigabe, bleibt
-            // ihr Pfad leer und der Teil entfaellt.
-            // Die Zuordnung merken, bevor die Meldungen laufen. Ein
+            // Ein Umbenennen ist fuer das Protokoll eine neue Datei und eine
+            // Loeschung -- in dieser Reihenfolge. Liegt eine Seite ausserhalb
+            // der Freigabe, bleibt ihr Pfad leer und der Teil entfaellt.
+            //
+            // Die Zuordnung wird gemerkt, bevor die Meldungen laufen. Ein
             // Platzhalter traegt seinen Inhalt nicht bei sich; unter dem alten
             // Namen steht aber seine Blockliste, und damit laesst er sich
             // ankuendigen, ohne ihn erst zu holen.
-            if (before.Length > 0 && after.Length > 0
-                && NameOf(before) is { } alt && NameOf(after) is { } neu)
-            {
-                _renamedFrom[neu] = alt;
-            }
+            var zusammen = before.Length > 0 && after.Length > 0
+                           && NameOf(before) is { } alt && NameOf(after) is { } neu;
 
-            if (before.Length > 0) NoteLocalDelete(before);
+            if (zusammen) _renamedFrom[NameOf(after)!] = NameOf(before)!;
+
+            // Die Loeschung des alten Namens geht nur allein hinaus. Gehoert
+            // sie zu einem Umbenennen, wartet sie darauf, dass der neue Name
+            // angekuendigt ist -- sonst kuendigen wir eine Loeschung an, deren
+            // Gegenstueck nie folgt, und der Inhalt ist ueberall fort.
+            if (before.Length > 0 && !zusammen) NoteLocalDelete(before);
+
             if (after.Length > 0) NoteLocalChange(after);
         };
 

@@ -1212,7 +1212,14 @@ public sealed partial class ShareHost
     {
         if (AnnouncedName(vorher) is not { } alt) return Done(name);
 
-        var quelle = LocalCopy(alt) ?? PeerCopy(alt);
+        // Der eigene Eintrag zum alten Namen kann eine Loeschmarke sein: null
+        // Bytes, keine Bloecke. Sie ist vorhanden und traegt trotzdem nichts.
+        // Genommen wird, was eine Blockliste hat.
+        static bool Traegt(BepFileInfo? f) => f is { Deleted: false } && f.Blocks.Count > 0;
+
+        var eigene = LocalCopy(alt);
+        var fremde = PeerCopy(alt);
+        var quelle = Traegt(eigene) ? eigene : Traegt(fremde) ? fremde : eigene ?? fremde;
 
         if (quelle is null)
         {
@@ -1252,6 +1259,11 @@ public sealed partial class ShareHost
 
         Store(file, StateAnnounced);
         _attempts.TryRemove(name, out _);
+
+        // Jetzt erst die Loeschung des alten Namens. Sie geht im selben
+        // Durchgang hinaus, aber nach der Ankuendigung: PublishAsync bewertet
+        // zuerst die Vermerke und sammelt danach die Loeschungen ein.
+        _removed[alt] = 0;
 
         _log($"[{FolderId}] \"{alt}\" liegt jetzt unter \"{announced}\" -- " +
              "angekuendigt mit den bekannten Bloecken, ohne Uebertragung.");
