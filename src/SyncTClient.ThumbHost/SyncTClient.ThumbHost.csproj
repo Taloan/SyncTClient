@@ -18,6 +18,10 @@
          OneDrive macht es genauso: Ueberlagerungssymbole als DLL im Prozess,
          Vorschauen in einem eigenen Programm. -->
     <Compile Include="..\SyncTClient.ThumbProvider\ThumbnailProvider.cs" Link="ThumbnailProvider.cs" />
+
+    <!-- Der Anbieter verweist darauf. Ohne diese Datei uebersetzt er hier
+         nicht, obwohl das Kontextmenue selbst nur in der DLL gebraucht wird. -->
+    <Compile Include="..\SyncTClient.ThumbProvider\ContextMenu.cs" Link="ContextMenu.cs" />
   </ItemGroup>
 
 </Project>
