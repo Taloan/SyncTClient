@@ -87,6 +87,59 @@ public static class ThumbnailProviderRegistration
         own.SetValue("ThumbnailStore", thumbnailDirectory);
     }
 
+    /// <summary>Die Klasse des Kontextmenues. Eigene Kennung, dieselbe DLL.</summary>
+    public const string MenuClassId = "{9C4E1F73-5A28-4D61-B0E9-3F7C6A15D482}";
+
+    /// <summary>
+    /// Sagt der Erweiterung, wo die Freigaben liegen.
+    /// </summary>
+    /// <remarks>
+    /// Die Erweiterung laeuft im fremden Prozess und soll dort nichts fragen
+    /// muessen. Ein Rechtsklick ausserhalb einer Freigabe darf sie nichts
+    /// kosten -- also steht die Antwort in der Registrierung, und sie liest
+    /// sie einmal.
+    /// </remarks>
+    public static void PublishShares(IEnumerable<string> localPaths)
+    {
+        using var own = Registry.CurrentUser.CreateSubKey(@"Software\SyncTClient");
+        own.SetValue("Shares", localPaths.ToArray(), RegistryValueKind.MultiString);
+    }
+
+    /// <summary>
+    /// Traegt das Kontextmenue ein.
+    /// </summary>
+    /// <remarks>
+    /// Als klassische Erweiterung und ohne Wirt: ein Kontextmenue muss im
+    /// Prozess des Datei-Managers laufen, sonst kann es kein Menue in dessen
+    /// Fenster haengen. Das ist der Unterschied zum Vorschau-Erzeuger, der
+    /// gerade deshalb in dllhost.exe sitzt.
+    ///
+    /// Eingetragen wird fuer Verzeichnisse und fuer alle Dateien. Ob die
+    /// Eintraege erscheinen, entscheidet die Erweiterung selbst anhand der
+    /// Auswahl -- die Registrierung kann das nicht, sie kennt nur Dateitypen.
+    /// </remarks>
+    public static void RegisterMenu(string libraryPath)
+    {
+        using (var clsid = Registry.CurrentUser.CreateSubKey($@"Software\Classes\CLSID\{MenuClassId}"))
+        {
+            clsid.SetValue(null, "SyncTClient");
+
+            using var server = clsid.CreateSubKey("InprocServer32");
+            server.SetValue(null, libraryPath);
+            server.SetValue("ThreadingModel", "Apartment");
+        }
+
+        foreach (var pfad in new[]
+                 {
+                     @"Directory\shellex\ContextMenuHandlers\SyncTClient",
+                     @"*\shellex\ContextMenuHandlers\SyncTClient"
+                 })
+        {
+            using var key = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{pfad}");
+            key.SetValue(null, MenuClassId);
+        }
+    }
+
     /// <summary>
     /// Traegt die COM-Klasse als DLL ein.
     /// </summary>

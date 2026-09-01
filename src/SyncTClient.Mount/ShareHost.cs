@@ -740,7 +740,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // einer veroeffentlichten Fassung waeren so gar keine Vorschauen
             // entstanden.
             if (ThumbnailProviderRegistration.FindLibrary() is { } library)
+            {
                 ThumbnailProviderRegistration.RegisterClass(library);
+                ThumbnailProviderRegistration.RegisterMenu(library);
+            }
 
             if (!ThumbnailProviderRegistration.AttachToSyncRoot(_syncRootId))
                 _log($"[{FolderId}] Vorschau-Erweiterung liess sich nicht am Sync-Root eintragen.");
@@ -750,7 +753,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             ThumbnailService.EnsureStarted(_log);
 
             lock (Laufende)
+            {
                 if (!Laufende.Contains(this)) Laufende.Add(this);
+                ThumbnailProviderRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath));
+            }
         }
         catch (Exception ex)
         {

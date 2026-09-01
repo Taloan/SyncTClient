@@ -322,13 +322,16 @@ internal sealed partial class Factory : IClassFactory
 {
     private const int NoAggregation = unchecked((int)0x80040110);
 
+    /// <summary>Was diese Fabrik herstellt. Die DLL bedient zwei Klassen.</summary>
+    public Func<object> Erzeuge { get; init; } = () => new SyncTThumbnailProvider();
+
     public int CreateInstance(nint outerUnknown, in Guid interfaceId, out nint instance)
     {
         instance = 0;
         if (outerUnknown != 0) return NoAggregation;
 
         var unknown = Exports.Wrappers.GetOrCreateComInterfaceForObject(
-            new SyncTThumbnailProvider(), CreateComInterfaceFlags.None);
+            Erzeuge(), CreateComInterfaceFlags.None);
         try
         {
             return Marshal.QueryInterface(unknown, in interfaceId, out instance);
@@ -347,6 +350,9 @@ internal static class Exports
     /// <summary>Unsere CLSID. Sie steht so auch in der Registrierung.</summary>
     public static readonly Guid ClassId = new("7E4B2A61-3C9D-4F58-9A17-6D2E5B84C013");
 
+    /// <summary>Die Klasse des Kontextmenues. Eigene Kennung, dieselbe DLL.</summary>
+    public static readonly Guid MenuClassId = new("9C4E1F73-5A28-4D61-B0E9-3F7C6A15D482");
+
     public static readonly StrategyBasedComWrappers Wrappers = new();
 
     private const int Ok = 0;
@@ -360,10 +366,15 @@ internal static class Exports
             if (result is null) return unchecked((int)0x80004003);
             *result = 0;
 
-            if (classId is null || *classId != ClassId) return ClassNotAvailable;
+            if (classId is null) return ClassNotAvailable;
+
+            Factory fabrik;
+            if (*classId == ClassId) fabrik = new Factory();
+            else if (*classId == MenuClassId) fabrik = new Factory { Erzeuge = () => new SyncTContextMenu() };
+            else return ClassNotAvailable;
 
             var unknown = Wrappers.GetOrCreateComInterfaceForObject(
-                new Factory(), CreateComInterfaceFlags.None);
+                fabrik, CreateComInterfaceFlags.None);
             try
             {
                 return Marshal.QueryInterface(unknown, in *interfaceId, out *result);
