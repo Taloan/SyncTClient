@@ -787,7 +787,7 @@ public sealed partial class ShareHost
             watcher.Error += (_, e) =>
             {
                 _log($"[{FolderId}] Beobachter hat Ereignisse verloren ({e.GetException().Message}). " +
-                     "Der Ordner wird vollstaendig durchgesehen.");
+                     "Der Ordner wird vollstaendig geprueft.");
 
                 _lastScan = DateTime.MinValue;
                 Wake();
