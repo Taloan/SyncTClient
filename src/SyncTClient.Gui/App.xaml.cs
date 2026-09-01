@@ -215,7 +215,14 @@ public partial class App : Application
             Derive(typeof(ProgressBar),
                 (Control.TemplateProperty, balken),
                 (Control.BackgroundProperty, Current.TryFindResource("Feld") ?? Brushes.Gray),
-                (Control.ForegroundProperty, Current.TryFindResource("Ein") ?? Brushes.SteelBlue));
+                (Control.ForegroundProperty, Current.TryFindResource("Ein") ?? Brushes.SteelBlue),
+
+                // Und die feste Hoehe des Themas fort. Sie ist der eigentliche
+                // Grund fuer den Strich quer durch den Text: die Vorlage
+                // zeichnet gehorsam so hoch, wie das Steuerelement ist, und
+                // das Thema macht es vier Punkte hoch. Ohne Angabe nimmt der
+                // Balken jetzt die Hoehe, die sein Platz hergibt.
+                (FrameworkElement.HeightProperty, double.NaN));
 
         Derive(typeof(Button),
             (Control.PaddingProperty, new Thickness(12, 5, 12, 5)),
