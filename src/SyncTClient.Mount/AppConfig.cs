@@ -835,6 +835,36 @@ public sealed class AppConfig
     private const int Sicherungen = 10;
 
     /// <summary>
+    /// Legt das Geraetezertifikat mit zur Sicherung.
+    /// </summary>
+    /// <remarks>
+    /// Ohne dieses Zertifikat ist dieser Rechner ein anderer. Die Geraete-ID
+    /// wird daraus abgeleitet; geht es verloren, bekommt er eine neue, und
+    /// jede Gegenstelle muss sie erst wieder freigeben. Die Konfiguration
+    /// allein zurueckzuspielen brauchte danach niemand -- sie nennt Ordner,
+    /// die uns nicht mehr gehoeren.
+    ///
+    /// Die Datei enthaelt den privaten Schluessel. Sie gehoert damit an
+    /// dieselbe Stelle wie die Konfiguration und an keine, die weitergegeben
+    /// wird.
+    /// </remarks>
+    private void SichereKennung(string voll, string ordner, string name)
+    {
+        try
+        {
+            var heim = Path.Combine(Path.GetDirectoryName(voll)!, HomeDirectory);
+            var pfx = Path.Combine(heim, "device.pfx");
+            if (!File.Exists(pfx)) return;
+
+            File.Copy(pfx, Path.Combine(ordner, $"{name}-{DateTime.Now:yyyy-MM-dd}-device.pfx"), overwrite: true);
+        }
+        catch (Exception)
+        {
+            // Die Konfiguration ist gesichert; das ist der wichtigere Teil.
+        }
+    }
+
+    /// <summary>
     /// Legt hoechstens eine Sicherung je Tag ab und raeumt die alten weg.
     /// </summary>
     /// <remarks>
@@ -842,7 +872,7 @@ public sealed class AppConfig
     /// etwas umstellt, braucht keine zwanzig Staende, sondern den von
     /// gestern.
     /// </remarks>
-    private static void Sichern(string voll, string text)
+    private void Sichern(string voll, string text)
     {
         try
         {
@@ -852,13 +882,21 @@ public sealed class AppConfig
             var name = Path.GetFileNameWithoutExtension(voll);
             var heute = Path.Combine(ordner, $"{name}-{DateTime.Now:yyyy-MM-dd}.json");
 
-            if (!File.Exists(heute)) File.WriteAllText(heute, text);
+            if (File.Exists(heute)) return;
 
-            foreach (var alt in Directory.GetFiles(ordner, $"{name}-*.json")
-                         .OrderByDescending(f => f, StringComparer.Ordinal)
-                         .Skip(Sicherungen))
+            File.WriteAllText(heute, text);
+            SichereKennung(voll, ordner, name);
+
+            // Beide Sorten getrennt zaehlen: sonst raeumte eine Sorte die
+            // andere weg, sobald von einer mehr da sind.
+            foreach (var muster in new[] { $"{name}-*.json", $"{name}-*-device.pfx" })
             {
-                try { File.Delete(alt); } catch (Exception) { /* beim naechsten Mal */ }
+                foreach (var alt in Directory.GetFiles(ordner, muster)
+                             .OrderByDescending(f => f, StringComparer.Ordinal)
+                             .Skip(Sicherungen))
+                {
+                    try { File.Delete(alt); } catch (Exception) { /* beim naechsten Mal */ }
+                }
             }
         }
         catch (Exception)
