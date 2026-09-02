@@ -2108,13 +2108,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
             NoteReceived(head.Length);
 
-            var thumbnail = ExifThumbnail.TryExtract(head);
+            var thumbnail = ExifThumbnail.TryExtract(head, out var grund);
             if (thumbnail is null)
             {
                 // Vermerkt, damit derselbe Dateikopf nicht bei jeder Ansicht
                 // erneut geholt wird.
                 _thumbnails.MarkWithout(local);
-                return Nein(local, "die Datei traegt kein eingebettetes Bild");
+
+                // Mit der Zahl daneben, denn "kein Vorschaubild" und "der
+                // Dateianfang kam gar nicht an" sind zwei verschiedene Dinge.
+                return Nein(local, $"{grund} ({head.Length} von {wanted} Bytes geholt)");
             }
 
             _thumbnails.Save(local, thumbnail);
