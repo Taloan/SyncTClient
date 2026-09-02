@@ -614,14 +614,47 @@ public partial class MainWindow : Window
     /// den Cache und die Vorschauen -- und alle auf dem einen Faden, den die
     /// Oberflaeche hat. Der Abgleich wartete mit.
     /// </remarks>
+    /// <summary>
+    /// Der Sekundentakt, mit einer Uhr an jedem Abschnitt.
+    /// </summary>
+    /// <remarks>
+    /// Die Messung von aussen sagt, dass ein Takt sieben Sekunden dauert. Sie
+    /// sagt nicht, welcher Teil davon. Bei sechs Abschnitten ist Raten sechs
+    /// Moeglichkeiten, und ich habe schon zweimal daneben gegriffen.
+    ///
+    /// Gemeldet wird nur ein Takt, der auffaellt. Ein Takt unter einer halben
+    /// Sekunde merkt niemand.
+    /// </remarks>
     private void Tick()
     {
+        var uhr = System.Diagnostics.Stopwatch.StartNew();
+
         FlushLog();
+        var t1 = uhr.ElapsedMilliseconds;
+
         RefreshRows();
+        var t2 = uhr.ElapsedMilliseconds;
+
         UpdateThroughput();
+        var t3 = uhr.ElapsedMilliseconds;
+
         _tray?.Show(Zustand());
+        var t4 = uhr.ElapsedMilliseconds;
+
         EnforceLimits();
+        var t5 = uhr.ElapsedMilliseconds;
+
         VersucheWiederzuverbinden();
+        var t6 = uhr.ElapsedMilliseconds;
+
+        if (t6 < 500) return;
+
+        var zeile =
+            $"Takt {t6} ms: Protokoll {t1}, Zeilen {t2 - t1}, Durchsatz {t3 - t2}, " +
+            $"Infobereich {t4 - t3}, Grenzen {t5 - t4}, Verbinden {t6 - t5}.";
+
+        AppendLog(zeile);
+        App.Vermerken(zeile);
     }
 
     // ------------------------------------------------------------ Wiederverbinden
