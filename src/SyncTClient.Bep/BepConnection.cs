@@ -1,8 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Authentication;
-using System.Security.Cryptography.X509Certificates;
 using Google.Protobuf;
 using SyncTClient.Bep.Proto;
 
@@ -22,8 +19,6 @@ namespace SyncTClient.Bep;
 /// </remarks>
 public sealed class BepConnection : IAsyncDisposable
 {
-    private const string BepProtocolName = "bep/1.0";
-
     /// <summary>
     /// Wieviele Anfragen der Gegenstelle gleichzeitig bedient werden.
     /// </summary>
@@ -35,7 +30,7 @@ public sealed class BepConnection : IAsyncDisposable
     private const int ConcurrentServes = 4;
 
     private readonly TcpClient _tcp;
-    private readonly SslStream _tls;
+    private readonly Stream _tls;
 
     /// <summary>Zaehlt die Bytes, die ueber diese Verbindung laufen.</summary>
     private readonly CountingStream _wire;
@@ -44,7 +39,7 @@ public sealed class BepConnection : IAsyncDisposable
     private readonly SemaphoreSlim _serveGate = new(ConcurrentServes);
     private int _nextRequestId;
 
-    private BepConnection(TcpClient tcp, SslStream tls, DeviceId peerId, Hello peerHello)
+    private BepConnection(TcpClient tcp, Stream tls, DeviceId peerId, Hello peerHello)
     {
         _tcp = tcp;
         _tls = tls;
@@ -95,61 +90,25 @@ public sealed class BepConnection : IAsyncDisposable
         {
             await tcp.ConnectAsync(host, port, ct).ConfigureAwait(false);
 
-            var tls = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false);
+            var tls = await BepTls
+                .ConnectAsync(tcp.GetStream(), identity, ct).ConfigureAwait(false);
 
-            await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
-            {
-                TargetHost = host,
-                ClientCertificates = new X509Certificate2Collection(identity.Certificate),
-                ApplicationProtocols = [new SslApplicationProtocol(BepProtocolName)],
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                RemoteCertificateValidationCallback = (_, _, _, _) => true
-            }, ct).ConfigureAwait(false);
-
-            if (tls.NegotiatedApplicationProtocol.ToString() != BepProtocolName)
-                throw new InvalidDataException(
-                    $"Peer hat \"{tls.NegotiatedApplicationProtocol}\" statt \"{BepProtocolName}\" ausgehandelt.");
-
-            var remoteCert = tls.RemoteCertificate
-                ?? throw new InvalidDataException("Peer hat kein Zertifikat geliefert.");
-            var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
+            var peerId = DeviceId.FromCertificate(tls.PeerCertificate);
 
             if (expectedPeer != DeviceId.Empty && peerId != expectedPeer)
                 throw new InvalidDataException(
-                    $"Geraete-ID stimmt nicht.\n  erwartet: {expectedPeer}\n  bekommen: {peerId}");
+                    $"Geraete-ID stimmt nicht. Erwartet: {expectedPeer}, bekommen: {peerId}");
 
             var peerHello = await HelloExchange
-                .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
+                .ExchangeAsync(tls.Stream, OwnHello(deviceName), ct).ConfigureAwait(false);
 
-            return new BepConnection(tcp, tls, peerId, peerHello);
+            return new BepConnection(tcp, tls.Stream, peerId, peerHello);
         }
         catch
         {
             tcp.Dispose();
             throw;
         }
-    }
-
-    /// <summary>
-    /// Was beim Handschlag herauskam, in einer Zeile.
-    /// </summary>
-    /// <remarks>
-    /// Fuer die Absage. "Kein Zertifikat" allein sagt nicht, ob die
-    /// Gegenstelle keines geschickt hat, ob die ausgehandelte Fassung eine
-    /// andere ist als gedacht, oder ob ueberhaupt jemand mit uns gesprochen
-    /// hat. Wer sich vorgestellt hat, steht ebenfalls dabei -- das Hello kommt
-    /// vor dem Zertifikat und nennt Namen und Programm.
-    /// </remarks>
-    private static string Handschlag(SslStream tls, Hello? hello)
-    {
-        var wer = hello is null
-            ? "kein Hello"
-            : $"\"{hello.DeviceName}\" ({hello.ClientName} {hello.ClientVersion})";
-
-        return $"[{tls.SslProtocol}, {tls.NegotiatedCipherSuite}, " +
-               $"ALPN \"{tls.NegotiatedApplicationProtocol}\", " +
-               $"Aushandlung {(tls.IsMutuallyAuthenticated ? "beidseitig" : "einseitig")}, {wer}]";
     }
 
     /// <summary>
@@ -169,72 +128,19 @@ public sealed class BepConnection : IAsyncDisposable
         try
         {
             tcp.NoDelay = true;
-            var tls = new SslStream(tcp.GetStream(), leaveInnerStreamOpen: false);
 
-            await tls.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
-            {
-                ServerCertificate = identity.Certificate,
+            // Der Handschlag verlangt das Zertifikat der Gegenstelle; ohne
+            // Zertifikat gibt es keine Geraete-ID und damit keine brauchbare
+            // Verbindung. Welches Geraet es ist, entscheidet der Aufrufer.
+            var tls = await BepTls
+                .AcceptAsync(tcp.GetStream(), identity, ct).ConfigureAwait(false);
 
-                // Ohne Zertifikat der Gegenseite laesst sich keine Geraete-ID
-                // bilden. Ohne Geraete-ID ist die Verbindung nicht brauchbar.
-                ClientCertificateRequired = true,
-                ApplicationProtocols = [new SslApplicationProtocol(BepProtocolName)],
+            var peerId = DeviceId.FromCertificate(tls.PeerCertificate);
 
-                // Syncthing 2 setzt MinVersion auf TLS 1.3. Wer hier 1.2
-                // erzwingt, bekommt keine Verbindung, sondern eine Absage
-                // ohne brauchbare Begruendung.
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
-                CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-                RemoteCertificateValidationCallback = (_, _, _, _) => true
-            }, ct).ConfigureAwait(false);
-
-            if (tls.NegotiatedApplicationProtocol.ToString() != BepProtocolName)
-                throw new InvalidDataException(
-                    $"Die Gegenstelle hat \"{tls.NegotiatedApplicationProtocol}\" statt \"{BepProtocolName}\" ausgehandelt.");
-
-            // Erst der Hello-Austausch, dann das Zertifikat -- in dieser
-            // Reihenfolge, und das ist kein Geschmack.
-            //
-            // In TLS 1.2 schickt der Client sein Zertifikat mitten im
-            // Handschlag; es liegt vor, sobald AuthenticateAsServerAsync
-            // zurueckkehrt. In TLS 1.3 sendet er es erst in seinem zweiten
-            // Flug, und den verarbeitet der Server nicht mehr im Handschlag,
-            // sondern beim ersten Lesen. Vorher ist RemoteCertificate null,
-            // und die Verbindung scheiterte an einem Zertifikat, das
-            // unterwegs war.
-            //
-            // Das eigene Hello geht damit an eine Gegenstelle, deren Kennung
-            // noch nicht feststeht. Es traegt nur Geraetenamen und
-            // Programmversion; Syncthing haelt es genauso, denn wer sich
-            // vorstellt, muss zuerst etwas sagen.
             var peerHello = await HelloExchange
-                .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
+                .ExchangeAsync(tls.Stream, OwnHello(deviceName), ct).ConfigureAwait(false);
 
-            // Kein Zertifikat heisst in aller Regel: Ed25519.
-            //
-            // Syncthing erzeugt die Zertifikate fuer Sync-Verbindungen seit
-            // einiger Zeit mit Ed25519. Windows kennt dieses Verfahren nicht
-            // und fuehrt es deshalb in seiner Zertifikatsanforderung nicht
-            // auf; die Gegenstelle findet daraufhin kein verwendbares
-            // Zertifikat und schickt ein leeres. Hier kommt das als "keines"
-            // an.
-            //
-            // In der Gegenrichtung scheitert es genauso, nur frueher: der
-            // Handschlag bricht mit "peer doesn't support any of the
-            // certificate's signature algorithms" ab. Aeltere Gegenstellen
-            // mit einem Zertifikat auf ECDSA P-384 sind davon nicht
-            // betroffen.
-            //
-            // Ohne Zertifikat gibt es keine Geraete-ID und damit keine
-            // brauchbare Verbindung.
-            var remoteCert = tls.RemoteCertificate
-                ?? throw new MissingPeerCertificateException(
-                    "Die Gegenstelle hat kein Zertifikat geliefert -- vermutlich verwendet es " +
-                    "Ed25519, das Windows nicht beherrscht. " + Handschlag(tls, peerHello));
-
-            var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
-
-            return new BepConnection(tcp, tls, peerId, peerHello);
+            return new BepConnection(tcp, tls.Stream, peerId, peerHello);
         }
         catch
         {
