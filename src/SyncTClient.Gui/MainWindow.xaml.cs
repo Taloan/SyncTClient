@@ -1086,6 +1086,15 @@ public partial class MainWindow : Window
     {
         if (_row?.Share is not { } share) return;
 
+        // Gefragt wird vorher, und die Frage nennt die Folge. Der Menuepunkt
+        // allein waere ein Knopf ohne Warnung -- und was er auslaest, ist von
+        // hier aus nicht mehr zurueckzunehmen.
+        var antwort = Warnen(
+            App.S("M.FixMarkerBody", _row.Name, share.Config.LocalPath),
+            App.S("M.FixMarkerTitle"));
+
+        if (antwort != MessageBoxResult.Yes) return;
+
         share.MarkierungHerstellen();
         Status(App.S("M.MarkerRestored", _row.Name));
         UpdateButtons();
@@ -1531,6 +1540,20 @@ public partial class MainWindow : Window
     /// Fragt nach. Ein Fenster, das noch nicht gezeigt wurde, darf kein
     /// Besitzer sein. Der Anruf kann eintreffen, bevor das Fenster steht.
     /// </summary>
+    /// <summary>
+    /// Fragt vor einem Schritt, der Folgen hat.
+    /// </summary>
+    /// <remarks>
+    /// Vorbelegt ist "Nein". Wer die Frage mit der Eingabetaste wegdrueckt,
+    /// ohne sie gelesen zu haben, soll damit nichts ausloesen.
+    /// </remarks>
+    private MessageBoxResult Warnen(string text, string caption)
+        => IsLoaded
+            ? MessageBox.Show(this, text, caption,
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No)
+            : MessageBox.Show(text, caption,
+                MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+
     private MessageBoxResult Ask(string text, string caption)
         => IsLoaded
             ? MessageBox.Show(this, text, caption, MessageBoxButton.YesNo, MessageBoxImage.Question)

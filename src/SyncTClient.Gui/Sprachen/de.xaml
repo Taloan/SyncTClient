@@ -385,6 +385,8 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Menu.Resync">Neu abgleichen …</s:String>
   <s:String x:Key="M.Rescanning">„{0}“ wird neu gescannt.</s:String>
   <s:String x:Key="M.MarkerRestored">„{0}“: Ordnermarkierung wiederhergestellt.</s:String>
+  <s:String x:Key="M.FixMarkerTitle">Ordnermarkierung wiederherstellen</s:String>
+  <s:String x:Key="M.FixMarkerBody">In „{0}“ fehlt die Ordnermarkierung.&#10;{1}&#10;&#10;Das deutet meist darauf hin, dass mit dem Ordner etwas nicht stimmt: ein Speichermedium ist nicht eingehängt — eine externe Festplatte, ein Netzlaufwerk, eine Speicherkarte —, oder der Ordner wurde umbenannt oder verschoben.&#10;&#10;Zuerst den Ordner prüfen. Erst dann bestätigen, wenn feststeht, dass es der richtige Ordner ist und sein Inhalt vollständig vorliegt.&#10;&#10;Mit der Bestätigung wird der Abgleich fortgesetzt. Von da an gelten Dateien und Ordner, die hier fehlen, als gelöscht — und diese Löschung geht an die Gegenstellen.&#10;&#10;Markierung jetzt wiederherstellen?</s:String>
   <s:String x:Key="M.Resyncing">„{0}“ wird neu abgeglichen: {1} Gegenstelle(n) gefragt.</s:String>
   <s:String x:Key="S2.ResyncAsk">Alles verwerfen, was über diesen Ordner von den Gegenstellen bekannt ist, und neu abfragen?&#10;&#10;Dateien werden dabei nicht angefasst. Der Index wird neu aufgebaut, und bis er steht, gilt der Ordner als nicht abgeglichen.</s:String>
   <s:String x:Key="S.Peer.SharedFolders">Geteilte Ordner</s:String>
