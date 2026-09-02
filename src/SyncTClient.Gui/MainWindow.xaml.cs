@@ -321,6 +321,19 @@ public partial class MainWindow : Window
             _rows.Add(zeile);
         }
 
+        // Ein Ordner bekommt seine Freigabe nur, wenn er auch uebernommen ist.
+        //
+        // Beim Uebernehmen entsteht sie schon vor der Rueckfrage: erst muss
+        // der Index da sein, sonst hat der Dialog keinen Baum zu zeigen. Sie
+        // traegt dabei einen vorlaeufigen Pfad, den niemand bestaetigt hat.
+        // Stand sie in der Zeile, sah man diesen Pfad und ihren Zustand,
+        // bevor ueberhaupt gefragt war -- und nach einem Abbruch blieb beides
+        // stehen.
+        ShareHost? Uebernommene(PeerItem peer, string folderId)
+            => _config.Shares.Any(s => s.FolderId.Equals(folderId, StringComparison.Ordinal))
+                ? peer.Host.ShareFor(folderId)
+                : null;
+
         foreach (var peer in _peers)
         {
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -328,12 +341,12 @@ public partial class MainWindow : Window
             foreach (var offer in peer.Host.Offered)
             {
                 seen.Add(offer.FolderId);
-                Aufnehmen(peer, offer.FolderId, offer.Label, peer.Host.ShareFor(offer.FolderId));
+                Aufnehmen(peer, offer.FolderId, offer.Label, Uebernommene(peer, offer.FolderId));
             }
 
             // Konfigurierte Ordner, die die Gegenstelle (noch) nicht nennt.
             foreach (var share in _config.SharesOf(peer.Config).Where(s => !seen.Contains(s.FolderId)))
-                Aufnehmen(peer, share.FolderId, share.Label, peer.Host.ShareFor(share.FolderId));
+                Aufnehmen(peer, share.FolderId, share.Label, Uebernommene(peer, share.FolderId));
         }
 
         // Uebernommen ist, was in der Konfiguration steht -- unabhaengig
@@ -1655,7 +1668,12 @@ public partial class MainWindow : Window
         var dialog = new AcceptShareWindow(draft, HomeDirectory, row.Name) { Owner = this };
         if (dialog.ShowDialog() != true)
         {
-            await row.Peer.Host.DiscardAsync(host);
+            // Ein Abbruch soll nichts hinterlassen. Scheitert das Aufraeumen,
+            // ist das eine Meldung wert -- aber die Zeile muss danach trotzdem
+            // neu gebaut werden, sonst steht dort eine halbe Freigabe.
+            try { await row.Peer.Host.DiscardAsync(host); }
+            catch (Exception ex) { AppendLog($"[{row.FolderId}] verworfen: {ex.Message}"); }
+
             Status(App.S("M.NotConnected", row.Name));
             RebuildRows();
             return;
