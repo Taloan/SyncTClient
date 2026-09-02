@@ -1836,9 +1836,26 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         if (!Directory.Exists(MarkerPath))
         {
-            // Beim ersten Lauf einer Freigabe gibt es sie noch nicht. Dann ist
-            // auch nichts zu vergleichen: eigene Eintraege gibt es keine.
-            MarkierungAnlegen();
+            // Beim ersten Lauf einer Freigabe gibt es sie noch nicht -- und
+            // dann ist auch nichts zu vergleichen. Woran das zu erkennen ist:
+            // wir fuehren noch keine einzige eigene Datei.
+            if (_index.LocalCount == 0)
+            {
+                MarkierungAnlegen();
+                return;
+            }
+
+            // Eigener Bestand vorhanden und die Markierung weg: das ist der
+            // Fall, fuer den es sie gibt. Sie wird von niemandem geloescht,
+            // also fehlt hier nicht sie, sondern der Ordner.
+            //
+            // Angelegt wird sie jetzt gerade nicht. Sie wieder hinzustellen
+            // hiesse, das Merkmal zu beseitigen: beim naechsten Start waere
+            // sie da, der Ordner leer, und jede Datei gaelte als geloescht.
+            _log($"[{FolderId}] Die Ordnermarkierung \"{MarkerFolder}\" fehlt, obwohl hier " +
+                 $"{_index.LocalCount} eigene Dateien gefuehrt werden. Der Ordner ist damit nicht " +
+                 "erreichbar -- eine nicht eingehaengte Platte, ein getrenntes Netzlaufwerk, ein " +
+                 "umbenannter Ordner. Es wird keine Loeschung gemeldet.");
             return;
         }
 
