@@ -290,7 +290,17 @@ public sealed partial class ShareHost
         // Was wir selbst gerade schreiben, ist keine Aenderung von aussen.
         if (IsHydrating(name)) return;
 
-        _removed.TryRemove(name, out _);
+        // Die Datei ist wieder da, also ist sie nicht geloescht. Das ist
+        // richtig -- aber wenn hier eine vorgemerkte Loeschung stirbt, muss
+        // man es sehen koennen.
+        //
+        // Genau daran scheiterten zwei Laeufe hintereinander: der Start merkte
+        // die Loeschung vor, ein anderer Weg legte die Datei sofort wieder an,
+        // und die Loeschung war fort, ohne dass eine Zeile davon zeugte. Aus
+        // dem Protokoll sah es aus, als waere sie nie erkannt worden.
+        if (_removed.TryRemove(name, out _))
+            _log($"[{FolderId}] \"{name}\" ist wieder da -- die vorgemerkte Loeschung entfaellt.");
+
         _dirty[name] = 0;
         Wake();
     }

@@ -184,9 +184,30 @@ public sealed partial class ShareHost
         if (IsPaused) return;
 
         var bilanz = new Bilanz();
+        var zurueckgestellt = 0;
 
         foreach (var name in _incoming.Keys.ToArray())
         {
+            // Erst melden, dann annehmen.
+            //
+            // Steht fuer diesen Namen bei uns eine Loeschung aus, ist der
+            // Stand der Gegenstelle der aeltere -- sie hat von der Loeschung
+            // noch nicht erfahren. Wird er trotzdem angewandt, entsteht die
+            // Datei hier neu, gilt damit als "wieder da", und die Loeschung
+            // faellt weg, ohne je gesendet worden zu sein. Gemessen: zweimal
+            // geloescht, zweimal binnen einer Sekunde wieder angelegt, beide
+            // Gegenstellen unveraendert.
+            //
+            // Der Name bleibt in der Schlange. Sobald die Loeschung heraus
+            // ist -- oder eine der Sicherungen in Deletions() sie verwirft --
+            // steht er nicht mehr in _removed und wird im naechsten Durchgang
+            // angewandt. Verloren geht dabei nichts.
+            if (_removed.ContainsKey(name))
+            {
+                zurueckgestellt++;
+                continue;
+            }
+
             _incoming.TryRemove(name, out _);
 
             try
@@ -206,6 +227,13 @@ public sealed partial class ShareHost
         Fortschritt(bilanz.Angelegt + bilanz.Ersetzt + bilanz.Entfernt);
 
         if (!bilanz.Leer) _log($"[{FolderId}] von der Gegenstelle uebernommen: {bilanz}.");
+
+        // Einmal je Durchgang, nicht je Name: haengt eine Loeschung fest,
+        // weil die Gegenstelle gerade nicht erreichbar ist, waere jede Zeile
+        // dieselbe.
+        if (zurueckgestellt > 0)
+            _log($"[{FolderId}] {zurueckgestellt} Eintraege der Gegenstelle zurueckgestellt, " +
+                 "bis unsere Loeschung dazu heraus ist.");
     }
 
     private void Apply(string name, Bilanz bilanz)
