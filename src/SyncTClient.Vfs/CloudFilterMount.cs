@@ -666,9 +666,33 @@ public sealed class CloudFilterMount : IDisposable
             // gruener Haken) aus dem Anheft-Zustand ab. Ohne ihn zeigt es gar
             // keines. "Nicht angeheftet" bedeutet, dass der Speicherplatz der Datei freigegeben
             // werden darf. Das ist hier der Normalfall.
+            // Jeder Eintrag traegt sein eigenes Ergebnis.
+            //
+            // Geprueft wurde bisher nur, wie weit der Aufruf kam. Ein Stapel
+            // kann aber vollstaendig verarbeitet sein und trotzdem einzelne
+            // Eintraege enthalten, die nicht zustande kamen -- und die wurden
+            // danach behandelt, als waeren sie in Ordnung.
+            var misslungen = 0;
+            for (var i = 0; i < (int)processed && i < entries.Count; i++)
+            {
+                if (infos[i].Result.Value == 0) continue;
+
+                misslungen++;
+                if (misslungen <= 3)
+                    _log?.Invoke($"  \"{entries[i].RelativePath}\" nicht angelegt: " +
+                                 $"0x{(uint)infos[i].Result.Value:X8}");
+            }
+
+            if (misslungen > 3)
+                _log?.Invoke($"  ... und {misslungen - 3} weitere in \"{directory}\".");
+
             for (var i = 0; i < (int)processed && i < entries.Count; i++)
             {
                 if (entries[i].IsDirectory) continue;
+
+                // Was nicht entstanden ist, wird auch nicht angefasst.
+                if (infos[i].Result.Value != 0) continue;
+
                 MarkUnpinned(Path.Combine(baseDirectory, LeafOf(entries[i].RelativePath)));
             }
 
@@ -700,7 +724,31 @@ public sealed class CloudFilterMount : IDisposable
     {
         try
         {
-            using var handle = File.OpenHandle(fullPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+            // Nur die Attributrechte, und ausdruecklich ohne Nachladen.
+            //
+            // Vorher stand hier FileAccess.Write. Das verlangt auch das Recht,
+            // Daten zu schreiben, und wurde unmittelbar nach dem Anlegen auf
+            // jeden frischen Platzhalter angewandt -- der weitgehendste
+            // Zugriff auf den empfindlichsten Zustand. Fuer den Anheft-Zustand
+            // genuegen die Attribute.
+            using var handle = PInvoke.CreateFile(
+                fullPath,
+                (uint)(FILE_ACCESS_RIGHTS.FILE_READ_ATTRIBUTES | FILE_ACCESS_RIGHTS.FILE_WRITE_ATTRIBUTES),
+                FILE_SHARE_MODE.FILE_SHARE_READ | FILE_SHARE_MODE.FILE_SHARE_WRITE
+                    | FILE_SHARE_MODE.FILE_SHARE_DELETE,
+                null,
+                FILE_CREATION_DISPOSITION.OPEN_EXISTING,
+                FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OPEN_NO_RECALL
+                    | FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS,
+                null);
+
+            if (handle.IsInvalid)
+            {
+                _log?.Invoke($"  Anheft-Zustand fuer \"{Path.GetFileName(fullPath)}\": " +
+                             $"nicht zu oeffnen, 0x{(uint)Marshal.GetLastWin32Error():X8}");
+                return;
+            }
+
             var result = PInvoke.CfSetPinState(
                 handle,
                 pinned ? CF_PIN_STATE.CF_PIN_STATE_PINNED : CF_PIN_STATE.CF_PIN_STATE_UNPINNED,
