@@ -83,9 +83,53 @@ public sealed class HydrationCache
     /// </remarks>
     public Func<string, bool>? MayEvict { get; set; }
 
-    public long UsedBytes => _entries.Values.Sum(e => e.Bytes);
+    private long _belegt;
+    private int _stueck;
+    private DateTime _gezaehlt = DateTime.MinValue;
 
-    public int FileCount => _entries.Count;
+    /// <summary>
+    /// Was hier lokal liegt, in Bytes.
+    /// </summary>
+    /// <remarks>
+    /// Hier stand ein Sum ueber alle Eintraege -- bei einem Ordner mit
+    /// hundertvierzehntausend Dateien also hundertvierzehntausend Schritte je
+    /// Abfrage. Und gefragt wurde im Sekundentakt, mehrfach: einmal je
+    /// Datentraegerzeile, einmal je Tabellenzeile, einmal fuers Symbol im
+    /// Infobereich. Zusammen ueber eine Million Schritte in der Sekunde, auf
+    /// dem Faden, der das Fenster zeichnet.
+    ///
+    /// Dazu kommt, dass "Values" einer ConcurrentDictionary saemtliche
+    /// Sperren nimmt und eine Kopie anlegt. Waehrend der Durchgang gerade
+    /// zehntausende Eintraege einpflegt, warten beide aufeinander.
+    ///
+    /// Jetzt wird hoechstens alle zwei Sekunden gezaehlt. Eine Zahl, die zwei
+    /// Sekunden alt ist, unterscheidet sich in dieser Anzeige durch nichts von
+    /// der aktuellen.
+    /// </remarks>
+    public long UsedBytes { get { Zaehlen(); return _belegt; } }
+
+    public int FileCount { get { Zaehlen(); return _stueck; } }
+
+    private void Zaehlen()
+    {
+        if (DateTime.UtcNow - _gezaehlt < TimeSpan.FromSeconds(2)) return;
+
+        // Vor dem Zaehlen gesetzt, nicht danach: sonst rechnen bei einem
+        // langen Durchgang mehrere Aufrufer gleichzeitig dasselbe.
+        _gezaehlt = DateTime.UtcNow;
+
+        long summe = 0;
+        var anzahl = 0;
+
+        foreach (var eintrag in _entries)
+        {
+            summe += eintrag.Value.Bytes;
+            anzahl++;
+        }
+
+        _belegt = summe;
+        _stueck = anzahl;
+    }
 
     /// <summary>Wo diese Freigabe liegt. Das Limit gruppiert danach.</summary>
     public string RootPath => _rootPath;
