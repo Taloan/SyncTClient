@@ -389,7 +389,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Share.SharedWithHint">Every device ticked carries the same folder. Unticking ends synchronisation with that device; the files stay here and there.</s:String>
   <s:String x:Key="S.Share.NoPeers">No remote devices configured. One can be added under “Remote devices …”.</s:String>
   <s:String x:Key="S.Menu.Rescan">Rescan</s:String>
-  <s:String x:Key="S.Menu.FixMarker">Restore folder marker</s:String>
+  <s:String x:Key="S.Menu.FixMarker">Restore folder marker …</s:String>
   <s:String x:Key="S.Menu.Resync">Resynchronise …</s:String>
   <s:String x:Key="M.Rescanning">“{0}” is being rescanned.</s:String>
   <s:String x:Key="M.MarkerRestored">“{0}”: folder marker restored.</s:String>
