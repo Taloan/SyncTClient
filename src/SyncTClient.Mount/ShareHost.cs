@@ -2100,6 +2100,84 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
+    /// Findet im Durchgang, was aus dem Ordner verschwunden ist.
+    /// </summary>
+    /// <remarks>
+    /// Bisher entstand eine Loeschung auf genau zwei Wegen: der Beobachter
+    /// meldete sie im Betrieb, oder <see cref="OfflineGeloeschte"/> fand sie
+    /// beim Start. Der Durchgang schloss aus blosser Abwesenheit nie auf eine
+    /// Loeschung.
+    ///
+    /// Das haelt, solange der Beobachter jede Loeschung meldet. Er tut es
+    /// nicht immer. Gemessen: zwei Bilder wurden hier geloescht, eines davon
+    /// gemeldet, das andere nicht -- und weil kein Durchgang daraus je etwas
+    /// schliesst, fuehrten beide Gegenstellen es stundenlang weiter, waehrend
+    /// der Ordner leer war. Erst ein Neustart haette es gefunden.
+    ///
+    /// Dieselben Schutzvorkehrungen wie beim Start: die Ordnermarkierung muss
+    /// da sein, gezaehlt wird nur der eigene Bestand, und mehr als
+    /// <see cref="MaximumDeletions"/> auf einmal gilt nicht als Loeschung von
+    /// Hand.
+    ///
+    /// Dazu zwei, die nur im Betrieb noetig sind: was wir selbst gerade
+    /// schreiben, fehlt nur fuer einen Augenblick, und der Befund des
+    /// Durchgangs wird vor der Meldung noch einmal an der Platte geprueft.
+    /// Zwischen Aufnahme und Auswertung liegt Zeit, und in dieser Zeit
+    /// entsteht manche Datei neu.
+    /// </remarks>
+    /// <param name="vorhanden">Was der Durchgang im Ordner angetroffen hat.</param>
+    private void FehlendeAusDemDurchgang(Dictionary<string, (long Size, long ModifiedS)> vorhanden)
+    {
+        if (_index is null) return;
+
+        // Fehlt die Markierung, fehlt der Ordner und nicht sein Inhalt.
+        if (!Directory.Exists(MarkerPath)) return;
+
+        var fehlend = new List<string>();
+
+        foreach (var eigen in _index.LocalFrom(0))
+        {
+            if (eigen.Deleted || IsHousekeeping(eigen.Name)) continue;
+
+            // Verzeichnisse stehen nicht in "vorhanden" -- der Durchgang
+            // sammelt dort nur Dateien. Aus ihrem Fehlen laesst sich hier
+            // also nichts schliessen.
+            if (eigen.Type == FileInfoType.Directory) continue;
+
+            if (vorhanden.ContainsKey(eigen.Name)) continue;
+
+            // Schon unterwegs.
+            if (_removed.ContainsKey(eigen.Name)) continue;
+
+            // Wir schreiben sie gerade. Zwischen "Platzhalter entfernen" und
+            // "Datei einsetzen" ist sie tatsaechlich fort.
+            if (IsHydrating(eigen.Name) || _imZugriff.ContainsKey(eigen.Name)) continue;
+
+            fehlend.Add(eigen.Name);
+        }
+
+        if (fehlend.Count == 0) return;
+
+        // Der zweite Blick, diesmal auf die Platte selbst.
+        fehlend.RemoveAll(name => File.Exists(LocalPathOf(name)));
+        if (fehlend.Count == 0) return;
+
+        if (fehlend.Count > MaximumDeletions)
+        {
+            _log($"[{FolderId}] {fehlend.Count} eigene Dateien fehlen im Ordner. " +
+                 "Das sind zu viele fuer eine Loeschung von Hand; es wird nichts gemeldet.");
+            return;
+        }
+
+        foreach (var name in fehlend) _removed[name] = 0;
+
+        _log($"[{FolderId}] {fehlend.Count} Dateien fehlen im Ordner, ohne dass der Beobachter " +
+             "es gemeldet hat. Die Loeschung wird weitergegeben.");
+
+        Wake();
+    }
+
+    /// <summary>
     /// Findet, was geloescht wurde, waehrend das Programm nicht lief.
     /// </summary>
     /// <remarks>
