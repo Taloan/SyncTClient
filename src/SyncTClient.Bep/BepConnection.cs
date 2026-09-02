@@ -179,7 +179,24 @@ public sealed class BepConnection : IAsyncDisposable
                 // bilden. Ohne Geraete-ID ist die Verbindung nicht brauchbar.
                 ClientCertificateRequired = true,
                 ApplicationProtocols = [new SslApplicationProtocol(BepProtocolName)],
-                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+
+                // Nur TLS 1.2 auf diesem Weg, und das ist keine Bequemlichkeit.
+                //
+                // Unter Windows verlangt SChannel das Zertifikat der
+                // Gegenseite in TLS 1.3 nicht waehrend des Handschlags.
+                // Vorgesehen ist dafuer die nachgelagerte Anforderung
+                // (NegotiateClientCertificateAsync); die kennt aber die
+                // TLS-Bibliothek von Go nicht, auf der Syncthing steht. In
+                // dieser Kombination kaeme nie ein Zertifikat, und ohne
+                // Zertifikat gibt es keine Geraete-ID.
+                //
+                // Sichtbar war es an einer einzigen Angabe: die Aushandlung
+                // blieb einseitig, obwohl ClientCertificateRequired gesetzt
+                // war. Hello und ALPN waren da laengst durch.
+                //
+                // Der eigene Weg nach draussen bleibt bei 1.3: dort sind wir
+                // der Client und schicken unser Zertifikat selbst.
+                EnabledSslProtocols = SslProtocols.Tls12,
                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 RemoteCertificateValidationCallback = (_, _, _, _) => true
             }, ct).ConfigureAwait(false);
