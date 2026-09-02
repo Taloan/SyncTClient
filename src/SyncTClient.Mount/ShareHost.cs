@@ -1147,6 +1147,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
         _thumbnails.Prepare();
 
+        // Einmal je Sitzung. Eine Ablage, die vor dieser Regel entstanden
+        // ist, bekaeme das Attribut sonst erst beim naechsten Konflikt -- und
+        // liegt bis dahin sichtbar mitten in der Freigabe.
+        if (_config.KeepVersions) VersteckeWurzel();
+
         // Der Eintrag muss stehen, bevor die Shell den Sync-Root uebernimmt.
         // Sie liest seine Eigenschaften beim Anmelden. Deshalb wird danach
         // noch einmal angemeldet, damit sie den Vorschau-Erzeuger erfasst.
