@@ -507,7 +507,7 @@ public sealed class PeerHost : IAsyncDisposable
 
     // ------------------------------------------------------------ Protokoll
 
-    private readonly Lock _verkehrSchloss = new();
+    private readonly Lock _verkehrSperre = new();
     private readonly Dictionary<(MessageType Typ, bool Rein), (int Anzahl, long Bytes)> _verkehr = [];
     private DateTime _verkehrSeit = DateTime.UtcNow;
 
@@ -556,7 +556,7 @@ public sealed class PeerHost : IAsyncDisposable
 
         string zeile;
 
-        lock (_verkehrSchloss)
+        lock (_verkehrSperre)
         {
             var schluessel = (typ, rein);
             var (anzahl, summe) = _verkehr.GetValueOrDefault(schluessel);

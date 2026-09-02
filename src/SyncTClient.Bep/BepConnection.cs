@@ -524,10 +524,10 @@ public sealed class BepConnection : IAsyncDisposable
     /// <summary>Ab dieser Dauer wird ein Sendevorgang auffaellig.</summary>
     /// <remarks>
     /// Eine Nachricht auf eine bestehende Leitung zu schreiben dauert
-    /// Millisekunden. Dauert es Sekunden, wartet entweder die Leitung -- die
-    /// Gegenstelle liest nicht -- oder das Schloss: ein anderer Sendevorgang
-    /// ist noch nicht fertig. Beides sagt etwas, und beides war bisher
-    /// unsichtbar.
+    /// Millisekunden. Dauert es Sekunden, hat das genau zwei moegliche
+    /// Gruende, und die Meldung trennt sie: entweder war die Sperre besetzt
+    /// -- ein anderer Sendevorgang lief noch --, oder die Leitung selbst hat
+    /// gewartet, weil die Gegenstelle nicht liest.
     /// </remarks>
     private static readonly TimeSpan SendeFrist = TimeSpan.FromSeconds(2);
 
@@ -536,7 +536,7 @@ public sealed class BepConnection : IAsyncDisposable
         var begonnen = Environment.TickCount64;
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
-        var amSchloss = Environment.TickCount64 - begonnen;
+        var anDerSperre = Environment.TickCount64 - begonnen;
 
         try
         {
@@ -546,8 +546,9 @@ public sealed class BepConnection : IAsyncDisposable
 
             var gesamt = Environment.TickCount64 - begonnen;
             if (gesamt > SendeFrist.TotalMilliseconds)
-                Log?.Invoke($"  {type} brauchte {gesamt} ms zum Senden " +
-                            $"(davon {amSchloss} ms am Schloss).");
+                Log?.Invoke($"  {type} brauchte {gesamt} ms zum Senden: " +
+                            $"{anDerSperre} ms Warten auf die Sperre, " +
+                            $"{gesamt - anDerSperre} ms auf der Leitung.");
         }
         finally
         {
