@@ -136,6 +136,7 @@ public partial class MainWindow : Window
         CommandService.Handle = OnCommand;
         CommandService.EnsureStarted(AppendLog);
         HorcheAufNetz();
+        UhrStarten();
     }
 
     private string HomeDirectory
@@ -2158,6 +2159,60 @@ public partial class MainWindow : Window
 
         Status(text.Split('\n')[0]);
         MessageBox.Show(this, text, App.S("M.LimitTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
+
+    /// <summary>
+    /// Misst, wie lange die Oberflaeche zum Antworten braucht.
+    /// </summary>
+    /// <remarks>
+    /// Zweimal habe ich geraten, woran das Stocken liegt, und zweimal lag es
+    /// woanders. Diese Uhr raet nicht: sie stellt dem Fenster alle
+    /// vierhundert Millisekunden eine Aufgabe, die nichts tut, und misst,
+    /// wann sie drankommt. Genau das ist die Zeit, die zwischen einem Klick
+    /// und seiner Wirkung liegt.
+    ///
+    /// Dazu die Pausen der Speicherbereinigung. Wenn das Fenster wartet,
+    /// ohne dass jemand rechnet, ist sie der Grund -- und die Gegenmittel
+    /// sind ganz andere als bei einem belegten Faden.
+    /// </remarks>
+    private void UhrStarten()
+    {
+        var faden = new Thread(() =>
+        {
+            var vorherPause = TimeSpan.Zero;
+
+            while (true)
+            {
+                Thread.Sleep(400);
+
+                var start = System.Diagnostics.Stopwatch.StartNew();
+
+                // Hintergrund-Rang: hinter allem, was das Fenster sonst zu tun
+                // hat. Was hier gemessen wird, ist die Wartezeit eines Klicks.
+                try { Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.Background).Wait(); }
+                catch (Exception) { return; }
+
+                var gewartet = start.Elapsed;
+                var pause = GC.GetTotalPauseDuration();
+                var pauseAnteil = pause - vorherPause;
+                vorherPause = pause;
+
+                if (gewartet < TimeSpan.FromMilliseconds(400)) continue;
+
+                AppendLog(
+                    $"Oberflaeche wartete {gewartet.TotalMilliseconds:0} ms " +
+                    $"(davon Speicherbereinigung {pauseAnteil.TotalMilliseconds:0} ms; " +
+                    $"Sammlungen {GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)}, " +
+                    $"belegt {GC.GetTotalMemory(false) / (1024 * 1024)} MB).");
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "Uhr",
+            Priority = ThreadPriority.AboveNormal
+        };
+
+        faden.Start();
     }
 
     /// <summary>Was noch ins Protokollfeld geschrieben werden muss.</summary>
