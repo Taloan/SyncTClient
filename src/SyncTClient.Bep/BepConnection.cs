@@ -198,11 +198,15 @@ public sealed class BepConnection : IAsyncDisposable
     /// </summary>
     public async Task RunAsync(CancellationToken ct)
     {
+        using var wache = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var puls = Task.Run(() => PulsAsync(wache), CancellationToken.None);
+
         try
         {
-            while (!ct.IsCancellationRequested)
+            while (!wache.IsCancellationRequested)
             {
-                var (type, payload) = await BepFraming.ReadMessageAsync(_wire, ct).ConfigureAwait(false);
+                var (type, payload) = await BepFraming.ReadMessageAsync(_wire, wache.Token).ConfigureAwait(false);
+                _letzteNachricht = DateTime.UtcNow;
                 MessageReceived?.Invoke(type, payload.Length);
 
                 switch (type)
@@ -434,6 +438,81 @@ public sealed class BepConnection : IAsyncDisposable
     public event Action<MessageType, int>? MessageReceived;
 
     /// <summary>Was hinausging.</summary>
+    /// <summary>Wann zuletzt etwas hereinkam.</summary>
+    private DateTime _letzteNachricht = DateTime.UtcNow;
+
+    /// <summary>
+    /// Nach dieser Stille gilt die Verbindung als tot.
+    /// </summary>
+    /// <remarks>
+    /// Syncthing schickt sein Lebenszeichen alle neunzig Sekunden. Wer nach
+    /// drei Minuten nichts gehoert hat, hoert auch nichts mehr.
+    /// </remarks>
+    private static readonly TimeSpan Stille = TimeSpan.FromMinutes(3);
+
+    /// <summary>
+    /// Der Abstand zwischen zwei eigenen Lebenszeichen.
+    /// </summary>
+    /// <remarks>
+    /// Kuerzer als die neunzig Sekunden von Syncthing, und mit Absicht: das
+    /// Lebenszeichen ist hier nicht die Hoeflichkeit gegenueber der
+    /// Gegenstelle, sondern die Probe auf die eigene Leitung. Je oefter
+    /// geschrieben wird, desto frueher faellt auf, dass niemand mehr zuhoert.
+    ///
+    /// Ein Ping ist ein paar Byte. Alle dreissig Sekunden kostet das nichts.
+    /// </remarks>
+    private static readonly TimeSpan Pulsschlag = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Haelt die Verbindung wach und stellt fest, wenn sie es nicht mehr ist.
+    /// </summary>
+    /// <remarks>
+    /// Eine abgerissene Verbindung merkt niemand, solange niemand schreibt.
+    /// TCP schweigt darueber: der Lesevorgang wartet weiter, und das Programm
+    /// zeigt "verbunden", waehrend das WLAN seit einer Minute aus ist.
+    ///
+    /// Zwei Mittel dagegen. Ein eigenes Lebenszeichen im Minutentakt -- es
+    /// schreibt, und ein Schreibvorgang auf eine tote Leitung scheitert,
+    /// meist sofort. Und eine Frist fuer das Gegenteil: kommt drei Minuten
+    /// lang nichts, wird die Leseschleife abgebrochen.
+    ///
+    /// Das Lebenszeichen entfaellt, solange ohnehin Verkehr laeuft.
+    /// </remarks>
+    private async Task PulsAsync(CancellationTokenSource wache)
+    {
+        try
+        {
+            while (!wache.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), wache.Token).ConfigureAwait(false);
+
+                if (DateTime.UtcNow - _letzteNachricht > Stille)
+                {
+                    Log?.Invoke($"seit {Stille.TotalMinutes:0} Minuten kein Lebenszeichen -- die Verbindung gilt als tot.");
+                    await wache.CancelAsync().ConfigureAwait(false);
+                    return;
+                }
+
+                if (DateTime.UtcNow - _letzterSchlag < Pulsschlag) continue;
+
+                _letzterSchlag = DateTime.UtcNow;
+                await SendAsync(MessageType.Ping, new Ping(), wache.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Die Verbindung wird geschlossen.
+        }
+        catch (Exception ex)
+        {
+            // Das Schreiben ist gescheitert. Genau dafuer ist es da.
+            Log?.Invoke($"Lebenszeichen nicht zustellbar: {ex.Message}");
+            try { await wache.CancelAsync().ConfigureAwait(false); } catch (Exception) { }
+        }
+    }
+
+    private DateTime _letzterSchlag = DateTime.UtcNow;
+
     public event Action<MessageType, int>? MessageSent;
 
     /// <summary>Die Gegenstelle laedt in diesem Ordner noch selbst.</summary>
@@ -462,6 +541,7 @@ public sealed class BepConnection : IAsyncDisposable
         try
         {
             await BepFraming.WriteMessageAsync(_wire, type, message, ct).ConfigureAwait(false);
+            _letzterSchlag = DateTime.UtcNow;
             MessageSent?.Invoke(type, message.CalculateSize());
 
             var gesamt = Environment.TickCount64 - begonnen;
