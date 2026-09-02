@@ -119,7 +119,8 @@ public static class BepTls
                     "Die Gegenstelle hat kein Zertifikat geliefert. " + beschreibung);
 
             Setzen(transport, Timeout.Infinite);
-            return new Verbindung(protokoll.Stream, peerCertificate, beschreibung);
+            return new Verbindung(
+                new NebenlaeufigerStrom(protokoll.Stream), peerCertificate, beschreibung);
         }
         catch
         {
