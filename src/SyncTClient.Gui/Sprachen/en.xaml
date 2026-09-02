@@ -210,6 +210,9 @@ Files already downloaded are kept.</s:String>
   <s:String x:Key="A.HintAlways">Everything is downloaded right away and kept permanently. The usage limit does not apply to this share.</s:String>
   <s:String x:Key="A.NoFolder">A local folder is required.</s:String>
   <s:String x:Key="A.PathNotFull">The local folder needs a full path.</s:String>
+  <s:String x:Key="A.PathSystemFolder">“{0}” is created by synchronisation inside a share. It cannot be the share itself — you probably mean the folder above it.</s:String>
+  <s:String x:Key="A.PathInsideShare">The folder lies inside the share “{0}”. Windows does not allow a share inside another one.</s:String>
+  <s:String x:Key="A.PathContainsShare">The folder contains the share “{0}”. Windows does not allow a share that contains another one.</s:String>
   <s:String x:Key="A.TreeSummary">{0} files, {1} in total</s:String>
   <s:String x:Key="P.IdIncomplete">The device ID is incomplete.</s:String>
   <s:String x:Key="G.ClearBody">All cached files become placeholders again, and the thumbnails are discarded.

@@ -20,16 +20,24 @@ public partial class AcceptShareWindow : Window
 {
     private readonly ShareConfig _share;
     private readonly string _homeDirectory;
+    private readonly IReadOnlyList<string> _andereWurzeln;
 
     private FolderNode? _tree;
     private bool _loading;
 
-    public AcceptShareWindow(ShareConfig share, string homeDirectory, string title)
+    /// <param name="andereWurzeln">
+    /// Die Ordner der uebrigen Freigaben. Eine Wurzel in einer anderen Wurzel
+    /// laesst Windows nicht zu.
+    /// </param>
+    public AcceptShareWindow(
+        ShareConfig share, string homeDirectory, string title,
+        IReadOnlyList<string> andereWurzeln)
     {
         InitializeComponent();
 
         _share = share;
         _homeDirectory = homeDirectory;
+        _andereWurzeln = andereWurzeln;
 
         TitleText.Text = title;
         SubTitleText.Text = App.S("S.FolderId", share.FolderId);
@@ -144,6 +152,12 @@ public partial class AcceptShareWindow : Window
         if (!Path.IsPathFullyQualified(path))
         {
             Hint.Text = App.S("A.PathNotFull");
+            return;
+        }
+
+        if (App.WurzelFehler(path, _andereWurzeln) is { } tadel)
+        {
+            Hint.Text = tadel;
             return;
         }
 

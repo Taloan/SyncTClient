@@ -1861,6 +1861,89 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             _log($"[{FolderId}] Ordnermarkierung liess sich nicht anlegen: {fehler}");
     }
 
+    /// <summary>Was gegen einen Ordner als Wurzel einer Freigabe spricht.</summary>
+    public enum Wurzelurteil
+    {
+        /// <summary>Nichts.</summary>
+        Taugt,
+
+        /// <summary>Ein Ordner, den der Abgleich selbst anlegt.</summary>
+        Systemordner,
+
+        /// <summary>Liegt innerhalb einer anderen Freigabe.</summary>
+        InAndererFreigabe,
+
+        /// <summary>Enthaelt eine andere Freigabe.</summary>
+        EnthaeltFreigabe
+    }
+
+    /// <summary>
+    /// Prueft, ob ein Ordner die Wurzel einer Freigabe sein kann.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Faelle, beide an einem Abend eingetreten:
+    ///
+    /// Ein Systemordner als Wurzel. ".stversions" nimmt ersetzte Fassungen
+    /// auf, ".stfolder" ist die Ordnermarkierung -- beide liegen *in* einer
+    /// Freigabe und koennen nicht selbst eine sein. Als ".stversions" als
+    /// Wurzel in der Konfiguration stand, lud das Programm neun Gigabyte ein
+    /// zweites Mal in einen Unterordner des Ordners, in dem dasselbe schon
+    /// lag.
+    ///
+    /// Eine Wurzel in einer anderen Wurzel. Windows lehnt das beim Anmelden
+    /// ab, und zwar mit "Attempted to perform an unauthorized operation" --
+    /// einer Meldung, die den Grund nicht nennt und die Freigabe ohne
+    /// erkennbare Ursache stehenlaesst. Besser hier, wo der Ordner gewaehlt
+    /// wird und ein Satz dazu passt.
+    /// </remarks>
+    /// <param name="andere">Die Wurzeln der uebrigen Freigaben.</param>
+    /// <param name="womit">Der Ordner oder die Freigabe, an der es liegt.</param>
+    public static Wurzelurteil PruefeWurzel(
+        string localPath, IEnumerable<string> andere, out string womit)
+    {
+        womit = "";
+
+        var voll = Normal(localPath);
+        if (voll.Length == 0) return Wurzelurteil.Taugt;
+
+        // Der Name des Ordners selbst, nicht der ganze Pfad: eine Freigabe
+        // darf durchaus unter einem Ordner liegen, der so heisst.
+        var name = Path.GetFileName(voll);
+        foreach (var eigener in new[] { VersionsFolder, MarkerFolder })
+        {
+            if (!name.Equals(eigener, StringComparison.OrdinalIgnoreCase)) continue;
+            womit = eigener;
+            return Wurzelurteil.Systemordner;
+        }
+
+        foreach (var fremd in andere)
+        {
+            var anderer = Normal(fremd);
+            if (anderer.Length == 0 || anderer.Equals(voll, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            womit = anderer;
+
+            if (voll.StartsWith(anderer + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return Wurzelurteil.InAndererFreigabe;
+
+            if (anderer.StartsWith(voll + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return Wurzelurteil.EnthaeltFreigabe;
+        }
+
+        womit = "";
+        return Wurzelurteil.Taugt;
+
+        // Ein unbrauchbarer Pfad ist hier kein Fall: darueber urteilen die
+        // Dialoge schon vorher.
+        static string Normal(string pfad)
+        {
+            if (string.IsNullOrWhiteSpace(pfad)) return "";
+            try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(pfad)); }
+            catch (Exception) { return ""; }
+        }
+    }
+
     /// <summary>
     /// Legt die Markierung an. Aufgerufen beim Verbinden einer Freigabe.
     /// </summary>

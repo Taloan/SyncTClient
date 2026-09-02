@@ -11,22 +11,29 @@ public partial class ShareSettingsWindow : Window
 {
     private readonly ShareConfig _share;
     private readonly string _homeDirectory;
+    private readonly IReadOnlyList<string> _andereWurzeln;
     private readonly List<PeerChoice> _peers = [];
     private FolderNode? _tree;
     private bool _loading;
 
+    /// <param name="andereWurzeln">
+    /// Die Ordner der uebrigen Freigaben. Eine Wurzel in einer anderen Wurzel
+    /// laesst Windows nicht zu.
+    /// </param>
     /// <param name="reportedName">
     /// Wie sich eine Gegenstelle selbst nennt. Optional: ohne laufende
     /// Verbindung ist nur die Kennung bekannt.
     /// </param>
     public ShareSettingsWindow(
         ShareConfig share, IReadOnlyList<PeerConfig> peers, string homeDirectory, string title,
+        IReadOnlyList<string> andereWurzeln,
         Func<string, string?>? reportedName = null)
     {
         InitializeComponent();
 
         _share = share;
         _homeDirectory = homeDirectory;
+        _andereWurzeln = andereWurzeln;
         TitleText.Text = title;
 
         LoadPeers(peers, reportedName);
@@ -198,6 +205,17 @@ public partial class ShareSettingsWindow : Window
         {
             SaveHint.Text = App.S("S2.ScanInvalid");
             ScanBox.Focus();
+            return;
+        }
+
+        // Der Pfad steht hier als gewoehnliches Textfeld und wird beim
+        // Speichern uebernommen. Er darf dabei nicht in einen Ordner zeigen,
+        // den Windows als Wurzel ablehnt -- das faellt sonst erst beim
+        // naechsten Anmelden auf, und dann ohne erkennbaren Grund.
+        if (App.WurzelFehler(LocalPathBox.Text.Trim(), _andereWurzeln) is { } tadel)
+        {
+            SaveHint.Text = tadel;
+            LocalPathBox.Focus();
             return;
         }
 
