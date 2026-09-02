@@ -188,9 +188,14 @@ public static class CommandService
     private static NamedPipeServerStream Erzeugen()
     {
         var rechte = new PipeSecurity();
+
+        // CreateNewInstance ist keine Zugabe. Die erste Instanz legt an, wer
+        // den Namen erfindet; fuer jede weitere prueft Windows die Rechteliste
+        // der bestehenden. Ohne dieses Recht scheitert sie mit "Zugriff
+        // verweigert", und es bleibt bei genau einer Verbindung zur Zeit.
         rechte.AddAccessRule(new PipeAccessRule(
             WindowsIdentity.GetCurrent().User!,
-            PipeAccessRights.ReadWrite,
+            PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance,
             AccessControlType.Allow));
 
         return NamedPipeServerStreamAcl.Create(

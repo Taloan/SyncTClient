@@ -1809,15 +1809,27 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         ShareHost[] shares;
         lock (Laufende) shares = [.. Laufende];
 
-        foreach (var share in shares)
-            if (share.Owns(localFilePath) && share.Produce(localFilePath))
-                return true;
+        // Zwei verschiedene Faelle, und sie duerfen nicht dieselbe Meldung
+        // bekommen: niemand ist zustaendig, oder jemand war zustaendig und
+        // konnte nichts erzeugen. Der zweite nennt seinen Grund selbst.
+        var zustaendig = false;
 
-        // Keine zustaendige Freigabe. Das ist der Fall, in dem die Anfrage
-        // ueberhaupt ankam und trotzdem nichts geschieht -- ohne diese Zeile
-        // sieht er genauso aus wie eine Anfrage, die nie gestellt wurde.
-        Melden?.Invoke($"Vorschau fuer \"{localFilePath}\": keine zustaendige Freigabe " +
-                       $"unter {shares.Length} laufenden.");
+        foreach (var share in shares)
+        {
+            if (!share.Owns(localFilePath)) continue;
+
+            zustaendig = true;
+            if (share.Produce(localFilePath)) return true;
+        }
+
+        // Der Fall, in dem die Anfrage ueberhaupt ankam und trotzdem nichts
+        // geschieht -- ohne diese Zeile sieht er genauso aus wie eine Anfrage,
+        // die nie gestellt wurde.
+        if (!zustaendig)
+        {
+            Melden?.Invoke($"Vorschau fuer \"{localFilePath}\": keine zustaendige Freigabe " +
+                           $"unter {shares.Length} laufenden.");
+        }
 
         return false;
     }
@@ -2065,12 +2077,20 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (_thumbnails is null || _index is null || _connections.IsEmpty) return false;
 
-        // Ein Vorschaubild ist ein Dateikopf und damit Uebertragung.
-        if (IsPaused) return false;
-
         var local = LocalPathOf(relativePath);
+
+        // Ein Vorschaubild ist ein Dateikopf und damit Uebertragung.
+        if (IsPaused) return Nein(local, "der Abgleich ist angehalten");
+
         if (_thumbnails.Has(local)) return true;
-        if (!_index.TryGet(relativePath, out var file) || file.Size <= 0) return false;
+
+        // Jede Absage nennt ihren Grund. Blieben diese hier stumm, meldete der
+        // Aufrufer "keine zustaendige Freigabe" -- und das waere falsch.
+        if (!_index.TryGet(relativePath, out var file))
+            return Nein(local, "die Gegenstelle fuehrt die Datei nicht");
+
+        if (file.Size <= 0)
+            return Nein(local, "die Datei ist leer");
 
         await _thumbnailGate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -2079,7 +2099,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             if (_thumbnails.Has(local)) return true;
 
             var wanted = Math.Min(ExifThumbnail.RequiredPrefixBytes, file.Size);
-            if (LineFor(file.Name) is not { } vorschauVerbindung) return false;
+            if (LineFor(file.Name) is not { } vorschauVerbindung)
+                return Nein(local, "keine erreichbare Gegenstelle haelt diese Datei");
 
             var head = await FileFetcher.FetchRangeAsync(
                 vorschauVerbindung, FolderId, file, 0, wanted, _app.Parallelism, ct: ct)
@@ -2090,8 +2111,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             var thumbnail = ExifThumbnail.TryExtract(head);
             if (thumbnail is null)
             {
+                // Vermerkt, damit derselbe Dateikopf nicht bei jeder Ansicht
+                // erneut geholt wird.
                 _thumbnails.MarkWithout(local);
-                return false;
+                return Nein(local, "die Datei traegt kein eingebettetes Bild");
             }
 
             _thumbnails.Save(local, thumbnail);
