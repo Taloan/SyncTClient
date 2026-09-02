@@ -1318,47 +1318,112 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // und haelt den Inhalt nicht. Hier ist nichts zu beschaffen.
         if (file.Blocks.Count == 0) return;
 
-        // Ohne Verbindung gaebe es nichts zu holen. Der Rueckruf wuerde es
-        // ebenfalls merken, aber erst nachdem Windows die Datei gesperrt hat.
-        if (LineFor(name) is null)
-            throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
+        // Warum nicht ueber CfHydratePlaceholder, was viel einfacher waere:
+        //
+        // Der Rueckruf wird nur bedient, wenn ein fremder Prozess die Datei
+        // oeffnet. Fordert der Anbieter seine eigene Datei an, meldet
+        // CfExecute Erfolg -- und schreibt nichts. Gemessen: 8779 B
+        // durchgereicht, Ergebnis 0x00000000, Attribute unveraendert
+        // 0x401620, also weiterhin "bei Bedarf abrufen". Windows stellt den
+        // Rueckruf eine Minute spaeter erneut zu, mit demselben Ausgang; bei
+        // zwei Plaetzen sind das zwei Dateien je Minute.
+        //
+        // Deshalb der Umweg: in eine Nebendatei holen, den Platzhalter
+        // entfernen, die Nebendatei an seine Stelle setzen und sie als
+        // abgeglichen kennzeichnen. Der letzte Schritt macht sie wieder zum
+        // Platzhalter, diesmal mit Inhalt.
 
-        // Ueber die Cloud-Files-Schicht fuellen und nicht ersetzen.
-        //
-        // Der Weg hierher fuehrte ueber eine Nebendatei: Inhalt holen,
-        // Platzhalter loeschen, Nebendatei an seine Stelle schieben. Das
-        // Loeschen wies Windows mit ERROR_CLOUD_FILE_METADATA_CORRUPT zurueck
-        // -- bei 519 von 3339 Dateien, und bei denselben auch im zweiten
-        // Anlauf. Ein Platzhalter ist eben keine gewoehnliche Datei, die man
-        // fortnehmen und ersetzen kann.
-        //
-        // Der vorgesehene Weg ist derselbe, den ein Doppelklick nimmt, und
-        // der funktioniert seit jeher: Windows fordert den Inhalt an, der
-        // Rueckruf liefert ihn, die Datei bleibt dieselbe. Die Uebertragung
-        // meldet dieser Rueckruf ebenfalls selbst -- ein zweiter Eintrag von
-        // hier waere derselbe Vorgang ein zweites Mal.
-        //
-        // Kein HoldHydration: hier wird gerade eine Hydration gewollt.
-        if (!HydrationCache.Hydrate(path, file.Size))
-            throw new IOException($"Windows hat \"{name}\" nicht gefuellt.");
+        var leitung = LineFor(name)
+            ?? throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
 
-        _cache?.NoteContent(name, file.Size);
-        _cache?.MarkInSync(name);
+        var transfer = new TransferInfo(FolderId, name, file.Size, TransferDirection.Herein);
+        TransferStarted?.Invoke(transfer);
+        transfer.State = TransferState.Laeuft;
 
-        // In den eigenen Bestand aufnehmen -- als Fassung der Gegenstelle,
-        // denn von dort kommt sie.
-        //
-        // Ohne diesen Eintrag haelt der naechste Durchgang jede eben
-        // geholte Datei fuer eine fremde Aenderung: er kennt sie nicht,
-        // rechnet ihre Blockliste und vergleicht. Bei 972 Dateien sind das
-        // 335 MB, die noch einmal von der Platte gelesen werden, nur um
-        // festzustellen, was wir gerade selbst geholt haben.
-        //
-        // Die Sequenznummer bleibt null: angekuendigt haben wir diese Fassung
-        // nie, und im Index darf die Null nicht stehen.
-        var uebernommen = file.Clone();
-        uebernommen.Sequence = 0;
-        Store(uebernommen, StateClean);
+        // Waehrend wir schreiben, ist jede Meldung darueber unsere eigene.
+        using var hold = HoldHydration(name);
+
+        var temp = path + ".synct-neu";
+
+        // Welcher Schritt gerade laeuft. Die Meldung der Cloud-Files-Schicht
+        // nennt die Datei, aber nicht den Aufruf; fuenf Schritte fassen
+        // Dateien an, und sie scheitern aus verschiedenen Gruenden.
+        var schritt = "die Zieldatei anlegen";
+
+        try
+        {
+            await using (var ziel = new FileStream(
+                temp, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.Asynchronous))
+            {
+                const int Stueck = 8 << 20;
+
+                for (long offset = 0; offset < file.Size;)
+                {
+                    var nehmen = (int)Math.Min(Stueck, file.Size - offset);
+
+                    var data = await FileFetcher.FetchRangeAsync(
+                        leitung, FolderId, file, offset, nehmen, _app.Parallelism, null, ct)
+                        .ConfigureAwait(false);
+
+                    await ziel.WriteAsync(data, ct).ConfigureAwait(false);
+
+                    offset += nehmen;
+                    transfer.DoneBytes = offset;
+                    NoteReceived(data.Length);
+                    schritt = "den Inhalt holen";
+                }
+            }
+
+            schritt = "den Zeitstempel setzen";
+            File.SetLastWriteTimeUtc(temp, DateTimeOffset.FromUnixTimeSeconds(file.ModifiedS).UtcDateTime);
+
+            // Erst jetzt an die Stelle der leeren Datei. Ein Abbruch unterwegs
+            // laesst den Platzhalter stehen, statt eine halbe Datei zu
+            // hinterlassen.
+            schritt = "den Platzhalter entfernen";
+            File.Delete(path);
+
+            schritt = "die Datei einsetzen";
+            File.Move(temp, path);
+
+            schritt = "sie in den Bestand aufnehmen";
+            _cache?.NoteContent(name, file.Size);
+            _cache?.MarkInSync(name);
+
+            // In den eigenen Bestand aufnehmen -- als Fassung der
+            // Gegenstelle, denn von dort kommt sie.
+            //
+            // Ohne diesen Eintrag haelt der naechste Durchgang jede eben
+            // geschriebene Datei fuer eine fremde Aenderung: er kennt sie
+            // nicht, rechnet ihre Blockliste und vergleicht. Bei 972 Dateien
+            // sind das 335 MB, die noch einmal von der Platte gelesen werden,
+            // nur um festzustellen, was wir gerade selbst geschrieben haben.
+            //
+            // Die Sequenznummer bleibt null: angekuendigt haben wir diese
+            // Fassung nie, und im Index darf die Null nicht stehen.
+            var uebernommen = file.Clone();
+            uebernommen.Sequence = 0;
+            Store(uebernommen, StateClean);
+
+            transfer.State = TransferState.Fertig;
+        }
+        catch (Exception ex)
+        {
+            transfer.State = TransferState.Fehler;
+            transfer.Error = $"{schritt}: {ex.Message}";
+
+            try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
+
+            // Mit dem Schritt und der Fehlerzahl davor. "Die Clouddatei-
+            // Metadaten sind beschaedigt" sagt nicht, welcher Aufruf das
+            // meldet, und ohne den Aufruf ist die Meldung nicht zu verwerten.
+            throw new IOException(
+                $"{schritt}: {ex.Message} (0x{ex.HResult:X8})", ex);
+        }
+        finally
+        {
+            TransferFinished?.Invoke(transfer);
+        }
     }
 
     /// <summary>
@@ -1729,7 +1794,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (pending.Count == 0) return;
         _log($"[{FolderId}] Modus AlwaysLocal: lade {pending.Count} noch fehlende Dateien herunter ...");
 
-        var done = 0;
+        // Drei Zahlen, und sie duerfen nicht verwechselt werden: was versucht
+        // wurde, was tatsaechlich hier liegt, und was scheiterte. Gezaehlt
+        // wurden bisher die Versuche und "heruntergeladen" genannt -- 381 von
+        // 3341 im Fenster, waehrend daneben 264 von 264 MB offen standen.
+        var versucht = 0;
+        var geholt = 0;
+        var gescheitert = 0;
         var beschaedigt = 0;
         SetPhase(SyncPhase.Inhalte, 0, pending.Count);
 
@@ -1748,6 +1819,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 try
                 {
                     await MaterialiseAsync(path, token).ConfigureAwait(false);
+                    Interlocked.Increment(ref geholt);
                 }
                 catch (Exception ex) when (IstBeschaedigt(ex))
                 {
@@ -1757,12 +1829,22 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 }
                 catch (Exception ex)
                 {
+                    Interlocked.Increment(ref gescheitert);
                     _log($"  {Path.GetFileName(path)}: {ex.Message}");
                 }
 
-                var fertig = Interlocked.Increment(ref done);
-                SetPhase(SyncPhase.Inhalte, fertig, pending.Count);
-                if (fertig % 50 == 0) _log($"[{FolderId}] {fertig}/{pending.Count} heruntergeladen.");
+                var fertig = Interlocked.Increment(ref versucht);
+
+                // Der Balken zeigt, was hier liegt, nicht, was versucht wurde.
+                var da = Volatile.Read(ref geholt);
+                SetPhase(SyncPhase.Inhalte, da, pending.Count);
+
+                if (fertig % 50 == 0)
+                {
+                    var daneben = Volatile.Read(ref gescheitert) + Volatile.Read(ref beschaedigt);
+                    _log($"[{FolderId}] {da} von {pending.Count} geholt" +
+                         (daneben > 0 ? $", {daneben} gescheitert" : "") + ".");
+                }
             }), ct).ConfigureAwait(false);
 
         if (beschaedigt > 0)
@@ -1773,7 +1855,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                  "der Inhalt liegt auf der Gegenstelle.");
         }
 
-        _log($"[{FolderId}] vollstaendig lokal.");
+        // "Vollstaendig lokal" nur, wenn es auch stimmt.
+        _log(geholt == pending.Count
+            ? $"[{FolderId}] vollstaendig lokal."
+            : $"[{FolderId}] {geholt} von {pending.Count} geholt, {pending.Count - geholt} fehlen weiterhin.");
     }
 
     /// <summary>
