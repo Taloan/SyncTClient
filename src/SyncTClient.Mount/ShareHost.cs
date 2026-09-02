@@ -515,7 +515,98 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (_index is not null) lock (_indexGate) _index.AdoptLegacy(device);
     }
 
+    /// <summary>Was noch in den Index geschrieben werden muss.</summary>
+    /// <remarks>
+    /// Die Schranke ist Absicht. Laeuft die Schlange voll, wartet die
+    /// Leseschleife -- und damit schliesst sich das TCP-Fenster, und die
+    /// Gegenstelle schickt langsamer. Das ist die einzige Bremse, die wirklich
+    /// wirkt: ohne sie sammelten sich Millionen Eintraege im Arbeitsspeicher,
+    /// waehrend die Platte nicht hinterherkommt.
+    /// </remarks>
+    private readonly System.Collections.Concurrent.BlockingCollection<(string Device, IReadOnlyList<BepFileInfo> Files)>
+        _indexSchlange = new(boundedCapacity: 4);
+
+    private Thread? _indexSchreiber;
+    private readonly object _schreiberGate = new();
+
+    /// <summary>
+    /// Der Faden, der den Index schreibt.
+    /// </summary>
+    /// <remarks>
+    /// Ein eigener, und ausdruecklich unterhalb der normalen Rangstufe.
+    ///
+    /// Vorher lief das Schreiben auf der Leseschleife: je Nachricht tausend
+    /// Eintraege, je Eintrag eine Abfrage und ein Schreibvorgang, zehn
+    /// Nachrichten in der Sekunde. Das ist ein voller Kern, dauerhaft, und
+    /// die Oberflaeche stand daneben in derselben Warteschlange des
+    /// Betriebssystems. Fenster wechseln dauerte Sekunden.
+    ///
+    /// Ein Index, der eine Minute spaeter fertig ist, faellt niemandem auf.
+    /// Ein Programm, das eine Sekunde spaeter auf einen Klick antwortet,
+    /// jedem.
+    /// </remarks>
+    private void SchreiberStarten()
+    {
+        lock (_schreiberGate)
+        {
+            if (_indexSchreiber is not null) return;
+
+            _indexSchreiber = new Thread(SchreiberLauf)
+            {
+                IsBackground = true,
+                Name = $"Index {FolderId}",
+                Priority = ThreadPriority.BelowNormal
+            };
+
+            _indexSchreiber.Start();
+        }
+    }
+
+    private void SchreiberLauf()
+    {
+        try
+        {
+            foreach (var (device, stapel) in _indexSchlange.GetConsumingEnumerable())
+            {
+                try
+                {
+                    IReadOnlyList<string> changed;
+                    lock (_indexGate) changed = _index!.Absorb(device, stapel);
+
+                    _indexArrived.Release();
+
+                    if (Phase == SyncPhase.Index)
+                        SetPhase(SyncPhase.Index, Interlocked.Add(ref _aufgenommen, stapel.Count));
+
+                    if (QueueIncoming(changed) > 0) PeerBusy();
+                }
+                catch (Exception ex)
+                {
+                    _log($"[{FolderId}] Index aufnehmen: {ex.Message}");
+                }
+
+                // Zwischen zwei Stapeln kurz aus der Hand geben. Die niedrige
+                // Rangstufe genuegt, solange andere Faeden etwas zu tun haben;
+                // dieser Punkt hilft dort, wo sie gerade nichts tun und
+                // trotzdem gleich etwas wollen -- ein Klick zum Beispiel.
+                Thread.Sleep(1);
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Der Ordner wird angehalten.
+        }
+        catch (InvalidOperationException)
+        {
+            // Die Schlange ist geschlossen.
+        }
+    }
+
     /// <summary>Nimmt einen Stapel Index-Eintraege auf, den der PeerHost zugestellt hat.</summary>
+    /// <remarks>
+    /// Hier wird nur eingereiht. Geschrieben wird auf einem eigenen Faden
+    /// unterhalb der normalen Rangstufe -- siehe <see cref="SchreiberStarten"/>.
+    /// </remarks>
     public void Absorb(string device, IEnumerable<BepFileInfo> files)
     {
         // Was ein Muster trifft, kommt nicht in den Index. Erst beim
@@ -532,41 +623,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (_config.Ignored.Count > 0)
             files = files.Where(f => !_config.IsIgnored(f.Name));
 
-        // Einmal ausrechnen, denn die Zahl wird gleich noch gebraucht.
         var stapel = files as IReadOnlyList<BepFileInfo> ?? [.. files];
+        if (stapel.Count == 0) return;
 
-        // Der Hintergrundlauf schreibt in dieselbe Datenbank. Sie haengt an
-        // einer einzigen Verbindung und vertraegt keine zwei Schreiber.
-        IReadOnlyList<string> changed;
-        lock (_indexGate) changed = _index!.Absorb(device, stapel);
+        SchreiberStarten();
 
-        _indexArrived.Release();
-
-        // Gezaehlt wird, was hereinkam, und nicht, was dasteht.
-        //
-        // Hier stand "_index.Count", und das ist ein SELECT COUNT(DISTINCT
-        // name) ueber die ganze Tabelle -- je Stapel von tausend Eintraegen
-        // einmal, ueber eine Tabelle, die dabei auf Millionen Zeilen waechst.
-        // Der Aufwand steigt damit im Quadrat zur Zahl der Dateien, und
-        // waehrenddessen liegt die Datenbank fest: die Oberflaeche kam bei
-        // einem grossen Ordner nur noch alle paar Sekunden zum Zeichnen.
-        //
-        // Ein Zaehler sagt dasselbe. Er ist nicht die Zahl der Dateien im
-        // Index -- Aenderungen zaehlen mehrfach --, aber er waechst, und mehr
-        // wird von einer Anzeige waehrend des Aufnehmens nicht verlangt.
-        if (Phase == SyncPhase.Index)
-            SetPhase(SyncPhase.Index, Interlocked.Add(ref _aufgenommen, stapel.Count));
-
-        // Der Index sagt nur, was die Gegenstelle fuehrt. Damit es auch im
-        // Ordner steht, muss jeder genannte Name angewendet werden: angelegt,
-        // ersetzt oder entfernt. Das geschieht im Hintergrundlauf, nicht hier.
-        //
-        // Nur was dabei an Arbeit uebrig bleibt, ist Redebedarf. Eine Gegenstelle, die
-        // ueber ausgeschlossene Namen oder alte Versionen redet, sagt nichts,
-        // was uns fehlt -- und "gleicht ab" waere dann genauso falsch wie
-        // vorher "abgeglichen".
-        if (QueueIncoming(changed) > 0) PeerBusy();
+        // Blockiert, wenn die Schlange voll ist -- und das ist die Bremse:
+        // die Leseschleife wartet, das TCP-Fenster schliesst sich, die
+        // Gegenstelle schickt langsamer.
+        try { _indexSchlange.Add((device, stapel)); }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            // Angehalten: die Schlange ist geschlossen oder fort.
+        }
     }
+
 
     /// <summary>Wie viele Index-Eintraege in dieser Sitzung hereinkamen.</summary>
     private int _aufgenommen;
@@ -776,6 +847,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // aeltere Fassung hereingelassen hat.
             var uhr = System.Diagnostics.Stopwatch.StartNew();
 
+            // Und nicht alle auf einmal.
+            //
+            // Acht Ordner starten miteinander, und jeder will lesen, rechnen
+            // und schreiben. Die Platte gibt das nicht her: was gleichzeitig
+            // laeuft, ist nicht schneller fertig, sondern nur gleichzeitig
+            // langsam -- und der Rechner steht derweil.
+            //
+            // Zwei zur Zeit. Die uebrigen warten hier und zeigen dabei
+            // "wartet"; sie sind gestartet, verbunden und haben ihren Index,
+            // nur der teure Teil steht an.
+            await Anlauf.WaitAsync(ct).ConfigureAwait(false);
+
+            try
+            {
+
             // Ausdruecklich auf einen eigenen Faden.
             //
             // Der Aufruf kommt ueber das Verbinden aus der Oberflaeche, und
@@ -791,6 +877,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 await ProjectAsync().ConfigureAwait(false);
             }).ConfigureAwait(false);
             _log($"[{FolderId}] Platzhalter vorbereitet in {uhr.ElapsedMilliseconds} ms.");
+            }
+            finally
+            {
+                Anlauf.Release();
+            }
+
             State = ShareState.Bereit;
 
             await ApplyModeAsync(ct);
@@ -861,6 +953,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         _wache?.Dispose();
         _wache = null;
+
+        // Der Schreiber laeuft, bis die Schlange geschlossen ist. Was noch
+        // darin steht, wird nicht mehr geschrieben -- die Gegenstelle schickt
+        // es beim naechsten Verbinden noch einmal, denn quittiert haben wir
+        // es nie.
+        try { _indexSchlange.CompleteAdding(); } catch (Exception) { }
 
         _cache?.Save();
         _cache?.LeaveLimits();
@@ -936,6 +1034,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     // ------------------------------------------------------------ Platzhalter
+
+    /// <summary>
+    /// So viele Ordner duerfen gleichzeitig ihren teuren Anlauf haben.
+    /// </summary>
+    /// <remarks>
+    /// Programmweit, nicht je Gegenstelle: die Platte ist eine.
+    /// </remarks>
+    private static readonly SemaphoreSlim Anlauf = new(2, 2);
 
     /// <summary>
     /// Die Fassung der Sync-Wurzel, wie sie in der Registrierung steht.
