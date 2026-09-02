@@ -63,6 +63,16 @@ public static class CommandService
     /// </remarks>
     private const int MaximumFehler = 3;
 
+    /// <summary>
+    /// So viele Verbindungen duerfen zugleich offen sein.
+    /// </summary>
+    /// <remarks>
+    /// Mehr als eine ist noetig, seit die Erweiterung auch Vorschauen ueber
+    /// diesen Weg anfordert. Wer keinen Platz findet, wartet beim Verbinden;
+    /// die Frist dort ist kurz, damit der Explorer nicht stehenbleibt.
+    /// </remarks>
+    private const int GleichzeitigeVerbindungen = 16;
+
     private static void Serve(Action<string> log)
     {
         var fehler = 0;
@@ -71,27 +81,19 @@ public static class CommandService
         {
             try
             {
-                using var pipe = Erzeugen();
+                var pipe = Erzeugen();
                 pipe.WaitForConnection();
 
                 // Kam eine Verbindung zustande, war es kein dauerhaftes Hindernis.
                 fehler = 0;
 
-                using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, leaveOpen: true);
-                using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
-
-                var zeile = reader.ReadLine();
-                if (string.IsNullOrWhiteSpace(zeile)) continue;
-
-                var teile = zeile.Split('\t', StringSplitOptions.RemoveEmptyEntries);
-                if (teile.Length < 2) continue;
-
-                var antwort = Handle?.Invoke(teile[0], teile[1..]) ?? "";
-                writer.WriteLine(antwort);
-
-                // Ohne dieses Warten schliesst das Verwerfen der Pipe den
-                // Puffer, bevor die Gegenseite gelesen hat.
-                pipe.WaitForPipeDrain();
+                // Die naechste Verbindung darf nicht warten, bis diese fertig
+                // ist. Ein Kontextmenue-Befehl ist sofort beantwortet, eine
+                // Vorschau dagegen wartet auf die Gegenstelle -- und der
+                // Explorer fragt einen ganzen Ordner auf einmal ab. Nach der
+                // Reihe bedient, liefe die Frist der meisten Anfragen ab,
+                // bevor sie an der Reihe waeren.
+                _ = Task.Run(() => Bedienen(pipe, log));
             }
             catch (Exception ex)
             {
@@ -107,6 +109,43 @@ public static class CommandService
                 // Nicht in einer engen Schleife scheitern.
                 Thread.Sleep(2000);
             }
+        }
+    }
+
+    /// <summary>
+    /// Beantwortet eine einzelne Verbindung.
+    /// </summary>
+    /// <remarks>
+    /// Ein Fehler hier betrifft nur diese eine Verbindung und zaehlt deshalb
+    /// nicht gegen <see cref="MaximumFehler"/>. Der Zaehler dort ist fuer den
+    /// belegten Namen gedacht, nicht fuer einen Befehl, der schiefgeht.
+    /// </remarks>
+    private static void Bedienen(NamedPipeServerStream pipe, Action<string> log)
+    {
+        try
+        {
+            using (pipe)
+            {
+                using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, leaveOpen: true);
+                using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
+
+                var zeile = reader.ReadLine();
+                if (string.IsNullOrWhiteSpace(zeile)) return;
+
+                var teile = zeile.Split('\t', StringSplitOptions.RemoveEmptyEntries);
+                if (teile.Length < 2) return;
+
+                var antwort = Handle?.Invoke(teile[0], teile[1..]) ?? "";
+                writer.WriteLine(antwort);
+
+                // Ohne dieses Warten schliesst das Verwerfen der Pipe den
+                // Puffer, bevor die Gegenseite gelesen hat.
+                pipe.WaitForPipeDrain();
+            }
+        }
+        catch (Exception ex)
+        {
+            log($"Befehlsdienst: {ex.Message}");
         }
     }
 
@@ -155,7 +194,7 @@ public static class CommandService
             AccessControlType.Allow));
 
         return NamedPipeServerStreamAcl.Create(
-            PipeName, PipeDirection.InOut, 1,
+            PipeName, PipeDirection.InOut, GleichzeitigeVerbindungen,
             PipeTransmissionMode.Byte, PipeOptions.None,
             0, 0, rechte);
     }

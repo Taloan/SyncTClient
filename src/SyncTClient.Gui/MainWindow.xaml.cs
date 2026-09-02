@@ -1957,6 +1957,14 @@ public partial class MainWindow : Window
     /// </remarks>
     private string OnCommand(string befehl, IReadOnlyList<string> pfade)
     {
+        // Vor dem Sprung auf den Oberflaechen-Thread, und das ist noetig: eine
+        // Vorschau wartet auf die Gegenstelle, bis zu zwanzig Sekunden, und
+        // der Explorer fragt einen ganzen Ordner auf einmal ab. Auf dem
+        // Oberflaechen-Thread stuende das Fenster so lange still. Der Erzeuger
+        // wird ohnehin schon aus mehreren COM-Threads zugleich aufgerufen.
+        if (befehl == "THUMB")
+            return pfade.Count == 1 && ShareHost.ProduceThumbnail(pfade[0]) ? "1" : "";
+
         return Dispatcher.Invoke(() =>
         {
             // Vor der Suche nach der Freigabe: dieser Befehl nennt keine
