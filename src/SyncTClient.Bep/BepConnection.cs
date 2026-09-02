@@ -132,6 +132,27 @@ public sealed class BepConnection : IAsyncDisposable
     }
 
     /// <summary>
+    /// Was beim Handschlag herauskam, in einer Zeile.
+    /// </summary>
+    /// <remarks>
+    /// Fuer die Absage. "Kein Zertifikat" allein sagt nicht, ob die
+    /// Gegenstelle keines geschickt hat, ob die ausgehandelte Fassung eine
+    /// andere ist als gedacht, oder ob ueberhaupt jemand mit uns gesprochen
+    /// hat. Wer sich vorgestellt hat, steht ebenfalls dabei -- das Hello kommt
+    /// vor dem Zertifikat und nennt Namen und Programm.
+    /// </remarks>
+    private static string Handschlag(SslStream tls, Hello? hello)
+    {
+        var wer = hello is null
+            ? "kein Hello"
+            : $"\"{hello.DeviceName}\" ({hello.ClientName} {hello.ClientVersion})";
+
+        return $"[{tls.SslProtocol}, {tls.NegotiatedCipherSuite}, " +
+               $"ALPN \"{tls.NegotiatedApplicationProtocol}\", " +
+               $"Aushandlung {(tls.IsMutuallyAuthenticated ? "beidseitig" : "einseitig")}, {wer}]";
+    }
+
+    /// <summary>
     /// Nimmt eine Verbindung an, die die Gegenstelle aufgebaut hat: TLS als
     /// Server, danach derselbe Hello-Austausch.
     /// </summary>
@@ -186,7 +207,9 @@ public sealed class BepConnection : IAsyncDisposable
                 .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
 
             var remoteCert = tls.RemoteCertificate
-                ?? throw new InvalidDataException("Die Gegenstelle hat kein Zertifikat geliefert.");
+                ?? throw new InvalidDataException(
+                    "Die Gegenstelle hat kein Zertifikat geliefert. " + Handschlag(tls, peerHello));
+
             var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
 
             return new BepConnection(tcp, tls, peerId, peerHello);
