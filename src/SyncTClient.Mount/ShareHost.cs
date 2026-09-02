@@ -1852,39 +1852,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
     }
 
-    /// <summary>
-    /// Ob wenigstens eine der Dateien, die wir fuehren, im Ordner liegt.
-    /// </summary>
-    /// <remarks>
-    /// Die Frage ist nicht, ob der Ordner vollstaendig ist, sondern ob es
-    /// ueberhaupt derselbe ist. Eine nicht eingehaengte Platte, ein
-    /// getrenntes Netzlaufwerk und ein umbenannter Ordner haben gemeinsam,
-    /// dass dort nichts von uns liegt.
-    ///
-    /// Geprueft wird eine Stichprobe. Bei elftausend Eintraegen waere ein
-    /// vollstaendiger Durchgang Aufwand fuer eine Frage, die die erste
-    /// gefundene Datei beantwortet.
-    /// </remarks>
-    private bool EigeneDateiVorhanden()
-    {
-        if (_index is null) return false;
-
-        var geprueft = 0;
-
-        foreach (var eigen in _index.LocalFrom(0))
-        {
-            if (eigen.Deleted || IsHousekeeping(eigen.Name)) continue;
-
-            var path = LocalPathOf(eigen.Name);
-            if (eigen.Type == FileInfoType.Directory ? Directory.Exists(path) : File.Exists(path))
-                return true;
-
-            if (++geprueft >= 200) break;
-        }
-
-        return false;
-    }
-
     /// <summary>Ob die Ordnermarkierung fehlt. Fuer die Oberflaeche.</summary>
     public bool MarkierungFehlt
         => _config.LocalPath.Length > 0 && !Directory.Exists(MarkerPath);
@@ -1919,23 +1886,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         if (Directory.Exists(MarkerPath)) return;
 
-        // Beim ersten Lauf gibt es sie zu Recht noch nicht. Daran zu erkennen,
-        // dass wir noch keine einzige eigene Datei fuehren.
+        // Der einzige Fall, in dem sie von selbst entsteht: wir fuehren noch
+        // keine einzige eigene Datei. Dann steht nichts auf dem Spiel -- ohne
+        // eigenen Bestand kann nichts faelschlich als geloescht gelten. Das
+        // deckt den Augenblick zwischen dem Vorbereiten und dem Verbinden
+        // einer neuen Freigabe ab; regulaer entsteht sie beim Verbinden.
         if (_index is null || _index.LocalCount == 0)
         {
             MarkierungAnlegen();
-            return;
-        }
-
-        // Freigaben, die vor der Markierung eingerichtet wurden, haben keine.
-        // Sie deswegen anzuhalten waere falsch -- ihnen fehlt nichts ausser
-        // dem Nachweis. Also wird er gefuehrt: findet sich auch nur eine
-        // einzige der Dateien, die wir hier fuehren, ist es der richtige
-        // Ordner und er ist erreichbar. Ist keine da, gilt genau das nicht.
-        if (EigeneDateiVorhanden())
-        {
-            MarkierungAnlegen();
-            _log($"[{FolderId}] Ordnermarkierung \"{MarkerFolder}\" nachgetragen.");
             return;
         }
 
