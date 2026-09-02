@@ -99,6 +99,33 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
         }
     }
 
+    /// <summary>
+    /// Laesst die Vorschau erzeugen, gleich in welchem Prozess dieser Code
+    /// laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Die Shell hat zwei Wege zu dieser Klasse: die Klasse, die der laufende
+    /// Client anmeldet, und die DLL hier, die sie im Wirt startet. Welchen sie
+    /// waehlt, entscheidet sie selbst.
+    ///
+    /// Ueber den ersten Weg steht <see cref="Store.Produce"/> bereit und ruft
+    /// den Erzeuger unmittelbar. Ueber den zweiten war bisher niemand
+    /// zustaendig: der Vorrat wurde nachgesehen, und war er leer, blieb es
+    /// beim Ersatzsymbol. Dieselbe Datei bekam damit eine Vorschau oder keine,
+    /// je nachdem, welchen Weg die Shell genommen hatte.
+    ///
+    /// Ueber die Pipe fuehren beide Wege zum selben Erzeuger. Sie ist dafuer
+    /// schon da; das Kontextmenue benutzt sie.
+    /// </remarks>
+    private static bool Beschaffen(string localFilePath)
+    {
+        if (Store.Produce is { } direkt) return direkt(localFilePath);
+
+        var antwort = Sync.Send("THUMB", [localFilePath]);
+        Trace.Write($"  Client gefragt: {(antwort == "1" ? "erzeugt" : antwort)}");
+        return antwort == "1";
+    }
+
     public int GetThumbnail(uint requestedSize, out nint bitmap, out int alphaType)
     {
         bitmap = 0;
@@ -118,10 +145,8 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
 
             if (!File.Exists(cached))
             {
-                // Im Vorrat liegt nichts. Laeuft dieser Code im Client, kann
-                // die Vorschau ueber dessen Verbindung nachgeladen werden. Als
-                // DLL in einem fremden Prozess bleibt es beim Nachsehen.
-                if (Store.Produce is null || !Store.Produce(_filePath) || !File.Exists(cached))
+                // Im Vorrat liegt nichts, also muss der Client sie beschaffen.
+                if (!Beschaffen(_filePath) || !File.Exists(cached))
                 {
                     Trace.Write($"  keine Vorschau unter {cached}");
                     return NoThumbnail;
