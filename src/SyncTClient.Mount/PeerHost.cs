@@ -663,6 +663,14 @@ public sealed class PeerHost : IAsyncDisposable
     {
         _shares.TryRemove(host.FolderId, out _);
 
+        // Auch aus der Ablage. Sie haelt je Ordner genau einen Host, und
+        // GetOrAdd findet ihn beim naechsten Versuch wieder -- verworfen,
+        // ohne Index, mit dem Pfad von vorhin. Der Index der Gegenstelle
+        // wuerde dann nicht neu geholt, denn wir haetten ihn ja schon.
+        //
+        // Einen Monat spaeter waere das ein Baum aus dem letzten Versuch.
+        _registry.Remove(host.FolderId, out _);
+
         await host.UnbindAsync();
         await host.DisposeAsync();
 

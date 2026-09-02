@@ -2300,11 +2300,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _index?.Dispose();
         _index = null;
 
+        // Nicht "egal": bleibt der Index liegen, findet der naechste Versuch
+        // ihn vor und holt sich nichts Neues -- der Baum von heute, einen
+        // Monat spaeter. Was scheitert, gehoert ins Protokoll.
         var databasePath = Path.Combine(_app.HomeDirectory, $"index-{FolderId}.db");
         foreach (var suffix in new[] { "", "-wal", "-shm" })
-            try { File.Delete(databasePath + suffix); } catch { /* egal */ }
+        {
+            try { File.Delete(databasePath + suffix); }
+            catch (Exception ex) { _log($"[{FolderId}] \"{databasePath + suffix}\" bleibt liegen: {ex.Message}"); }
+        }
 
-        try { File.Delete(Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json")); } catch { /* egal */ }
+        try { File.Delete(Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json")); }
+        catch (Exception ex) { _log($"[{FolderId}] Cache-Stand bleibt liegen: {ex.Message}"); }
 
         _log($"[{FolderId}] Bindung geloest.");
     }

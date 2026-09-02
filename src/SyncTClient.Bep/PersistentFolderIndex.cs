@@ -677,9 +677,23 @@ public sealed class PersistentFolderIndex : IDisposable
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Schliesst die Datenbank und gibt die Datei frei.
+    /// </summary>
+    /// <remarks>
+    /// Dispose allein gibt sie nicht frei. Microsoft.Data.Sqlite fuehrt einen
+    /// Vorrat offener Verbindungen; eine verworfene wandert dorthin zurueck
+    /// und haelt die Datei weiter offen. Wer sie danach loeschen will --
+    /// beim Loesen einer Bindung etwa --, scheitert stillschweigend, und der
+    /// naechste Versuch findet den alten Index vor.
+    ///
+    /// Genau das war zu sehen: eine Freigabe, getrennt und neu verbunden,
+    /// holte sich keinen neuen Baum. Sie hatte ja noch den alten.
+    /// </remarks>
     public void Dispose()
     {
         using var gate = _gate.EnterScope();
         _db.Dispose();
+        SqliteConnection.ClearPool(_db);
     }
 }
