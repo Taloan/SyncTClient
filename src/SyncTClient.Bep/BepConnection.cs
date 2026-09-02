@@ -534,6 +534,9 @@ public sealed class BepConnection : IAsyncDisposable
     /// </remarks>
     private static readonly TimeSpan SendeFrist = TimeSpan.FromSeconds(2);
 
+    /// <summary>Wann zuletzt ueber einen langsamen Sendevorgang geklagt wurde.</summary>
+    private long _letzteKlage;
+
     private async Task SendAsync(MessageType type, IMessage message, CancellationToken ct)
     {
         var begonnen = Environment.TickCount64;
@@ -553,8 +556,18 @@ public sealed class BepConnection : IAsyncDisposable
             // Zwei Ursachen, und der Satz nennt die, die ueberwiegt. Wer
             // beide Zahlen nebeneinander stellt, zwingt jeden Leser, sich
             // die Bedeutung selbst zusammenzureimen.
-            if (gesamt > SendeFrist.TotalMilliseconds)
+            // Und hoechstens alle fuenf Sekunden eine.
+            //
+            // Waehrend einer grossen Ankuendigung ueberschreitet jede einzelne
+            // Antwort die Frist, und dann stehen hunderte gleichlautende
+            // Zeilen im Protokoll. Sie sagen zusammen nicht mehr als eine --
+            // aber sie machen das Protokoll unbrauchbar.
+            var jetzt = Environment.TickCount64;
+
+            if (gesamt > SendeFrist.TotalMilliseconds && jetzt - _letzteKlage > 5000)
             {
+                _letzteKlage = jetzt;
+
                 Log?.Invoke(anDerSperre > uebertragen
                     ? $"  {type} musste {anDerSperre} ms warten, weil ueber die Verbindung " +
                       $"gerade etwas anderes lief. Das Senden selbst dauerte {uebertragen} ms."

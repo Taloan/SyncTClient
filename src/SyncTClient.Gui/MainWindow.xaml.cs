@@ -2245,18 +2245,32 @@ public partial class MainWindow : Window
         var zeilen = new System.Text.StringBuilder();
         while (_protokoll.TryDequeue(out var zeile)) zeilen.AppendLine(zeile);
 
+        // Solange jemand das Feld in der Hand hat, wird daran nicht gezogen
+        // und nichts darin ersetzt.
+        //
+        // Beides riss den Rollbalken weg: das Rollen ans Ende, weil man beim
+        // Ziehen des Reglers am unteren Rand als "am Ende" gilt, und das
+        // Kuerzen, weil ein neu gesetzter Text die Mausfuehrung abbricht.
+        var inBenutzung = LogBox.IsMouseOver
+                          && System.Windows.Input.Mouse.LeftButton
+                             == System.Windows.Input.MouseButtonState.Pressed;
+
         var amEnde = LogBox.VerticalOffset + LogBox.ViewportHeight >= LogBox.ExtentHeight - 4;
 
         LogBox.AppendText(zeilen.ToString());
 
-        if (LogBox.Text.Length > ProtokollGrenze)
+        // Gekuerzt wird erst deutlich ueber der Grenze und dann auf einmal.
+        // Bei jedem Takt ein Stueck abzuschneiden hiesse, den Text bei jedem
+        // Takt neu zu setzen -- und damit jede Markierung zu verlieren.
+        if (!inBenutzung && LogBox.SelectionLength == 0
+            && LogBox.Text.Length > ProtokollGrenze * 3 / 2)
         {
             // Am naechsten Zeilenanfang abschneiden, nicht mitten im Wort.
             var schnitt = LogBox.Text.IndexOf('\n', LogBox.Text.Length - ProtokollGrenze);
             if (schnitt > 0) LogBox.Text = LogBox.Text[(schnitt + 1)..];
         }
 
-        if (amEnde) LogBox.ScrollToEnd();
+        if (amEnde && !inBenutzung) LogBox.ScrollToEnd();
     }
 
     private void Persist()
