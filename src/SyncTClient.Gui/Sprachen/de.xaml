@@ -381,8 +381,10 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Share.SharedWithHint">Jedes angekreuzte Gerät führt denselben Ordner. Abwählen beendet den Abgleich mit diesem Gerät; die Dateien bleiben hier und dort liegen.</s:String>
   <s:String x:Key="S.Share.NoPeers">Keine Gegenstellen eingetragen. Unter „Gegenstellen …“ lässt sich eine hinzufügen.</s:String>
   <s:String x:Key="S.Menu.Rescan">Neu scannen</s:String>
+  <s:String x:Key="S.Menu.FixMarker">Ordnermarkierung wiederherstellen</s:String>
   <s:String x:Key="S.Menu.Resync">Neu abgleichen …</s:String>
   <s:String x:Key="M.Rescanning">„{0}“ wird neu gescannt.</s:String>
+  <s:String x:Key="M.MarkerRestored">„{0}“: Ordnermarkierung wiederhergestellt.</s:String>
   <s:String x:Key="M.Resyncing">„{0}“ wird neu abgeglichen: {1} Gegenstelle(n) gefragt.</s:String>
   <s:String x:Key="S2.ResyncAsk">Alles verwerfen, was über diesen Ordner von den Gegenstellen bekannt ist, und neu abfragen?&#10;&#10;Dateien werden dabei nicht angefasst. Der Index wird neu aufgebaut, und bis er steht, gilt der Ordner als nicht abgeglichen.</s:String>
   <s:String x:Key="S.Peer.SharedFolders">Geteilte Ordner</s:String>

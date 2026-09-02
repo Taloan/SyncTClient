@@ -95,6 +95,9 @@ public partial class MainWindow : Window
     private MenuItem _menuRebuild = new();
     private MenuItem _menuResync = new();
 
+    /// <summary>Stellt die Ordnermarkierung wieder her. Meist abgeblendet.</summary>
+    private MenuItem _menuMarker = new();
+
     public MainWindow()
     {
         InitializeComponent();
@@ -1040,6 +1043,7 @@ public partial class MainWindow : Window
         _menuRescan = Eintrag("S.Menu.Rescan", OnRescan);
         _menuRebuild = Eintrag("S.Menu.Rebuild", OnRebuild);
         _menuResync = Eintrag("S.Menu.Resync", OnResync);
+        _menuMarker = Eintrag("S.Menu.FixMarker", OnFixMarker);
 
         var menu = new ContextMenu();
         menu.Items.Add(_menuConnect);
@@ -1051,6 +1055,7 @@ public partial class MainWindow : Window
         menu.Items.Add(_menuRescan);
         menu.Items.Add(_menuRebuild);
         menu.Items.Add(_menuResync);
+        menu.Items.Add(_menuMarker);
         menu.Items.Add(new Separator());
         menu.Items.Add(_menuUnbind);
 
@@ -1068,6 +1073,24 @@ public partial class MainWindow : Window
     /// jede Aenderung sofort. Gebraucht wird der Befehl, wenn der Beobachter
     /// Ereignisse verloren hat -- und dann will man nicht warten.
     /// </remarks>
+    /// <summary>
+    /// Stellt die Ordnermarkierung wieder her.
+    /// </summary>
+    /// <remarks>
+    /// Nur erreichbar, solange sie fehlt. Wer sie wiederherstellt, erklaert
+    /// damit, dass dies der richtige Ordner ist und sein Inhalt vollstaendig:
+    /// was danach fehlt, gilt als geloescht und wird an die Gegenstellen
+    /// weitergegeben. Deshalb geschieht es nur auf ausdrueckliche Anweisung.
+    /// </remarks>
+    private void OnFixMarker(object sender, RoutedEventArgs e)
+    {
+        if (_row?.Share is not { } share) return;
+
+        share.MarkierungHerstellen();
+        Status(App.S("M.MarkerRestored", _row.Name));
+        UpdateButtons();
+    }
+
     private void OnRescan(object sender, RoutedEventArgs e)
     {
         if (_row?.Share is not { } share) return;
@@ -2179,6 +2202,12 @@ public partial class MainWindow : Window
         _menuRescan.IsEnabled = _row is { Accepted: true };
         _menuRebuild.IsEnabled = _row is { Accepted: true };
         _menuResync.IsEnabled = _row is { Accepted: true } && connected;
+
+        // Nur anbieten, solange sie tatsaechlich fehlt. Ein Eintrag, der
+        // immer da ist und meistens nichts tut, laedt zum Draufklicken ein --
+        // und hier hat das Folgen.
+        _menuMarker.IsEnabled = _row?.Share is { MarkierungFehlt: true };
+        _menuMarker.Visibility = _menuMarker.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
         _menuSettings.IsEnabled = _row is { Configured: true };
         _menuOpen.IsEnabled = _row is { Configured: true };
 

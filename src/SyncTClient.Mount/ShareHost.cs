@@ -1217,6 +1217,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // geloescht wurde, waehrend das Programm nicht lief, bekaeme dabei
         // sofort wieder einen Platzhalter -- und die Loeschung waere nicht
         // mehr zu sehen, sondern rueckgaengig gemacht.
+        MarkierungPruefen();
         OfflineGeloeschte();
 
         SetPhase(SyncPhase.Platzhalter);
@@ -1810,6 +1811,56 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         {
             _log($"[{FolderId}] Ordnermarkierung liess sich nicht anlegen: {ex.Message}");
         }
+    }
+
+    /// <summary>Ob die Ordnermarkierung fehlt. Fuer die Oberflaeche.</summary>
+    public bool MarkierungFehlt
+        => _config.LocalPath.Length > 0 && !Directory.Exists(MarkerPath);
+
+    /// <summary>
+    /// Stellt die Ordnermarkierung auf ausdrueckliche Anweisung wieder her.
+    /// </summary>
+    /// <remarks>
+    /// Von selbst geschieht das nie, ausser beim ersten Lauf einer Freigabe.
+    /// Die Markierung wieder hinzustellen heisst zu erklaeren, dass dies der
+    /// richtige Ordner ist und sein Inhalt vollstaendig -- und was danach
+    /// fehlt, gilt als geloescht und wird weitergegeben. Diese Erklaerung
+    /// kann nur abgeben, wer den Ordner kennt.
+    /// </remarks>
+    public void MarkierungHerstellen()
+    {
+        MarkierungAnlegen();
+        _log($"[{FolderId}] Ordnermarkierung wiederhergestellt.");
+    }
+
+    /// <summary>
+    /// Bricht den Start ab, wenn der Ordner nicht erreichbar ist.
+    /// </summary>
+    /// <remarks>
+    /// Nicht nur Loeschungen sind dann gefaehrlich, sondern auch das
+    /// Gegenteil: wo der gemeinte Ordner fehlt, wuerde alles neu angelegt --
+    /// auf irgendeinem Laufwerk, das gerade unter diesem Pfad erreichbar ist.
+    /// Syncthing haelt einen solchen Ordner deshalb ganz an, und das ist
+    /// richtig.
+    /// </remarks>
+    private void MarkierungPruefen()
+    {
+        if (Directory.Exists(MarkerPath)) return;
+
+        // Beim ersten Lauf gibt es sie zu Recht noch nicht. Daran zu erkennen,
+        // dass wir noch keine einzige eigene Datei fuehren.
+        if (_index is null || _index.LocalCount == 0)
+        {
+            MarkierungAnlegen();
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Die Ordnermarkierung \"{MarkerFolder}\" fehlt, obwohl hier {_index.LocalCount} eigene " +
+            "Dateien gefuehrt werden. Der Ordner ist damit nicht erreichbar -- eine nicht " +
+            "eingehaengte Platte, ein getrenntes Netzlaufwerk, ein umbenannter Ordner. Es wird " +
+            "nichts abgeglichen, bis er wieder da ist. Ist es doch der richtige Ordner, stellt " +
+            "\"Ordnermarkierung wiederherstellen\" sie wieder her.");
     }
 
     /// <summary>
