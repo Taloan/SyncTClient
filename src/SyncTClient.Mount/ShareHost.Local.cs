@@ -98,7 +98,37 @@ public sealed partial class ShareHost
     private const int MaximumAttempts = 5;
 
     /// <summary>Abstand zwischen zwei Durchgaengen ueber den Ordner.</summary>
-    private static readonly TimeSpan RescanInterval = TimeSpan.FromMinutes(3);
+    /// <summary>
+    /// Der Abstand zwischen zwei vollstaendigen Durchgaengen.
+    /// </summary>
+    /// <remarks>
+    /// Eine Stunde, wie bei Syncthing. Der Beobachter meldet, was geschieht;
+    /// der Durchgang ist das Netz darunter, fuer die Faelle, in denen eine
+    /// Meldung ausbleibt -- ein uebergelaufener Puffer, eine Datei, die ein
+    /// Programm offen haelt, ein Treiber, der nichts sagt.
+    ///
+    /// Vorher stand hier eine Minute, und der Durchgang war damit der teuerste
+    /// Posten des Programms: einundsiebzigtausend Dateien, sechzigmal in der
+    /// Stunde.
+    /// </remarks>
+    private static readonly TimeSpan RescanInterval = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Der eigene Abstand dieser Freigabe: drei Viertel bis fuenf Viertel des
+    /// Vorgabewerts.
+    /// </summary>
+    /// <remarks>
+    /// Sieben Freigaben starten miteinander und haetten mit demselben Abstand
+    /// auch ihren Durchgang miteinander -- einmal je Stunde saehe der Rechner
+    /// aus wie unter Last, und dazwischen geschieht nichts. Gestreut faellt
+    /// dieselbe Arbeit nicht mehr auf. Syncthing streut aus demselben Grund
+    /// und in derselben Spanne.
+    ///
+    /// Einmal je Sitzung gezogen, nicht je Durchgang: ein Abstand, der sich
+    /// staendig aendert, ist keiner.
+    /// </remarks>
+    private readonly TimeSpan _rescanInterval =
+        RescanInterval * (0.75 + Random.Shared.NextDouble() * 0.5);
 
     /// <summary>
     /// So lange nach der eigenen Ankuendigung bleibt eine Datei liegen, bevor
@@ -1276,7 +1306,7 @@ public sealed partial class ShareHost
                 // sie war nie ein Platzhalter. Deshalb wird in Abstaenden
                 // nachgesehen. Der Durchgang liest nur Attribute, Groesse und
                 // Zeit, keine Inhalte.
-                if (DateTime.UtcNow - _lastScan >= RescanInterval)
+                if (DateTime.UtcNow - _lastScan >= _rescanInterval)
                 {
                     _lastScan = DateTime.UtcNow;
                     ScanLocal(quiet: true);
