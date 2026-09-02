@@ -308,6 +308,20 @@ public sealed partial class ShareHost
     {
         if (NameOf(relativePath) is not { } name) return;
 
+        // Dieselbe Bedingung wie beim Start, und aus demselben Grund. Faellt
+        // ein Laufwerk im laufenden Betrieb aus, meldet der Beobachter das
+        // Verschwinden jeder einzelnen Datei, und von hier aus saehe das wie
+        // eine Loeschung von Hand aus. Die Markierung loescht niemand; fehlt
+        // sie, fehlt der Ordner.
+        if (!Directory.Exists(MarkerPath))
+        {
+            if (_warned.TryAdd("marker", 0))
+                _log($"[{FolderId}] Die Ordnermarkierung \"{MarkerFolder}\" fehlt. " +
+                     "Loeschungen werden nicht weitergegeben, solange das so ist.");
+
+            return;
+        }
+
         // Ausserhalb der Auswahl entfernen wir selbst, sobald die Gegenstelle
         // die Datei fuehrt. Das ist keine Loeschung, sondern das Ende des
         // Weges. Wuerde sie angekuendigt, loeschte die Gegenstelle die eben
