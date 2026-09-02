@@ -176,11 +176,26 @@ public sealed class PersistentFolderIndex : IDisposable
     public int MessageCount => _messageCount;
 
     /// <summary>
+    /// Fuehrt der Index ueberhaupt etwas?
+    /// </summary>
+    /// <remarks>
+    /// Fuer die Frage "gibt es hier etwas" ist das Zaehlen die falsche
+    /// Antwort. EXISTS haelt beim ersten Treffer an; COUNT(DISTINCT name)
+    /// liest die ganze Tabelle und sortiert sie, bei hunderttausend Zeilen
+    /// also jedes Mal von vorn.
+    /// </remarks>
+    public bool HasEntries
+        => Scalar("SELECT EXISTS(SELECT 1 FROM files WHERE deleted = 0)") is long treffer && treffer != 0;
+
+    /// <summary>
     /// Zahl der Dateien, die die Gegenstellen fuehren.
     /// </summary>
     /// <remarks>
     /// Gezaehlt werden Namen, nicht Zeilen. Fuehren drei Gegenstellen
     /// dieselbe Datei, ist es eine Datei und nicht drei.
+    ///
+    /// Teuer: die ganze Tabelle wird gelesen und sortiert. Fuer die Frage,
+    /// ob ueberhaupt etwas dasteht, gibt es <see cref="HasEntries"/>.
     /// </remarks>
     public int Count => (int)(long)(
         Scalar("SELECT COUNT(DISTINCT name) FROM files WHERE deleted = 0") ?? 0L);
