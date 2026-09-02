@@ -217,6 +217,21 @@ public sealed class ShareConfig
         => Ignored.Count > 0 && Rules.Matches(relativePath);
 
     /// <summary>
+    /// Aenderungen im Ordner ueber das Dateisystem melden lassen.
+    /// </summary>
+    /// <remarks>
+    /// Nicht jedes Laufwerk kann das. Netzlaufwerke, eingehaengte Freigaben
+    /// und manche Treiber melden gar nichts oder nur einen Teil -- und man
+    /// sieht es ihnen nicht an, denn der Beobachter laesst sich anlegen und
+    /// schweigt dann.
+    ///
+    /// Abgeschaltet faellt das Programm auf den vollstaendigen Durchgang
+    /// zurueck, und der laeuft dann wieder in kurzen Abstaenden. Das kostet
+    /// Rechenzeit, ist aber vollstaendig.
+    /// </remarks>
+    public bool WatchChanges { get; set; } = true;
+
+    /// <summary>
     /// Ob diese Freigabe im Navigationsbereich des Explorers steht.
     /// </summary>
     /// <remarks>

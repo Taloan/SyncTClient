@@ -127,8 +127,21 @@ public sealed partial class ShareHost
     /// Einmal je Sitzung gezogen, nicht je Durchgang: ein Abstand, der sich
     /// staendig aendert, ist keiner.
     /// </remarks>
-    private readonly TimeSpan _rescanInterval =
-        RescanInterval * (0.75 + Random.Shared.NextDouble() * 0.5);
+    private TimeSpan _rescanInterval = Streuen(RescanInterval);
+
+    private static TimeSpan Streuen(TimeSpan abstand)
+        => abstand * (0.75 + Random.Shared.NextDouble() * 0.5);
+
+    /// <summary>
+    /// Der Abstand ohne Beobachter: eine Minute, wie frueher.
+    /// </summary>
+    /// <remarks>
+    /// Die Stunde ist nur zu rechtfertigen, solange etwas anderes die
+    /// Aenderungen meldet. Faellt der Beobachter aus -- abgeschaltet, oder
+    /// vom Laufwerk nicht getragen --, ist der Durchgang wieder die einzige
+    /// Quelle, und dann darf er nicht stuendlich sein.
+    /// </remarks>
+    private void OhneBeobachter() => _rescanInterval = Streuen(TimeSpan.FromMinutes(1));
 
     /// <summary>
     /// So lange nach der eigenen Ankuendigung bleibt eine Datei liegen, bevor
