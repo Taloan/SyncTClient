@@ -130,7 +130,7 @@ public sealed class BepListener : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log($"Verbindung von {remote?.Address.ToString() ?? "unbekannt"} kam nicht zustande: {ex.Message}");
+            _log($"Verbindung von {remote?.Address.ToString() ?? "unbekannt"} kam nicht zustande: {Ursache(ex)}");
             tcp.Dispose();
         }
     }
@@ -148,4 +148,23 @@ public sealed class BepListener : IAsyncDisposable
 
         _cts.Dispose();
     }
+    /// <summary>
+    /// Die Ausnahme samt ihrer Ursachen, in einer Zeile.
+    /// </summary>
+    /// <remarks>
+    /// "Authentication failed, see inner exception." ist die Aufforderung,
+    /// nachzusehen -- und genau die Auskunft, die verlorenging. Ein
+    /// gescheiterter Handschlag traegt seinen Grund erst zwei Ebenen tiefer:
+    /// welche Fassung, welches Verfahren, welche Ablehnung.
+    /// </remarks>
+    private static string Ursache(Exception ex)
+    {
+        var teile = new List<string>(3);
+
+        for (Exception? e = ex; e is not null && teile.Count < 3; e = e.InnerException)
+            teile.Add(e.Message);
+
+        return string.Join(" -- ", teile);
+    }
+
 }
