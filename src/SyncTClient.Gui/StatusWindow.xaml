@@ -1,7 +1,7 @@
 ﻿<Window x:Class="SyncTClient.Gui.StatusWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SyncTClient" Width="360" MaxHeight="620" SizeToContent="Height"
+        Title="SyncTClient" Width="360" MaxHeight="620" MinHeight="220" SizeToContent="Height"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
         Background="{DynamicResource Flaeche}">
   <!-- Der Blick aus dem Infobereich: was gerade laeuft, ohne das ganze

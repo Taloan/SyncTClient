@@ -1796,6 +1796,15 @@ public partial class MainWindow : Window
     {
         return Dispatcher.Invoke(() =>
         {
+            // Vor der Suche nach der Freigabe: dieser Befehl nennt keine
+            // Pfade, er kommt von einer zweiten Instanz, die sich gleich
+            // wieder beendet.
+            if (befehl == "SHOW")
+            {
+                Restore();
+                return "";
+            }
+
             var host = pfade.Select(ShareHost.Owning).OfType<ShareHost>().FirstOrDefault();
             if (host is null) return App.S("C.NoShare");
 
@@ -1900,11 +1909,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Holt das Hauptfenster zurueck.</summary>
+    /// <remarks>
+    /// Activate allein genuegt nicht, wenn der Aufruf aus einem anderen
+    /// Prozess kommt: Windows laesst ein Fenster nur von dem Programm nach
+    /// vorn holen, das gerade die Eingabe hat. Der Umweg ueber Topmost ist
+    /// der uebliche -- kurz nach oben, sofort wieder zurueck.
+    /// </remarks>
     private void Restore()
     {
         Show();
         WindowState = WindowState.Normal;
         Activate();
+
+        var oben = Topmost;
+        Topmost = true;
+        Topmost = oben;
     }
 
     /// <summary>

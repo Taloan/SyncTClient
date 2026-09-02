@@ -110,6 +110,42 @@ public static class CommandService
         }
     }
 
+    /// <summary>
+    /// Schickt einen Befehl an eine laufende Instanz.
+    /// </summary>
+    /// <remarks>
+    /// Derselbe Weg, den die Shell-Erweiterung nimmt. Er wird auch beim
+    /// Starten gebraucht: eine zweite Instanz hat nichts zu tun, ausser der
+    /// ersten zu sagen, dass jemand sie sucht.
+    ///
+    /// Die Wartezeit ist kurz. Antwortet niemand, laeuft eben keine Instanz
+    /// -- oder eine, die gerade beschaeftigt ist; in beiden Faellen ist
+    /// Weitermachen besser als Warten.
+    /// </remarks>
+    /// <returns>Die Antwort, oder <c>null</c>, wenn niemand zuhoert.</returns>
+    public static string? Send(string befehl, IReadOnlyList<string> argumente, int millisekunden = 1500)
+    {
+        try
+        {
+            using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
+            pipe.Connect(millisekunden);
+
+            using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
+            using var reader = new StreamReader(pipe, Encoding.UTF8);
+
+            // Der Dienst trennt an Tabulatoren und braucht mindestens zwei
+            // Felder. Ein Befehl ohne Argument bekommt deshalb einen Strich.
+            var felder = argumente.Count > 0 ? string.Join('\t', argumente) : "-";
+            writer.WriteLine($"{befehl}\t{felder}");
+
+            return reader.ReadLine() ?? "";
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private static NamedPipeServerStream Erzeugen()
     {
         var rechte = new PipeSecurity();
