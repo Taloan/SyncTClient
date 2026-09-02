@@ -791,8 +791,82 @@ public sealed class AppConfig
         }
     }
 
+    /// <summary>
+    /// Schreibt die Konfiguration -- ganz oder gar nicht, mit Sicherungen.
+    /// </summary>
+    /// <remarks>
+    /// Hier stand ein WriteAllText. Das schreibt in die vorhandene Datei
+    /// hinein: geht dabei etwas schief -- ein Absturz, eine volle Platte,
+    /// ein Stromausfall --, steht dort eine halbe Datei, und mit ihr sind
+    /// saemtliche Freigaben fort. Die Ordner auf der Platte blieben, aber
+    /// niemand wuesste mehr, zu wem sie gehoeren.
+    ///
+    /// Deshalb erst daneben schreiben und dann tauschen. File.Replace macht
+    /// beides in einem Zug und legt die bisherige Fassung als ".bak"
+    /// beiseite; ein Abbruch unterwegs laesst die alte Datei unberuehrt.
+    ///
+    /// Dazu eine Sicherung je Tag, die zehn juengsten bleiben. Der ".bak"
+    /// hilft gegen einen missglueckten Schreibvorgang, nicht gegen einen
+    /// Fehler, der erst drei Tage spaeter auffaellt.
+    /// </remarks>
     public void Save(string path)
-        => File.WriteAllText(path, JsonSerializer.Serialize(this, Format));
+    {
+        var text = JsonSerializer.Serialize(this, Format);
+        var voll = Path.GetFullPath(path);
+
+        if (!File.Exists(voll))
+        {
+            File.WriteAllText(voll, text);
+            return;
+        }
+
+        var neben = voll + ".neu";
+        File.WriteAllText(neben, text);
+
+        // Der dritte Parameter ist die Sicherung der bisherigen Fassung.
+        // Ohne ihn waere der Tausch zwar auch atomar, aber die alte Datei
+        // waere fort -- und genau sie ist im Zweifel die richtige.
+        File.Replace(neben, voll, voll + ".bak", ignoreMetadataErrors: true);
+
+        Sichern(voll, text);
+    }
+
+    /// <summary>So viele Tagessicherungen bleiben liegen.</summary>
+    private const int Sicherungen = 10;
+
+    /// <summary>
+    /// Legt hoechstens eine Sicherung je Tag ab und raeumt die alten weg.
+    /// </summary>
+    /// <remarks>
+    /// Je Tag und nicht je Speichern: wer an einem Nachmittag zwanzig Mal
+    /// etwas umstellt, braucht keine zwanzig Staende, sondern den von
+    /// gestern.
+    /// </remarks>
+    private static void Sichern(string voll, string text)
+    {
+        try
+        {
+            var ordner = Path.Combine(Path.GetDirectoryName(voll)!, "synct-sicherungen");
+            Directory.CreateDirectory(ordner);
+
+            var name = Path.GetFileNameWithoutExtension(voll);
+            var heute = Path.Combine(ordner, $"{name}-{DateTime.Now:yyyy-MM-dd}.json");
+
+            if (!File.Exists(heute)) File.WriteAllText(heute, text);
+
+            foreach (var alt in Directory.GetFiles(ordner, $"{name}-*.json")
+                         .OrderByDescending(f => f, StringComparer.Ordinal)
+                         .Skip(Sicherungen))
+            {
+                try { File.Delete(alt); } catch (Exception) { /* beim naechsten Mal */ }
+            }
+        }
+        catch (Exception)
+        {
+            // Eine Sicherung, die nicht gelingt, darf das Speichern nicht
+            // aufhalten. Die Konfiguration steht zu diesem Zeitpunkt schon.
+        }
+    }
 
     /// <summary>Eine Vorlage zum Ausfuellen.</summary>
     public static AppConfig Template(string address, string deviceId, string folderId)
