@@ -303,8 +303,27 @@
         <DataGridTemplateColumn Header="{DynamicResource S.Col.Status}" Width="190" SortMemberPath="StatusText" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
+              <!-- Hintergrund und ToolTipService: sonst reagiert nur die
+                   Schrift selbst, und der Zeiger muesste die Buchstaben
+                   treffen. Der Hinweis gehoert an die ganze Zelle. -->
               <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
-                          HorizontalAlignment="Center">
+                          HorizontalAlignment="Center" Background="Transparent"
+                          ToolTip="{Binding ErrorTip}"
+                          ToolTipService.ShowDuration="60000"
+                          ToolTipService.IsEnabled="{Binding HasError}">
+                <TextBlock Text="&#xE7BA;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                           Foreground="{DynamicResource Warnung}" VerticalAlignment="Center" Margin="0,0,6,0">
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasError}" Value="True">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
                 <TextBlock Text="&#xE73E;" FontFamily="Segoe MDL2 Assets" FontSize="12"
                            Foreground="{DynamicResource Gut}" VerticalAlignment="Center" Margin="0,0,6,0">
                   <TextBlock.Style>

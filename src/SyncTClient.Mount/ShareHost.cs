@@ -169,6 +169,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     public string FolderId => _config.FolderId;
+
+    /// <summary>
+    /// Woran der letzte Anlauf scheiterte, im Wortlaut. Null, wenn keiner.
+    /// </summary>
+    public string? Fehler { get; private set; }
     public ShareConfig Config => _config;
 
     public ShareState State
@@ -967,6 +972,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private void Fail(Exception exception)
     {
+        // Die Meldung bleibt stehen, nicht nur im Protokoll.
+        //
+        // Die Statusspalte sagte "Fehler" und sonst nichts; wer wissen wollte,
+        // welcher, musste im Protokoll suchen -- und dort steht sie zwischen
+        // hundert anderen Zeilen. Der Text gehoert an die Zeile, die ihn
+        // meldet.
+        Fehler = exception.Message;
         State = ShareState.Fehler;
         SetPhase(SyncPhase.Ruht);
         _log($"[{FolderId}] {Herkunft(exception)}");
@@ -1196,6 +1208,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             if (after.Length > 0) NoteLocalChange(after);
         };
 
+        Fehler = null;
         _mount.Connect();
 
         // Zuerst der eigene Bestand, dann der fremde.
