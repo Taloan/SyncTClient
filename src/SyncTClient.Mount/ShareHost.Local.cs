@@ -121,7 +121,7 @@ public sealed partial class ShareHost
     private const int AnnounceDetails = 8;
 
     /// <summary>So oft wird geprueft, was sich entfernen laesst.</summary>
-    private static readonly TimeSpan PruneInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PruneInterval = TimeSpan.FromMinutes(2);
 
     private DateTime _lastPrune = DateTime.MinValue;
 
@@ -427,6 +427,7 @@ public sealed partial class ShareHost
         };
 
         var found = 0;
+        var uhr = System.Diagnostics.Stopwatch.StartNew();
 
         // Was im Ordner steht, mit Groesse und Zeit. Platzhalter gehoeren
         // dazu: fuer den Rueckstand zaehlt, ob der Eintrag da ist und zum
@@ -491,6 +492,14 @@ public sealed partial class ShareHost
 
         LastScan = DateTime.Now;
         _mitInhalt = mitInhalt;
+
+        // Nur wenn es auffaellt. Ein Durchgang ueber fuenfundvierzigtausend
+        // Dateien kostet Zeit, und er laeuft in jeder Minute; eine Zeile je
+        // Minute je Freigabe waere aber Laerm. Gemeldet wird, was ueber einer
+        // Viertelsekunde liegt -- das ist die Groessenordnung, ab der es sich
+        // lohnt, ueber den Abstand nachzudenken.
+        if (uhr.ElapsedMilliseconds > 250)
+            _log($"[{FolderId}] Durchgang ueber {vorhanden.Count} Dateien: {uhr.ElapsedMilliseconds} ms.");
 
         // Erst die Bilanz nachziehen, dann messen: die Anzeige des belegten
         // Platzes haengt daran, und der naechste Takt entscheidet auf dieser
