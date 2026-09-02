@@ -478,8 +478,16 @@ internal static class Sync
             // Explorer anhaelt, ist schlimmer als eines, das nichts tut.
             pipe.Connect(3000);
 
-            using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
-            using var reader = new StreamReader(pipe, Encoding.UTF8);
+            // leaveOpen bei beiden, und das ist noetig: sonst raeumt der
+            // zuletzt angelegte zuerst auf, schliesst dabei die Pipe, und der
+            // andere will danach noch einmal leeren. Die Ausnahme daraus
+            // fliegt aus dem try heraus und ueberschreibt die Antwort, die
+            // laengst da ist, mit "Cannot access a closed pipe". Die Pipe
+            // selbst wird von ihrem eigenen using geschlossen.
+            using var writer = new StreamWriter(
+                pipe, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true };
+            using var reader = new StreamReader(
+                pipe, Encoding.UTF8, false, 1024, leaveOpen: true);
 
             writer.WriteLine(befehl + "\t" + string.Join('\t', pfade));
             return reader.ReadLine() ?? "";
