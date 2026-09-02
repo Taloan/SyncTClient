@@ -2588,13 +2588,29 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Aufgeloest, nicht geloescht: eine geholte Datei behaelt ihren
         // Inhalt, ein leerer Platzhalter wird eine leere Datei. Was hier lag,
         // bleibt liegen; es gehoert nur zu keiner Freigabe mehr.
-        try { _mount?.RevertPlaceholders(); } catch (Exception ex) { _log($"[{FolderId}] Platzhalter aufloesen: {ex.Message}"); }
+        var offen = 0;
+        try { offen = _mount?.RevertPlaceholders() ?? 0; }
+        catch (Exception ex) { _log($"[{FolderId}] Platzhalter aufloesen: {ex.Message}"); offen = -1; }
 
         if (_syncRootId is not null)
         {
             lock (Laufende) Laufende.Remove(this);
             ThumbnailProviderRegistration.DetachFromSyncRoot(_syncRootId);
-            try { WinRtSyncRoot.Unregister(_syncRootId); } catch { /* schon weg */ }
+
+            // Die Wurzel bleibt angemeldet, solange auch nur ein Platzhalter
+            // steht. Eine angemeldete Wurzel ohne laufenden Anbieter ist
+            // harmlos -- der naechste Start nimmt sie wieder auf. Ein
+            // Platzhalter ohne Wurzel dagegen ist endgueltig verloren.
+            if (offen != 0)
+            {
+                _log($"[{FolderId}] {(offen < 0 ? "Platzhalter konnten nicht geprueft werden" : $"{offen} Platzhalter stehen noch")}; " +
+                     "der Ordner bleibt angemeldet. Abmelden wuerde sie unbrauchbar machen.");
+            }
+            else
+            {
+                try { WinRtSyncRoot.Unregister(_syncRootId); } catch { /* schon weg */ }
+            }
+
             _syncRootId = null;
         }
 
