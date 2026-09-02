@@ -360,6 +360,10 @@ public sealed class PeerHost : IAsyncDisposable
 
         _readLoop = connection.RunAsync(token);
 
+        // Und jemanden, der ihr Ende bemerkt. Ohne das faellt eine
+        // abgebrochene Verbindung niemandem auf.
+        _ = VerlustBemerken(_readLoop, connection, token);
+
         // Die Ordner vorbereiten, bevor angekuendigt wird. Ihr Indexstand
         // geht in die Ankuendigung ein.
         foreach (var share in shares)
@@ -712,6 +716,59 @@ public sealed class PeerHost : IAsyncDisposable
     {
         Offered = Offered.Select(o => o with { Accepted = _shares.ContainsKey(o.FolderId) }).ToList();
         OfferedChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Wartet das Ende der Leseschleife ab und zieht die Folgerung daraus.
+    /// </summary>
+    /// <remarks>
+    /// Die Schleife lief bisher unbeobachtet: gestartet, in ein Feld gelegt,
+    /// nie erwartet. Brach die Verbindung von selbst ab -- das Netz fort, das
+    /// WLAN aus, die Gegenstelle neu gestartet --, verschwand die Ausnahme in
+    /// einer Task, die niemand ansah.
+    ///
+    /// Die Folgen reichten weiter als die fehlende Meldung. Der Zustand blieb
+    /// auf "verbunden": die Oberflaeche zeigte eine Leitung, die es nicht mehr
+    /// gab, und der Wiederverbinder sucht nach Gegenstellen im Zustand
+    /// "getrennt" -- eine Bedingung, die so nie eintrat. Die ganze
+    /// Wiederaufnahme konnte nicht anspringen.
+    ///
+    /// Das Ereignis "Closed" der Verbindung half dabei nicht: es wurde
+    /// ausgeloest, aber nirgends abonniert.
+    ///
+    /// Gemessen an einem Abend: die Gegenstelle verlor die Verbindung um
+    /// 21:16:48 und nahm sie zwoelf Minuten lang nicht wieder auf; hier stand
+    /// dazu keine einzige Zeile.
+    /// </remarks>
+    private async Task VerlustBemerken(
+        Task lauf, BepConnection connection, CancellationToken token)
+    {
+        string? grund = null;
+
+        try { await lauf.ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { grund = ShareHost.Herkunft(ex); }
+
+        // Wir haben selbst getrennt. Anhalten und Trennen raeumen bereits auf
+        // und sagen es auch; eine zweite Meldung nennte eine zweite Ursache,
+        // die es nicht gibt.
+        if (token.IsCancellationRequested) return;
+
+        // Inzwischen haengt eine andere Verbindung an dieser Stelle.
+        if (!ReferenceEquals(_connection, connection)) return;
+
+        _log(grund is null
+            ? $"[{Display}] Die Gegenstelle hat die Verbindung beendet."
+            : $"[{Display}] Verbindung verloren: {grund}");
+
+        // Derselbe Weg wie beim Anhalten: die Ordner bleiben eingehaengt, nur
+        // die Leitung faellt weg. Damit steht der Zustand auf "getrennt", und
+        // der Wiederverbinder nimmt die Gegenstelle beim naechsten Takt auf.
+        try { await SuspendAsync().ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            _log($"[{Display}] Aufraeumen nach dem Verbindungsverlust: {ex.Message}");
+        }
     }
 
     /// <summary>
