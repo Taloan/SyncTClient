@@ -1800,17 +1800,89 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private void MarkierungAnlegen()
     {
+        if (!MarkierungAnlegen(_config.LocalPath, out var fehler))
+            _log($"[{FolderId}] Ordnermarkierung liess sich nicht anlegen: {fehler}");
+    }
+
+    /// <summary>
+    /// Legt die Markierung an. Aufgerufen beim Verbinden einer Freigabe.
+    /// </summary>
+    /// <remarks>
+    /// Das Verbinden ist der Augenblick, in dem der Anwender erklaert, dass
+    /// dieser Ordner der richtige ist. Genau dort gehoert die Markierung hin
+    /// -- und sonst nirgends von selbst.
+    /// </remarks>
+    public static bool MarkierungAnlegen(string localPath, out string fehler)
+    {
+        fehler = "";
+
         try
         {
-            if (Directory.Exists(MarkerPath)) return;
+            var pfad = Path.Combine(localPath, MarkerFolder);
+            if (Directory.Exists(pfad)) return true;
 
-            var marker = Directory.CreateDirectory(MarkerPath);
+            var marker = Directory.CreateDirectory(pfad);
             marker.Attributes |= FileAttributes.Hidden;
+            return true;
         }
         catch (Exception ex)
         {
-            _log($"[{FolderId}] Ordnermarkierung liess sich nicht anlegen: {ex.Message}");
+            fehler = ex.Message;
+            return false;
         }
+    }
+
+    /// <summary>
+    /// Nimmt die Markierung fort. Aufgerufen beim Trennen einer Freigabe.
+    /// </summary>
+    /// <remarks>
+    /// Ein Ordner, der zu keiner Freigabe mehr gehoert, soll auch nicht
+    /// bezeugen, dass er zu einer gehoert. Wird er spaeter wieder verbunden,
+    /// entsteht sie dabei neu -- und bis dahin bescheinigt sie nichts.
+    /// </remarks>
+    public void MarkierungEntfernen()
+    {
+        try
+        {
+            if (Directory.Exists(MarkerPath)) Directory.Delete(MarkerPath, recursive: true);
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Ordnermarkierung liess sich nicht entfernen: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Ob wenigstens eine der Dateien, die wir fuehren, im Ordner liegt.
+    /// </summary>
+    /// <remarks>
+    /// Die Frage ist nicht, ob der Ordner vollstaendig ist, sondern ob es
+    /// ueberhaupt derselbe ist. Eine nicht eingehaengte Platte, ein
+    /// getrenntes Netzlaufwerk und ein umbenannter Ordner haben gemeinsam,
+    /// dass dort nichts von uns liegt.
+    ///
+    /// Geprueft wird eine Stichprobe. Bei elftausend Eintraegen waere ein
+    /// vollstaendiger Durchgang Aufwand fuer eine Frage, die die erste
+    /// gefundene Datei beantwortet.
+    /// </remarks>
+    private bool EigeneDateiVorhanden()
+    {
+        if (_index is null) return false;
+
+        var geprueft = 0;
+
+        foreach (var eigen in _index.LocalFrom(0))
+        {
+            if (eigen.Deleted || IsHousekeeping(eigen.Name)) continue;
+
+            var path = LocalPathOf(eigen.Name);
+            if (eigen.Type == FileInfoType.Directory ? Directory.Exists(path) : File.Exists(path))
+                return true;
+
+            if (++geprueft >= 200) break;
+        }
+
+        return false;
     }
 
     /// <summary>Ob die Ordnermarkierung fehlt. Fuer die Oberflaeche.</summary>
@@ -1852,6 +1924,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (_index is null || _index.LocalCount == 0)
         {
             MarkierungAnlegen();
+            return;
+        }
+
+        // Freigaben, die vor der Markierung eingerichtet wurden, haben keine.
+        // Sie deswegen anzuhalten waere falsch -- ihnen fehlt nichts ausser
+        // dem Nachweis. Also wird er gefuehrt: findet sich auch nur eine
+        // einzige der Dateien, die wir hier fuehren, ist es der richtige
+        // Ordner und er ist erreichbar. Ist keine da, gilt genau das nicht.
+        if (EigeneDateiVorhanden())
+        {
+            MarkierungAnlegen();
+            _log($"[{FolderId}] Ordnermarkierung \"{MarkerFolder}\" nachgetragen.");
             return;
         }
 
@@ -2849,6 +2933,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public async Task UnbindAsync()
     {
         await StopAsync();
+
+        // Ein Ordner, der zu keiner Freigabe mehr gehoert, soll auch nicht
+        // bezeugen, dass er zu einer gehoert.
+        MarkierungEntfernen();
 
         // Erst die Platzhalter aufloesen, dann die Wurzel abmelden.
         //
