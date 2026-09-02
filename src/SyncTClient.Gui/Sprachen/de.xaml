@@ -385,6 +385,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Peer.SharedFolders">Geteilte Ordner</s:String>
   <s:String x:Key="S.Peer.SharedFoldersHint">Angekreuzt ist, woran dieses Gerät teilnimmt. Dieselbe Angabe steht im Ordner unter „Teilen“ — hier je Gerät, dort je Ordner.</s:String>
   <s:String x:Key="S.Peer.NoShares">Noch keine Ordner eingerichtet.</s:String>
+  <s:String x:Key="M.Reconnecting">{0} wird erneut verbunden …</s:String>
   <s:String x:Key="M.AlreadyRunning">SyncTClient läuft bereits.&#10;&#10;Ein zweiter Client belegt denselben Port und dieselbe Geräte-ID; die Gegenstelle würde eine der beiden Verbindungen verwerfen. Das laufende Fenster findest du im Infobereich neben der Uhr.</s:String>
   <s:String x:Key="S.Main.Outgoing">↑ HINAUS</s:String>
   <s:String x:Key="S.Main.Incoming">↓ HEREIN</s:String>
