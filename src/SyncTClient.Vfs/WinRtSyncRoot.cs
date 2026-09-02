@@ -20,6 +20,31 @@ namespace SyncTClient.Vfs;
 /// </remarks>
 public static class WinRtSyncRoot
 {
+    /// <summary>Wo Windows die angemeldeten Wurzeln fuehrt.</summary>
+    private const string SyncRootManagerKey =
+        @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager";
+
+    /// <summary>
+    /// Das Symbol im Navigationsbereich.
+    /// </summary>
+    /// <remarks>
+    /// Bisher die Windows-Wolke aus <c>imageres.dll</c>. Sie steht dort fuer
+    /// jeden Anbieter und war von OneDrive nicht zu unterscheiden.
+    ///
+    /// Genommen wird das Symbol der laufenden Programmdatei -- denselben Weg
+    /// geht Nextcloud, dessen Eintrag auf seine eigene Exe zeigt. Der Pfad
+    /// steht in der Registrierung und gilt, bis neu angemeldet wird; zieht
+    /// das Programm um, holt die naechste Anmeldung ihn nach.
+    ///
+    /// Ohne Programmdatei -- gehostet, aus einem Testlauf heraus -- bleibt es
+    /// bei der Wolke. Ein Eintrag, der ins Leere zeigt, waere schlechter als
+    /// ein fremdes Symbol.
+    /// </remarks>
+    private static string Symbol
+        => Environment.ProcessPath is { Length: > 0 } exe
+            ? exe
+            : @"%SystemRoot%\system32\imageres.dll,-1043";
+
     /// <summary>
     /// Registriert <paramref name="path"/> und liefert die vergebene Id
     /// zurueck, die zum Abmelden gebraucht wird.
@@ -143,7 +168,7 @@ public static class WinRtSyncRoot
         try
         {
             using var wurzel = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager\" + id);
+                SyncRootManagerKey + @"\" + id);
 
             if (wurzel?.GetValue("NamespaceCLSID") is not string clsid || clsid.Length == 0) return false;
 
@@ -167,10 +192,6 @@ public static class WinRtSyncRoot
     public static void Unregister(string id)
         => StorageProviderSyncRootManager.Unregister(id);
 
-    /// <summary>
-    /// Alle von diesem Programm angemeldeten Roots. Wird zum Aufraeumen
-    /// gebraucht.
-    /// </summary>
     /// <summary>
     /// Meldet ab, was hier angemeldet ist und zu keinem der genannten Pfade
     /// gehoert.
@@ -223,30 +244,55 @@ public static class WinRtSyncRoot
         }
     }
 
+    /// <summary>
+    /// Alle von diesem Programm angemeldeten Wurzeln. Wird zum Aufraeumen
+    /// gebraucht.
+    /// </summary>
+    /// <remarks>
+    /// Gelesen wird die Registrierung, nicht
+    /// <c>GetCurrentSyncRoots</c>. Die Schnittstelle laesst genau die
+    /// Eintraege aus, um die es beim Aufraeumen geht: fehlt der Ordner, faellt
+    /// die Wurzel aus ihrer Liste heraus -- steht aber weiter in der
+    /// Registrierung und belegt ihren Pfad.
+    ///
+    /// Gemessen: sieben gemeldete Wurzeln bei zehn eingetragenen. Die
+    /// fehlende hing an einem geloeschten Ordner, war deshalb weder zu finden
+    /// noch abzumelden, und verhinderte die Anmeldung des Elternordners --
+    /// Windows laesst keine Wurzel zu, die eine andere enthaelt. Zu beheben
+    /// war das nur, indem der Benutzer den Schluessel von Hand loeschte.
+    ///
+    /// Der Aufbau steht fest: unter <c>SyncRootManager\&lt;Kennung&gt;</c>
+    /// liegt <c>UserSyncRoots</c>, dessen Werte je Benutzer-SID den Pfad
+    /// nennen. Die Kennung traegt die SID bereits; gesucht wird nur, was
+    /// diesem Benutzer gehoert, damit ein zweites Konto am selben Rechner
+    /// unberuehrt bleibt.
+    /// </remarks>
     public static IEnumerable<(string Id, string Path)> ListOwn()
     {
-        // Ein einzelner unlesbarer Eintrag darf die Liste nicht kippen.
-        //
-        // Genau die Eintraege, um die es hier geht, sind die kaputten: ihr
-        // Ordner ist fort, und "Path" ist ein StorageFolder, der dann nicht
-        // mehr aufzuloesen ist. Ein Wurf an dieser Stelle nahm alle anderen
-        // mit -- und das Aufraeumen lief ins Leere, ohne dass es jemand
-        // erfuhr.
-        IReadOnlyList<StorageProviderSyncRootInfo> roots;
-        try { roots = StorageProviderSyncRootManager.GetCurrentSyncRoots(); }
+        var sid = WindowsIdentity.GetCurrent().User?.Value ?? "S-1-0-0";
+        var praefix = $"SyncTClient!{sid}!";
+
+        using var verwaltung = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(SyncRootManagerKey);
+        if (verwaltung is null) yield break;
+
+        string[] kennungen;
+        try { kennungen = verwaltung.GetSubKeyNames(); }
         catch (Exception) { yield break; }
 
-        foreach (var root in roots)
+        foreach (var id in kennungen)
         {
-            string id;
-            try { id = root.Id; }
-            catch (Exception) { continue; }
+            if (!id.StartsWith(praefix, StringComparison.OrdinalIgnoreCase)) continue;
 
-            if (!id.StartsWith("SyncTClient!", StringComparison.Ordinal)) continue;
-
+            // Ein einzelner unlesbarer Eintrag darf die Liste nicht kippen.
+            // Ohne Pfad bleibt die Kennung, und die genuegt zum Abmelden.
             var pfad = "";
-            try { pfad = root.Path?.Path ?? ""; }
-            catch (Exception) { /* der Ordner ist fort; die Kennung genuegt */ }
+            try
+            {
+                using var wurzeln = verwaltung.OpenSubKey(id + @"\UserSyncRoots");
+                if (wurzeln is not null && wurzeln.GetValue(sid) is string p)
+                    pfad = p;
+            }
+            catch (Exception) { /* unlesbar; dann eben ohne Pfad */ }
 
             yield return (id, pfad);
         }
