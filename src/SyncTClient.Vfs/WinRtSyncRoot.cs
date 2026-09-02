@@ -85,8 +85,7 @@ public static class WinRtSyncRoot
             Id = id,
             Path = folder,
             DisplayNameResource = displayName,
-            // Ein vorhandenes Systemsymbol. Eigene Ressourcen kommen spaeter.
-            IconResource = @"%SystemRoot%\system32\imageres.dll,-1043",
+            IconResource = Symbol,
             Version = providerVersion,
 
             // Der eigentliche Grund fuer diesen Weg.
