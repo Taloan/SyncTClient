@@ -615,6 +615,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void Tick()
     {
+        FlushLog();
         RefreshRows();
         UpdateThroughput();
         _tray?.Show(Zustand());
@@ -2159,11 +2160,65 @@ public partial class MainWindow : Window
         MessageBox.Show(this, text, App.S("M.LimitTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private void AppendLog(string line) => Dispatcher.Invoke(() =>
+    /// <summary>Was noch ins Protokollfeld geschrieben werden muss.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _protokoll = new();
+
+    /// <summary>So viele Zeichen bleiben im Feld stehen.</summary>
+    /// <remarks>
+    /// Ein TextBox misst seinen Text neu, wenn er sich aendert. Bei einem
+    /// Feld, das ueber Stunden waechst, wird das langsam -- und zwar auf dem
+    /// Faden, der auch das Fenster zeichnet.
+    /// </remarks>
+    private const int ProtokollGrenze = 400_000;
+
+    /// <summary>
+    /// Nimmt eine Protokollzeile entgegen.
+    /// </summary>
+    /// <remarks>
+    /// Hier stand ein Dispatcher.Invoke, und das ist der synchrone: jeder
+    /// Faden, der etwas zu sagen hatte, wartete darauf, dass die Oberflaeche
+    /// es hinschreibt. Bei einem grossen Ordner kommen zehn Zeilen in der
+    /// Sekunde, jede mit einem AppendText und einem ScrollToEnd auf einem
+    /// Feld, das dabei immer laenger wird -- und alle uebrigen Faeden standen
+    /// derweil in der Schlange. Das Programm antwortete nur noch alle paar
+    /// Sekunden, und die Zeitstempel im Protokoll waren die des Schreibens
+    /// und nicht die des Ereignisses.
+    ///
+    /// Jetzt wird nur eingereiht. Die Zeit wird hier genommen, damit sie
+    /// stimmt; geschrieben wird einmal je Takt.
+    /// </remarks>
+    private void AppendLog(string line)
+        => _protokoll.Enqueue($"{DateTime.Now:HH:mm:ss}  {line}");
+
+    /// <summary>
+    /// Schreibt alles Aufgelaufene in einem Zug.
+    /// </summary>
+    /// <remarks>
+    /// Ans Ende gerollt wird nur, wenn dort schon jemand war. Wer weiter oben
+    /// liest oder gerade etwas markiert, wird sonst bei jedem Takt
+    /// weggerissen -- und genau das machte es unmoeglich, eine Stelle im
+    /// Protokoll zu markieren.
+    /// </remarks>
+    private void FlushLog()
     {
-        LogBox.AppendText($"{DateTime.Now:HH:mm:ss}  {line}{Environment.NewLine}");
-        LogBox.ScrollToEnd();
-    });
+        if (_protokoll.IsEmpty) return;
+
+        var zeilen = new System.Text.StringBuilder();
+        while (_protokoll.TryDequeue(out var zeile)) zeilen.AppendLine(zeile);
+
+        var amEnde = LogBox.VerticalOffset + LogBox.ViewportHeight >= LogBox.ExtentHeight - 4;
+
+        LogBox.AppendText(zeilen.ToString());
+
+        if (LogBox.Text.Length > ProtokollGrenze)
+        {
+            // Am naechsten Zeilenanfang abschneiden, nicht mitten im Wort.
+            var schnitt = LogBox.Text.IndexOf('\n', LogBox.Text.Length - ProtokollGrenze);
+            if (schnitt > 0) LogBox.Text = LogBox.Text[(schnitt + 1)..];
+        }
+
+        if (amEnde) LogBox.ScrollToEnd();
+    }
 
     private void Persist()
     {
