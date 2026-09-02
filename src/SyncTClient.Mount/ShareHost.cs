@@ -1330,6 +1330,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         var temp = path + ".synct-neu";
 
+        // Welcher Schritt gerade laeuft. Die Meldung der Cloud-Files-Schicht
+        // nennt die Datei, aber nicht den Aufruf; fuenf Schritte fassen
+        // Dateien an, und sie scheitern aus verschiedenen Gruenden.
+        var schritt = "die Zieldatei anlegen";
+
         try
         {
             await using (var ziel = new FileStream(
@@ -1350,17 +1355,23 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                     offset += nehmen;
                     transfer.DoneBytes = offset;
                     NoteReceived(data.Length);
+                    schritt = "den Inhalt holen";
                 }
             }
 
+            schritt = "den Zeitstempel setzen";
             File.SetLastWriteTimeUtc(temp, DateTimeOffset.FromUnixTimeSeconds(file.ModifiedS).UtcDateTime);
 
             // Erst jetzt an die Stelle der leeren Datei. Ein Abbruch unterwegs
             // laesst den Platzhalter stehen, statt eine halbe Datei zu
             // hinterlassen.
+            schritt = "den Platzhalter entfernen";
             File.Delete(path);
+
+            schritt = "die Datei einsetzen";
             File.Move(temp, path);
 
+            schritt = "sie in den Bestand aufnehmen";
             _cache?.NoteContent(name, file.Size);
             _cache?.MarkInSync(name);
 
@@ -1384,10 +1395,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         catch (Exception ex)
         {
             transfer.State = TransferState.Fehler;
-            transfer.Error = ex.Message;
+            transfer.Error = $"{schritt}: {ex.Message}";
 
             try { if (File.Exists(temp)) File.Delete(temp); } catch (Exception) { }
-            throw;
+
+            // Mit dem Schritt und der Fehlerzahl davor. "Die Clouddatei-
+            // Metadaten sind beschaedigt" sagt nicht, welcher Aufruf das
+            // meldet, und ohne den Aufruf ist die Meldung nicht zu verwerten.
+            throw new IOException(
+                $"{schritt}: {ex.Message} (0x{ex.HResult:X8})", ex);
         }
         finally
         {
