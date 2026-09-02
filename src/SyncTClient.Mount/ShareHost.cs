@@ -532,14 +532,30 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         if (_config.Ignored.Count > 0)
             files = files.Where(f => !_config.IsIgnored(f.Name));
 
+        // Einmal ausrechnen, denn die Zahl wird gleich noch gebraucht.
+        var stapel = files as IReadOnlyList<BepFileInfo> ?? [.. files];
+
         // Der Hintergrundlauf schreibt in dieselbe Datenbank. Sie haengt an
         // einer einzigen Verbindung und vertraegt keine zwei Schreiber.
         IReadOnlyList<string> changed;
-        lock (_indexGate) changed = _index!.Absorb(device, files);
+        lock (_indexGate) changed = _index!.Absorb(device, stapel);
 
         _indexArrived.Release();
 
-        if (Phase == SyncPhase.Index) SetPhase(SyncPhase.Index, _index.Count);
+        // Gezaehlt wird, was hereinkam, und nicht, was dasteht.
+        //
+        // Hier stand "_index.Count", und das ist ein SELECT COUNT(DISTINCT
+        // name) ueber die ganze Tabelle -- je Stapel von tausend Eintraegen
+        // einmal, ueber eine Tabelle, die dabei auf Millionen Zeilen waechst.
+        // Der Aufwand steigt damit im Quadrat zur Zahl der Dateien, und
+        // waehrenddessen liegt die Datenbank fest: die Oberflaeche kam bei
+        // einem grossen Ordner nur noch alle paar Sekunden zum Zeichnen.
+        //
+        // Ein Zaehler sagt dasselbe. Er ist nicht die Zahl der Dateien im
+        // Index -- Aenderungen zaehlen mehrfach --, aber er waechst, und mehr
+        // wird von einer Anzeige waehrend des Aufnehmens nicht verlangt.
+        if (Phase == SyncPhase.Index)
+            SetPhase(SyncPhase.Index, Interlocked.Add(ref _aufgenommen, stapel.Count));
 
         // Der Index sagt nur, was die Gegenstelle fuehrt. Damit es auch im
         // Ordner steht, muss jeder genannte Name angewendet werden: angelegt,
@@ -551,6 +567,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // vorher "abgeglichen".
         if (QueueIncoming(changed) > 0) PeerBusy();
     }
+
+    /// <summary>Wie viele Index-Eintraege in dieser Sitzung hereinkamen.</summary>
+    private int _aufgenommen;
 
     /// <summary>Wann die Gegenstelle zuletzt etwas zu tun gab.</summary>
     private DateTime _letzteMeldung = DateTime.MinValue;
