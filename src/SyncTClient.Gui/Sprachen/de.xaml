@@ -63,6 +63,10 @@
   <s:String x:Key="S.Device.OwnIdHint">Diese Kennung auf der Gegenstelle als Gerät eintragen und die gewünschten Ordner für dieses Gerät freigeben. Die Shares erscheinen danach in der Übersicht als angeboten.</s:String>
   <s:String x:Key="S.Device.OwnId">Eigene Device-ID</s:String>
   <s:String x:Key="S.Device.Copy">In die Zwischenablage</s:String>
+  <s:String x:Key="S.Device.DataDir">Datenverzeichnis und Indizes</s:String>
+  <s:String x:Key="S.Device.DbSummary">{0} Datenbanken, {1} zusammen. Je Freigabe eine, benannt nach der Ordnerkennung; mitgezählt sind die Begleitdateien von SQLite.</s:String>
+  <s:String x:Key="S.Device.NoData">Noch keine Datenbanken angelegt.</s:String>
+  <s:String x:Key="S.Device.NoShare">— keine Freigabe dazu —</s:String>
   <s:String x:Key="S.Device.ConfigFile">Konfigurationsdatei</s:String>
   <s:String x:Key="S.Device.StartGroup">Start und Fenster</s:String>
   <s:String x:Key="S.Device.Autostart">Mit Windows starten</s:String>
