@@ -1521,6 +1521,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Client laeuft, beantwortet er Anfragen selbst.
             ThumbnailService.EnsureStarted(_log);
 
+            // Die Vorschau-Kette laeuft ueber statische Einstiegspunkte und
+            // kennt kein Protokoll. Hier bekommt sie eines.
+            Melden ??= _log;
+
             lock (Laufende)
             {
                 if (!Laufende.Contains(this)) Laufende.Add(this);
@@ -1809,8 +1813,24 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             if (share.Owns(localFilePath) && share.Produce(localFilePath))
                 return true;
 
+        // Keine zustaendige Freigabe. Das ist der Fall, in dem die Anfrage
+        // ueberhaupt ankam und trotzdem nichts geschieht -- ohne diese Zeile
+        // sieht er genauso aus wie eine Anfrage, die nie gestellt wurde.
+        Melden?.Invoke($"Vorschau fuer \"{localFilePath}\": keine zustaendige Freigabe " +
+                       $"unter {shares.Length} laufenden.");
+
         return false;
     }
+
+    /// <summary>
+    /// Wohin die Vorschau-Kette meldet.
+    /// </summary>
+    /// <remarks>
+    /// Die Kette laeuft ueber statische Einstiegspunkte, weil die
+    /// Shell-Erweiterung keine Freigabe kennt. Ein Protokoll je Freigabe gibt
+    /// es dort nicht; ohne diesen Weg bleibt jede Absage stumm.
+    /// </remarks>
+    public static Action<string>? Melden { get; set; }
 
     /// <summary>Die Freigabe, zu der dieser Pfad gehoert.</summary>
     public static ShareHost? Owning(string localPath)
@@ -1979,11 +1999,36 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private bool Produce(string localFilePath)
     {
-        if (_thumbnails is null || _index is null || _connections.IsEmpty) return false;
-        if (!_app.GenerateThumbnails) return false;
-        if (_thumbnails.KnownWithout(localFilePath)) return false;
+        // Jede Absage nennt ihren Grund. Eine Vorschau, die ausbleibt, sieht
+        // sonst immer gleich aus -- gleich ob niemand gefragt hat, die
+        // Verbindung fehlt, der Schalter aus ist oder die Datei schon einmal
+        // ohne eingebettetes Bild angesehen wurde.
+        if (_thumbnails is null || _index is null)
+            return Nein(localFilePath, "der Ordner ist noch nicht bereit");
+
+        if (_connections.IsEmpty)
+            return Nein(localFilePath, "keine Verbindung zu einer Gegenstelle");
+
+        if (!_app.GenerateThumbnails)
+            return Nein(localFilePath, "Vorschaubilder sind abgeschaltet");
+
+        if (_thumbnails.KnownWithout(localFilePath))
+            return Nein(localFilePath, "die Datei traegt kein eingebettetes Bild");
 
         return Await(FetchThumbnailAsync(RelativeOf(localFilePath), CancellationToken.None));
+    }
+
+    /// <summary>Schreibt den Grund einer Absage und liefert <c>false</c>.</summary>
+    /// <remarks>
+    /// Je Datei einmal. Der Explorer fragt nach derselben Datei mehrfach, und
+    /// ein Grund, der sich nicht aendert, gehoert einmal ins Protokoll.
+    /// </remarks>
+    private bool Nein(string localFilePath, string grund)
+    {
+        if (_warned.TryAdd("vorschau:" + localFilePath, 0))
+            _log($"[{FolderId}] keine Vorschau fuer \"{Path.GetFileName(localFilePath)}\": {grund}.");
+
+        return false;
     }
 
     /// <summary>
