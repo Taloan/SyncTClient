@@ -1082,7 +1082,7 @@ public partial class MainWindow : Window
     /// was danach fehlt, gilt als geloescht und wird an die Gegenstellen
     /// weitergegeben. Deshalb geschieht es nur auf ausdrueckliche Anweisung.
     /// </remarks>
-    private void OnFixMarker(object sender, RoutedEventArgs e)
+    private async void OnFixMarker(object sender, RoutedEventArgs e)
     {
         if (_row?.Share is not { } share) return;
 
@@ -1095,9 +1095,32 @@ public partial class MainWindow : Window
 
         if (antwort != MessageBoxResult.Yes) return;
 
+        var name = _row.Name;
+
         share.MarkierungHerstellen();
-        Status(App.S("M.MarkerRestored", _row.Name));
-        UpdateButtons();
+        Status(App.S("M.MarkerRestored", name));
+
+        // Und gleich neu anlaufen lassen.
+        //
+        // Die Pruefung findet beim Anlauf statt; die Freigabe stuende sonst
+        // weiter auf "Fehler", obwohl der Grund behoben ist, und muesste ueber
+        // einen Neustart des Programms wieder in Gang gebracht werden. Ein
+        // Handgriff, der die Ursache beseitigt und die Wirkung stehenlaesst,
+        // ist ein halber.
+        try
+        {
+            await share.CommitAsync(_cts.Token);
+        }
+        catch (Exception)
+        {
+            // Scheitert es erneut, steht der Grund bereits im Protokoll und
+            // an der Zeile. Ein zweites Mal dasselbe zu melden hilft nicht.
+        }
+        finally
+        {
+            RebuildRows();
+            UpdateButtons();
+        }
     }
 
     private void OnRescan(object sender, RoutedEventArgs e)
