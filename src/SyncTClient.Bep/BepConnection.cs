@@ -167,12 +167,27 @@ public sealed class BepConnection : IAsyncDisposable
                 throw new InvalidDataException(
                     $"Die Gegenstelle hat \"{tls.NegotiatedApplicationProtocol}\" statt \"{BepProtocolName}\" ausgehandelt.");
 
+            // Erst der Hello-Austausch, dann das Zertifikat -- in dieser
+            // Reihenfolge, und das ist kein Geschmack.
+            //
+            // In TLS 1.2 schickt der Client sein Zertifikat mitten im
+            // Handschlag; es liegt vor, sobald AuthenticateAsServerAsync
+            // zurueckkehrt. In TLS 1.3 sendet er es erst in seinem zweiten
+            // Flug, und den verarbeitet der Server nicht mehr im Handschlag,
+            // sondern beim ersten Lesen. Vorher ist RemoteCertificate null,
+            // und die Verbindung scheiterte an einem Zertifikat, das
+            // unterwegs war.
+            //
+            // Das eigene Hello geht damit an eine Gegenstelle, deren Kennung
+            // noch nicht feststeht. Es traegt nur Geraetenamen und
+            // Programmversion; Syncthing haelt es genauso, denn wer sich
+            // vorstellt, muss zuerst etwas sagen.
+            var peerHello = await HelloExchange
+                .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
+
             var remoteCert = tls.RemoteCertificate
                 ?? throw new InvalidDataException("Die Gegenstelle hat kein Zertifikat geliefert.");
             var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
-
-            var peerHello = await HelloExchange
-                .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
 
             return new BepConnection(tcp, tls, peerId, peerHello);
         }
