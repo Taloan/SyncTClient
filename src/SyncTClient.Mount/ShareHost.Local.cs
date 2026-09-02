@@ -623,6 +623,42 @@ public sealed partial class ShareHost
     /// <summary>So viele offene Namen werden gemerkt.</summary>
     private const int ListenGrenze = 2000;
 
+    /// <summary>So viele Namen holt eine Seite aus dem Index.</summary>
+    private const int Seitengroesse = 2000;
+
+    /// <summary>
+    /// Liest den Index in Seiten und gibt zwischen ihnen die Sperre frei.
+    /// </summary>
+    /// <remarks>
+    /// Der Aufrufer bekommt eine einzige Folge und merkt davon nichts. Was
+    /// er nicht bekommt, ist eine Momentaufnahme: zwischen zwei Seiten kann
+    /// sich der Index aendern. Fuer eine Zaehlung, die im naechsten Durchgang
+    /// ohnehin neu gemacht wird, ist das kein Verlust -- fuer die Bedienbarkeit
+    /// des Programms ist es der Unterschied.
+    /// </remarks>
+    private IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> Seitenweise()
+    {
+        var nach = "";
+
+        while (true)
+        {
+            IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> seite;
+            lock (_indexGate)
+            {
+                if (_index is null) yield break;
+                seite = _index.EnumerateLight(nach, Seitengroesse);
+            }
+
+            if (seite.Count == 0) yield break;
+            nach = seite[^1].Name;
+
+            foreach (var eintrag in seite) yield return eintrag;
+
+            // Zwischen zwei Seiten aus der Hand geben.
+            Thread.Sleep(0);
+        }
+    }
+
     /// <summary>Platzhalter, die bei "vollstaendig lokal" noch zu fuellen sind.</summary>
     private List<string> _ohneInhalt = [];
 
@@ -665,13 +701,19 @@ public sealed partial class ShareHost
 
         try
         {
-            lock (_indexGate)
             {
                 if (_index is null) return;
 
                 var bekannt = new HashSet<string>(StringComparer.Ordinal);
 
-                foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in _index.EnumerateLight())
+                // Seitenweise, und die Sperre nur je Seite.
+                //
+                // Vorher lag sie auf dem ganzen Durchgang: bei hunderttausend
+                // Dateien Sekunden am Stueck, in denen niemand sonst an die
+                // Datenbank kam -- auch der Schreiber nicht, der gerade den
+                // Index aufnimmt. Und die vollstaendige Liste war ein
+                // einziger grosser Brocken im Speicher.
+                foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in Seitenweise())
                 {
                     if (isDirectory) continue;
 
@@ -784,13 +826,17 @@ public sealed partial class ShareHost
                     // Angekuendigt heisst: genau diese Version ist heraus.
                     // Groesse und Zeit muessen dazu passen, sonst steht die
                     // Aenderung noch aus.
-                    if (_index.TryGetLocal(name, out var eigene)
-                        && !eigene.Deleted
-                        && eigene.Size == eintrag.Size
-                        && eigene.ModifiedS == eintrag.ModifiedS)
+                    bool angekuendigt;
+                    lock (_indexGate)
                     {
-                        continue;
+                        angekuendigt = _index is not null
+                                       && _index.TryGetLocal(name, out var eigene)
+                                       && !eigene.Deleted
+                                       && eigene.Size == eintrag.Size
+                                       && eigene.ModifiedS == eintrag.ModifiedS;
                     }
+
+                    if (angekuendigt) continue;
 
                     // Und zur Bewertung vormerken. Der Durchgang ueber den
                     // Ordner uebergeht Platzhalter -- sie halten keinen Inhalt,

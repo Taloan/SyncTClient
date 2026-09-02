@@ -556,6 +556,26 @@ public sealed class PersistentFolderIndex : IDisposable
     /// Datenmenge aus.
     /// </summary>
     public IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> EnumerateLight()
+        => EnumerateLight("", int.MaxValue);
+
+    /// <summary>
+    /// Dieselben Angaben, aber seitenweise.
+    /// </summary>
+    /// <remarks>
+    /// Bei hunderttausend Dateien ist die vollstaendige Liste ein einziger
+    /// grosser Brocken: die Sperre liegt darauf, solange sie entsteht, und
+    /// der Speicher dafuer wird am Stueck angefordert und wieder freigegeben.
+    /// Beides trifft alle anderen -- die Datenbank ist so lange belegt, und
+    /// die Speicherbereinigung haelt fuer einen solchen Brocken das ganze
+    /// Programm an.
+    ///
+    /// Weitergeblaettert wird ueber den Namen und nicht ueber OFFSET: OFFSET
+    /// zaehlt bei jeder Seite von vorn und wird gegen Ende quadratisch teuer.
+    /// </remarks>
+    /// <param name="nach">Der letzte Name der vorigen Seite, oder leer.</param>
+    /// <param name="hoechstens">Wie viele Namen die Seite umfasst.</param>
+    public IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)>
+        EnumerateLight(string nach, int hoechstens)
     {
         using var gate = _gate.EnterScope();
         var eintraege = new List<(string, long, long, bool, bool)>();
@@ -564,10 +584,14 @@ public sealed class PersistentFolderIndex : IDisposable
         // Inhalt hat er, sobald ihn eine von ihnen fuehrt.
         command.CommandText = """
             SELECT name, MAX(size), MAX(modified), MAX(kind), MAX(has_blocks) FROM files
-            WHERE deleted = 0 AND name <> ''
+            WHERE deleted = 0 AND name <> '' AND name > $nach
             GROUP BY name
             ORDER BY name
+            LIMIT $hoechstens
             """;
+
+        command.Parameters.AddWithValue("$nach", nach);
+        command.Parameters.AddWithValue("$hoechstens", hoechstens);
 
         using var reader = command.ExecuteReader();
         while (reader.Read())
