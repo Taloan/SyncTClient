@@ -17,6 +17,13 @@ synct-home/
 *.pfx
 *.key
 
+# Laufzeitdaten dieses Rechners. Sie beschreiben, wo hier was liegt und mit
+# wem gesprochen wird -- eine Aussage ueber ein Geraet, nicht ueber das
+# Programm. Die Sicherungen daneben enthalten dasselbe, nur aelter.
+fehler.log
+synct.json.bak
+synct-sicherungen/
+
 # Geholte Testdateien
 *.fetched
 bild-p*.jpg
