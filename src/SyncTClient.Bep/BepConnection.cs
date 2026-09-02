@@ -180,23 +180,10 @@ public sealed class BepConnection : IAsyncDisposable
                 ClientCertificateRequired = true,
                 ApplicationProtocols = [new SslApplicationProtocol(BepProtocolName)],
 
-                // Nur TLS 1.2 auf diesem Weg, und das ist keine Bequemlichkeit.
-                //
-                // Unter Windows verlangt SChannel das Zertifikat der
-                // Gegenseite in TLS 1.3 nicht waehrend des Handschlags.
-                // Vorgesehen ist dafuer die nachgelagerte Anforderung
-                // (NegotiateClientCertificateAsync); die kennt aber die
-                // TLS-Bibliothek von Go nicht, auf der Syncthing steht. In
-                // dieser Kombination kaeme nie ein Zertifikat, und ohne
-                // Zertifikat gibt es keine Geraete-ID.
-                //
-                // Sichtbar war es an einer einzigen Angabe: die Aushandlung
-                // blieb einseitig, obwohl ClientCertificateRequired gesetzt
-                // war. Hello und ALPN waren da laengst durch.
-                //
-                // Der eigene Weg nach draussen bleibt bei 1.3: dort sind wir
-                // der Client und schicken unser Zertifikat selbst.
-                EnabledSslProtocols = SslProtocols.Tls12,
+                // Syncthing 2 setzt MinVersion auf TLS 1.3. Wer hier 1.2
+                // erzwingt, bekommt keine Verbindung, sondern eine Absage
+                // ohne brauchbare Begruendung.
+                EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
                 CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
                 RemoteCertificateValidationCallback = (_, _, _, _) => true
             }, ct).ConfigureAwait(false);
@@ -223,8 +210,23 @@ public sealed class BepConnection : IAsyncDisposable
             var peerHello = await HelloExchange
                 .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
 
+            // Unter Windows bleibt das Zertifikat in TLS 1.3 aus, und daran
+            // laesst sich hier nichts aendern.
+            //
+            // SChannel gibt das Zertifikat der Gegenseite nicht heraus, auch
+            // nicht nach dem ersten Lesen, obwohl ClientCertificateRequired
+            // gesetzt ist. Vorgesehen waere die Nachforderung nach dem
+            // Handschlag (NegotiateClientCertificateAsync); die kennt die
+            // TLS-Bibliothek von Go nicht, auf der Syncthing steht. Und auf
+            // TLS 1.2 auszuweichen scheidet aus: Syncthing 2 spricht es nicht.
+            //
+            // Ohne Zertifikat gibt es keine Geraete-ID und damit keine
+            // brauchbare Verbindung. Der Lauscher faengt diese Ausnahme
+            // gesondert ab und baut die Verbindung in der Gegenrichtung auf,
+            // denn ausgehend sind wir der Client und schicken unser
+            // Zertifikat selbst.
             var remoteCert = tls.RemoteCertificate
-                ?? throw new InvalidDataException(
+                ?? throw new MissingPeerCertificateException(
                     "Die Gegenstelle hat kein Zertifikat geliefert. " + Handschlag(tls, peerHello));
 
             var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
