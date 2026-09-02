@@ -183,6 +183,12 @@ public partial class MainWindow : Window
             HomeDirectory = HomeDirectory,
             DeviceName = _config.DeviceName,
             MinimumCopies = _config.MinimumCopies,
+
+            // Ohne diese Zeile liest _runtime den Vorgabewert, und der
+            // programmweite Schalter waere seinerseits wirkungslos -- genau
+            // der Zustand, den das Entfernen der zweiten Einstellung beenden
+            // sollte.
+            GenerateThumbnails = _config.GenerateThumbnails,
             SharesRoot = _config.SharesRoot,
             CacheMaxBytes = _config.CacheMaxBytes,
             MinimumFreeBytes = _config.MinimumFreeBytes,
