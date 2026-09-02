@@ -233,14 +233,24 @@ public sealed class CloudFilterMount : IDisposable
     /// Eine Datei, die sich nicht oeffnen laesst, wird uebergangen. Das
     /// Abmelden der Wurzel darf daran nicht scheitern.
     /// </remarks>
+    /// <summary>
+    /// Loest die Platzhalter auf und meldet, wieviele stehenblieben.
+    /// </summary>
+    /// <remarks>
+    /// Der Rueckgabewert ist die Zahl der Platzhalter, die sich nicht aufloesen
+    /// liessen. Sie entscheidet darueber, ob die Wurzel abgemeldet werden darf:
+    /// ein Platzhalter ohne angemeldete Wurzel ist fuer Windows dauerhaft
+    /// unbrauchbar.
+    /// </remarks>
     public int RevertPlaceholders()
     {
-        var (_, aufgeloest, fehler) = RevertPlaceholdersIn(_rootPath);
+        var (_, aufgeloest, entfernt, offen, fehler) = RevertPlaceholdersIn(_rootPath);
 
         if (aufgeloest > 0) _log?.Invoke($"{aufgeloest} Platzhalter aufgeloest.");
+        if (entfernt > 0) _log?.Invoke($"{entfernt} leere Platzhalter entfernt (ihr Inhalt lag nicht hier).");
         if (fehler is not null) _log?.Invoke($"Platzhalter aufloesen: {fehler}");
 
-        return aufgeloest;
+        return offen;
     }
 
     /// <summary>
@@ -251,9 +261,10 @@ public sealed class CloudFilterMount : IDisposable
     /// dieses Aufloesen geloest wurde. Ein solcher Ordner laesst sich sonst
     /// nicht einmal von Hand entfernen.
     /// </remarks>
-    public static unsafe (int Geprueft, int Aufgeloest, string? Fehler) RevertPlaceholdersIn(string root)
+    public static unsafe (int Geprueft, int Aufgeloest, int Entfernt, int Offen, string? Fehler)
+        RevertPlaceholdersIn(string root)
     {
-        if (!Directory.Exists(root)) return (0, 0, "Der Ordner besteht nicht.");
+        if (!Directory.Exists(root)) return (0, 0, 0, 0, "Der Ordner besteht nicht.");
 
         var options = new EnumerationOptions
         {
@@ -264,6 +275,8 @@ public sealed class CloudFilterMount : IDisposable
 
         var geprueft = 0;
         var aufgeloest = 0;
+        var entfernt = 0;
+        var offen = 0;
         string? fehler = null;
 
         // Von unten nach oben, und der Ordner selbst zuletzt.
@@ -325,17 +338,63 @@ public sealed class CloudFilterMount : IDisposable
             if (handle.IsInvalid)
             {
                 fehler ??= $"\"{info.Name}\": 0x{(uint)Marshal.GetLastWin32Error():X8}";
+                if (!Entfernen(info, attribute)) offen++; else entfernt++;
                 continue;
             }
 
             var result = PInvoke.CfRevertPlaceholder(
                 handle, CF_REVERT_FLAGS.CF_REVERT_FLAG_NONE, null);
 
-            if (result.Succeeded) aufgeloest++;
-            else fehler ??= $"\"{info.Name}\": 0x{(uint)result.Value:X8}";
+            if (result.Succeeded)
+            {
+                aufgeloest++;
+                continue;
+            }
+
+            fehler ??= $"\"{info.Name}\": 0x{(uint)result.Value:X8}";
+
+            // Ein Platzhalter ohne Inhalt laesst sich nicht aufloesen -- es
+            // gibt nichts, worin er aufgehen koennte. Stehenlassen darf man
+            // ihn aber auch nicht: sobald die Wurzel abgemeldet ist, findet
+            // Windows den Anbieter nicht mehr und weist jeden Zugriff mit
+            // "Die Clouddatei-Metadaten sind beschaedigt und nicht lesbar"
+            // ab -- Lesen, Loeschen und Umbenennen gleichermassen, auch
+            // ueber fsutil und auch mit FILE_FLAG_OPEN_NO_RECALL. Aus dem
+            // Benutzermodus ist ein solcher Zustand nicht mehr zu heilen.
+            //
+            // Entfernt wird deshalb hier, solange es noch geht. Verloren
+            // geht dabei nichts: der Inhalt lag nie auf dieser Platte, er
+            // liegt auf der Gegenstelle.
+            handle.Dispose();
+            if (!Entfernen(info, attribute)) offen++; else entfernt++;
         }
 
-        return (geprueft, aufgeloest, fehler);
+        return (geprueft, aufgeloest, entfernt, offen, fehler);
+    }
+
+    /// <summary>
+    /// Entfernt einen Platzhalter, dessen Inhalt nicht hier liegt.
+    /// </summary>
+    /// <remarks>
+    /// Nur bei gesetztem Offline-Merkmal, und nur fuer Dateien. Es besagt,
+    /// dass auf dieser Platte keine Bytes dazu liegen. Alles andere bleibt
+    /// stehen -- eine Datei mit Inhalt zu entfernen, weil sich ihre Huelle
+    /// nicht aufloesen liess, waere der falsche Handel.
+    /// </remarks>
+    private static bool Entfernen(System.IO.FileSystemInfo info, uint attribute)
+    {
+        if (info is not FileInfo) return false;
+        if ((attribute & FileAttributeOffline) == 0) return false;
+
+        try
+        {
+            File.Delete(info.FullName);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     public void ProjectPlaceholders(Action<int, int>? progress = null)
