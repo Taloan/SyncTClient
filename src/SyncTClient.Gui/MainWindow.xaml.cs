@@ -2231,10 +2231,13 @@ public partial class MainWindow : Window
         _menuRebuild.IsEnabled = _row is { Accepted: true };
         _menuResync.IsEnabled = _row is { Accepted: true } && connected;
 
-        // Nur anbieten, solange sie tatsaechlich fehlt. Ein Eintrag, der
-        // immer da ist und meistens nichts tut, laedt zum Draufklicken ein --
-        // und hier hat das Folgen.
-        _menuMarker.IsEnabled = _row?.Share is { MarkierungFehlt: true };
+        // Nur bei genau diesem Fehler, und dann auch nur sichtbar.
+        //
+        // Nicht "die Markierung fehlt" allein: das trifft auch auf eine
+        // Freigabe zu, die aus einem anderen Grund noch nicht angelaufen ist.
+        // Ein Eintrag, der oft dasteht und selten gemeint ist, laedt zum
+        // Draufklicken ein -- und hier hat das Folgen.
+        _menuMarker.IsEnabled = _row?.Share is { State: ShareState.Fehler, MarkierungFehlt: true };
         _menuMarker.Visibility = _menuMarker.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
         _menuSettings.IsEnabled = _row is { Configured: true };
         _menuOpen.IsEnabled = _row is { Configured: true };
