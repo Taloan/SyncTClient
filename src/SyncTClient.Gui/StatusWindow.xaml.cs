@@ -95,6 +95,16 @@ public partial class StatusWindow : Window
 
         var bereich = SystemParameters.WorkArea;
 
+        // Die Obergrenze ergibt sich aus dem Bildschirm, nicht aus einer
+        // einmal geschätzten Zahl.
+        //
+        // Feste 620 Punkte reichten für vier Freigaben. Bei sieben stand die
+        // Liste oben und drängte die zuletzt übertragenen Dateien nach unten
+        // aus dem Fenster — dabei sind sie der Grund, warum jemand auf das
+        // Symbol klickt. Jetzt wächst das Fenster mit, bis der
+        // Arbeitsbereich es nicht mehr hergibt.
+        MaxHeight = Math.Max(320, bereich.Height - 24);
+
         // Erst messen, dann setzen. Die Höhe ergibt sich aus dem Inhalt und
         // steht vor dem ersten Anzeigen noch nicht fest.
         Show();

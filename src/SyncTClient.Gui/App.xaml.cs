@@ -77,9 +77,20 @@ public partial class App : Application
 
         if (!alleine)
         {
-            MessageBox.Show(
-                S("M.AlreadyRunning"), "SyncTClient",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            // Der laufenden Instanz sagen, dass jemand sie sucht, und still
+            // gehen. Ein zweites Fenster gibt es nicht zu zeigen, und eine
+            // Meldung, die nur sagt "laeuft schon", beantwortet nicht die
+            // Frage, die zum Doppelklick gefuehrt hat: wo ist es denn?
+            //
+            // Antwortet niemand, ist die Instanz zwar da, aber nicht
+            // ansprechbar -- sie startet gerade, oder sie haengt. Dann bleibt
+            // die Meldung, denn kommentarlos zu verschwinden waere schlimmer.
+            if (Mount.CommandService.Send("SHOW", []) is null)
+            {
+                MessageBox.Show(
+                    S("M.AlreadyRunning"), "SyncTClient",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
 
             Shutdown();
             return;
