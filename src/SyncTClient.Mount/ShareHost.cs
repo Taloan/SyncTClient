@@ -896,7 +896,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // fuenfundvierzigtausend Dateien sind das zwoelf bis siebzehn
             // Sekunden, in denen das Fenster nichts zeichnet und auf keinen
             // Klick antwortet.
-            await Task.Run(async () =>
+            await ImHintergrund(async () =>
             {
                 PurgeIgnored();
                 await ProjectAsync().ConfigureAwait(false);
@@ -1380,7 +1380,51 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Ordner und das Rechnen der Blocklisten. Bei sechzig Gigabyte sind
         // das anderthalb Minuten, in denen das Fenster nichts zeichnet und auf
         // keinen Klick antwortet -- es sieht aus, als sei es abgestuerzt.
-        await Task.Run(AufnehmenAsync).ConfigureAwait(false);
+        await ImHintergrund(AufnehmenAsync).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Fuehrt eine lange Arbeit auf einem eigenen, nachrangigen Faden aus.
+    /// </summary>
+    /// <remarks>
+    /// Task.Run nimmt einen Faden aus dem Vorrat, und der laeuft mit der
+    /// gewoehnlichen Rangstufe -- derselben, die auch das Fenster hat. Wer
+    /// zwanzig Gigabyte liest und hasht, gewinnt damit gegen jeden Klick,
+    /// den das Betriebssystem gerade zustellen will.
+    ///
+    /// Ein eigener Faden unterhalb dieser Stufe kehrt das um: die Arbeit
+    /// laeuft, solange niemand sonst etwas will, und tritt zurueck, sobald
+    /// doch. Sie dauert dadurch nicht laenger -- ausser jemand bedient das
+    /// Programm, und dann ist das genau richtig.
+    ///
+    /// Der Vorrat taugt dafuer nicht: seine Faeden gehoeren allen, und ihre
+    /// Rangstufe zu aendern hiesse, sie auch fuer den naechsten zu aendern,
+    /// der sie bekommt.
+    /// </remarks>
+    private static Task ImHintergrund(Func<Task> arbeit)
+    {
+        var fertig = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var faden = new Thread(() =>
+        {
+            try
+            {
+                arbeit().GetAwaiter().GetResult();
+                fertig.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                fertig.TrySetException(ex);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "Aufnehmen",
+            Priority = ThreadPriority.BelowNormal
+        };
+
+        faden.Start();
+        return fertig.Task;
     }
 
     private async Task AufnehmenAsync()
