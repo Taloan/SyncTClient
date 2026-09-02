@@ -569,19 +569,26 @@ public sealed partial class ShareHost
     /// den Ordner oeffnet, will seine Dateien sehen und nicht den Keller, in
     /// dem die ersetzten Fassungen liegen.
     ///
-    /// Gesetzt wird nur beim Anlegen. Wer das Kaestchen spaeter selbst
-    /// entfernt, hat es so gewollt; die Vorgabe ein zweites Mal
-    /// durchzusetzen waere eine Bevormundung.
+    /// Gesetzt wird beim Anlegen und beim Start -- nicht laufend. Ein
+    /// Ordner, der vor dieser Regel entstanden ist, bekommt das Attribut
+    /// sonst nie, und genau das war der haeufige Fall.
+    ///
+    /// Wer es zwischen zwei Starts entfernt, behaelt seine Entscheidung bis
+    /// zum naechsten Start. Sie bei jedem Durchgang zu ueberschreiben waere
+    /// eine Bevormundung; sie einmal je Sitzung zu setzen ist die Vorgabe.
     /// </remarks>
-    private void VersteckeWurzel()
+    internal void VersteckeWurzel()
     {
         var wurzel = LocalPathOf(VersionsFolder);
-        if (Directory.Exists(wurzel)) return;
 
         try
         {
-            var info = Directory.CreateDirectory(wurzel);
-            info.Attributes |= FileAttributes.Hidden;
+            var info = Directory.Exists(wurzel)
+                ? new DirectoryInfo(wurzel)
+                : Directory.CreateDirectory(wurzel);
+
+            if ((info.Attributes & FileAttributes.Hidden) == 0)
+                info.Attributes |= FileAttributes.Hidden;
         }
         catch (Exception ex)
         {
