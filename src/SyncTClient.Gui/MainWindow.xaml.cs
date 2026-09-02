@@ -156,6 +156,32 @@ public partial class MainWindow : Window
     /// </remarks>
     private AppConfig _runtime = new();
 
+    /// <summary>Ein einziger Vorrat, nicht je Abfrage ein neuer.</summary>
+    /// <remarks>
+    /// <see cref="ThumbnailStore.Usage"/> gibt den zuletzt gezaehlten Stand
+    /// zurueck und stoesst die Zaehlung nur an -- ein Durchgang ueber
+    /// tausende Dateien gehoert nicht auf den Faden, der das Fenster
+    /// zeichnet. Ein bei jeder Abfrage neu angelegter Vorrat hat nie gezaehlt,
+    /// meldet deshalb immer null und wirft das Ergebnis seiner eigenen
+    /// Zaehlung sofort wieder fort.
+    /// </remarks>
+    private ThumbnailStore? _vorschau;
+
+    private string _vorschauPfad = "";
+
+    private ThumbnailStore Vorschau()
+    {
+        var pfad = _config.ThumbnailDirectory;
+
+        if (_vorschau is null || !_vorschauPfad.Equals(pfad, StringComparison.OrdinalIgnoreCase))
+        {
+            _vorschau = new ThumbnailStore(pfad);
+            _vorschauPfad = pfad;
+        }
+
+        return _vorschau;
+    }
+
     // ------------------------------------------------------------ Laden
 
     private void Load()
@@ -1352,7 +1378,7 @@ public partial class MainWindow : Window
     private string CacheUsage()
     {
         var shares = _rows.Select(r => r.Share).OfType<ShareHost>().ToList();
-        var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Usage();
+        var thumbs = Vorschau().Usage();
         var preview = App.S("M.Previews", Format.Count(thumbs.Count), Format.Bytes(thumbs.Bytes));
 
         if (shares.Count == 0)
@@ -1385,7 +1411,7 @@ public partial class MainWindow : Window
 
     private Task<string> ClearThumbnailsAsync()
     {
-        var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Clear();
+        var thumbs = Vorschau().Clear();
         Refreshed();
 
         return Task.FromResult(thumbs.Count == 0
@@ -1396,7 +1422,7 @@ public partial class MainWindow : Window
     private async Task<string> ClearAllAsync()
     {
         var (files, bytes) = await _runtime.Cache.ClearAsync();
-        var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Clear();
+        var thumbs = Vorschau().Clear();
         Refreshed();
 
         if (files == 0 && thumbs.Count == 0)
@@ -1431,7 +1457,7 @@ public partial class MainWindow : Window
                 MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
             return;
 
-        var thumbs = new ThumbnailStore(_config.ThumbnailDirectory).Clear();
+        var thumbs = Vorschau().Clear();
         Refreshed();
 
         Status(thumbs.Count == 0
@@ -2203,7 +2229,7 @@ public partial class MainWindow : Window
             _config, Path.GetDirectoryName(_configPath)!,
             () => _runtime.Cache.VolumesWithCandidates(),
             ReleaseVolumeAsync,
-            () => new ThumbnailStore(_config.ThumbnailDirectory).Usage(),
+            () => Vorschau().Usage(),
             ClearThumbnailsAsync)
         {
             Owner = this

@@ -141,6 +141,11 @@ public sealed class ThumbnailStore(string directory)
     /// </summary>
     public (int Count, long Bytes) Clear()
     {
+        // Der gezaehlte Stand gilt nicht mehr. Ohne dies zeigte die Anzeige
+        // bis zur naechsten Zaehlung weiter die alte Menge.
+        _bestand = (0, 0);
+        _gezaehlt = DateTime.MinValue;
+
         if (!System.IO.Directory.Exists(Directory)) return (0, 0);
 
         var count = 0;
