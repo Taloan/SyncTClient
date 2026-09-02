@@ -523,11 +523,14 @@ public sealed class BepConnection : IAsyncDisposable
 
     /// <summary>Ab dieser Dauer wird ein Sendevorgang auffaellig.</summary>
     /// <remarks>
-    /// Eine Nachricht auf eine bestehende Leitung zu schreiben dauert
+    /// Eine Nachricht ueber eine bestehende Verbindung zu schicken dauert
     /// Millisekunden. Dauert es Sekunden, hat das genau zwei moegliche
-    /// Gruende, und die Meldung trennt sie: entweder war die Sperre besetzt
-    /// -- ein anderer Sendevorgang lief noch --, oder die Leitung selbst hat
-    /// gewartet, weil die Gegenstelle nicht liest.
+    /// Gruende: entweder lief gerade etwas anderes ueber dieselbe Verbindung
+    /// -- es darf immer nur einer schreiben --, oder die Gegenstelle nimmt
+    /// die Daten nicht ab.
+    ///
+    /// Die Meldung nennt den Grund, der ueberwiegt, und nicht zwei Zahlen,
+    /// aus denen der Leser ihn selbst herleiten muss.
     /// </remarks>
     private static readonly TimeSpan SendeFrist = TimeSpan.FromSeconds(2);
 
@@ -545,10 +548,19 @@ public sealed class BepConnection : IAsyncDisposable
             MessageSent?.Invoke(type, message.CalculateSize());
 
             var gesamt = Environment.TickCount64 - begonnen;
+            var uebertragen = gesamt - anDerSperre;
+
+            // Zwei Ursachen, und der Satz nennt die, die ueberwiegt. Wer
+            // beide Zahlen nebeneinander stellt, zwingt jeden Leser, sich
+            // die Bedeutung selbst zusammenzureimen.
             if (gesamt > SendeFrist.TotalMilliseconds)
-                Log?.Invoke($"  {type} brauchte {gesamt} ms zum Senden: " +
-                            $"{anDerSperre} ms Warten auf die Sperre, " +
-                            $"{gesamt - anDerSperre} ms auf der Leitung.");
+            {
+                Log?.Invoke(anDerSperre > uebertragen
+                    ? $"  {type} musste {anDerSperre} ms warten, weil ueber die Verbindung " +
+                      $"gerade etwas anderes lief. Das Senden selbst dauerte {uebertragen} ms."
+                    : $"  {type} brauchte {uebertragen} ms zum Senden -- die Gegenstelle " +
+                      $"nimmt die Daten nur langsam ab.");
+            }
         }
         finally
         {
