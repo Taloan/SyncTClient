@@ -526,6 +526,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private readonly System.Collections.Concurrent.BlockingCollection<(string Device, IReadOnlyList<BepFileInfo> Files)>
         _indexSchlange = new(boundedCapacity: 4);
 
+    /// <summary>So viele Eintraege gehen in einem Zug in die Datenbank.</summary>
+    /// <remarks>
+    /// Die Gegenstelle schickt tausend je Nachricht. So viele in einer
+    /// Transaktion sind fuer die Datenbank die guenstigste Form -- und fuer
+    /// alles andere die unguenstigste, denn solange sie laeuft, ist die
+    /// Datenbank belegt.
+    /// </remarks>
+    private const int Haeppchen = 200;
+
     private Thread? _indexSchreiber;
     private readonly object _schreiberGate = new();
 
@@ -570,15 +579,31 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             {
                 try
                 {
-                    IReadOnlyList<string> changed;
-                    lock (_indexGate) changed = _index!.Absorb(device, stapel);
+                    // In kleinen Haeppchen, nicht in einem Rutsch.
+                    //
+                    // Die Gegenstelle schickt tausend Eintraege je Nachricht.
+                    // Tausend Zeilen in einer Sperre und einer Transaktion
+                    // heisst: solange die laeuft, kommt niemand an die
+                    // Datenbank -- nicht der Durchgang, nicht die Anzeige.
+                    // Zweihundert dauern ein Fuenftel so lang, und dazwischen
+                    // ist die Sperre offen.
+                    for (var i = 0; i < stapel.Count; i += Haeppchen)
+                    {
+                        var teil = stapel.Skip(i).Take(Haeppchen).ToList();
+
+                        IReadOnlyList<string> changed;
+                        lock (_indexGate) changed = _index!.Absorb(device, teil);
+
+                        if (QueueIncoming(changed) > 0) PeerBusy();
+
+                        // Zwischen zwei Haeppchen aus der Hand geben.
+                        Thread.Sleep(1);
+                    }
 
                     _indexArrived.Release();
 
                     if (Phase == SyncPhase.Index)
                         SetPhase(SyncPhase.Index, Interlocked.Add(ref _aufgenommen, stapel.Count));
-
-                    if (QueueIncoming(changed) > 0) PeerBusy();
                 }
                 catch (Exception ex)
                 {
