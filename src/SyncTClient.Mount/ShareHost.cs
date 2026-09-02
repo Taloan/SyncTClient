@@ -1691,6 +1691,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     public IReadOnlyList<VirtualEntry> Enumerate()
         => _index!.EnumerateLight()
+            // Auch hier, nicht nur beim Aufnehmen in den Index. Ueber diesen
+            // Weg entstehen die Platzhalter, und er ging bisher an der
+            // Pruefung vorbei: eine ".stfolder" der Gegenstelle wurde als
+            // Verzeichnis angelegt und ihre Markierungsdatei geholt --
+            // Verwaltung eines fremden Geraets, hier nachgebaut.
+            .Where(e => !IsHousekeeping(e.Name))
             .Where(e => !_config.IsIgnored(e.Name))
             .Where(e => _config.Includes(e.Name, e.IsDirectory))
             .Select(e => new VirtualEntry(
