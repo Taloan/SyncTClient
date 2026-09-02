@@ -1331,7 +1331,33 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
     }
 
+    /// <summary>Namen, die gerade geholt werden.</summary>
+    private readonly ConcurrentDictionary<string, byte> _imZugriff = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Holt eine Datei, aber jeden Namen nur einmal gleichzeitig.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Schleifen holen Inhalte nach: eine beim Verbinden ueber alle
+    /// fehlenden Dateien, eine nach jedem Durchgang ueber die, die er als
+    /// leer vorfand. Sie liefen gleichzeitig ueber dieselben Namen, und beide
+    /// legten die Nebendatei ".synct-neu" mit FileShare.None an. Die zweite
+    /// scheiterte dann an der ersten -- 976 Dateien in einem einzigen Lauf,
+    /// alle mit "The process cannot access the file".
+    ///
+    /// Der zweite Aufrufer geht ohne Warten weiter: der erste holt dieselbe
+    /// Datei, und danach bliebe fuer den zweiten nichts mehr zu tun.
+    /// </remarks>
     private async Task MaterialiseAsync(string path, CancellationToken ct)
+    {
+        if (NameOf(path) is not { } name) return;
+        if (!_imZugriff.TryAdd(name, 0)) return;
+
+        try { await MaterialiseKernAsync(path, ct).ConfigureAwait(false); }
+        finally { _imZugriff.TryRemove(name, out _); }
+    }
+
+    private async Task MaterialiseKernAsync(string path, CancellationToken ct)
     {
         if (NameOf(path) is not { } name) return;
 
