@@ -1772,6 +1772,11 @@ public partial class MainWindow : Window
 
         _config.Shares.Add(draft);
 
+        // Das Verbinden ist der Augenblick, in dem erklaert wird, dass dieser
+        // Ordner der richtige ist. Genau dort gehoert die Markierung hin.
+        if (!ShareHost.MarkierungAnlegen(draft.LocalPath, out var markerFehler))
+            AppendLog($"[{draft.FolderId}] Ordnermarkierung liess sich nicht anlegen: {markerFehler}");
+
         // Der erste Share auf einem Laufwerk legt dessen Werte fest. Zehn
         // Prozent des Datentraegers werden dabei einmal ausgerechnet und
         // stehen danach als Zahl in der Datei.
