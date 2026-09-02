@@ -1380,6 +1380,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private void BeobachteOrdner()
     {
+        if (!_config.WatchChanges)
+        {
+            _log($"[{FolderId}] ohne Beobachter, wie eingestellt: es wird regelmaessig durchgegangen.");
+            OhneBeobachter();
+            return;
+        }
+
         try
         {
             var wache = new FileSystemWatcher(_config.LocalPath)
@@ -1421,6 +1428,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Ohne Beobachter faellt das Programm auf den Durchgang zurueck.
             // Das ist langsamer, aber vollstaendig.
             _log($"[{FolderId}] kein Beobachter fuer \"{_config.LocalPath}\": {ex.Message}");
+            OhneBeobachter();
         }
     }
 
