@@ -183,7 +183,6 @@ public partial class MainWindow : Window
             HomeDirectory = HomeDirectory,
             DeviceName = _config.DeviceName,
             MinimumCopies = _config.MinimumCopies,
-            GenerateThumbnails = _config.GenerateThumbnails,
             SharesRoot = _config.SharesRoot,
             CacheMaxBytes = _config.CacheMaxBytes,
             MinimumFreeBytes = _config.MinimumFreeBytes,

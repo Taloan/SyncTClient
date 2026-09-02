@@ -33,10 +33,6 @@
             <ComboBoxItem Content="{DynamicResource S.Mode.Always}" />
           </ComboBox>
         </StackPanel>
-        <StackPanel Margin="20,0,0,0" VerticalAlignment="Bottom">
-          <CheckBox x:Name="ThumbsBox" Content="{DynamicResource S.Share.Thumbs}"
-                    IsChecked="True" />
-        </StackPanel>
       </StackPanel>
       <TextBlock x:Name="ModeHint" Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap"
                  Margin="0,6,0,0" />
