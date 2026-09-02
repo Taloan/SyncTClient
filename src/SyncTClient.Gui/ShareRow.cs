@@ -110,6 +110,19 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         _ => App.S("R.PhaseWaiting")
     };
 
+    /// <summary>Warndreieck, solange die Freigabe nicht anlaufen konnte.</summary>
+    public bool HasError => Share?.State == ShareState.Fehler;
+
+    /// <summary>
+    /// Was in der Statusspalte beim Ueberfahren erscheint.
+    /// </summary>
+    /// <remarks>
+    /// Der Wortlaut des Fehlers. Er nennt bereits, was zu tun ist -- eine
+    /// zweite, allgemeine Zeile daneben ("ein Fehler ist aufgetreten") saehe
+    /// nach Auskunft aus und waere keine.
+    /// </remarks>
+    public string? ErrorTip => HasError ? Share?.Fehler : null;
+
     /// <summary>Haken, wenn der Abgleich abgeschlossen ist. Entspricht der gruenen Spalte in Resilio.</summary>
     public bool Ready => Share is { State: ShareState.Bereit, Phase: SyncPhase.Fertig };
 
@@ -383,6 +396,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         foreach (var name in new[]
                  {
                      nameof(Name), nameof(StatusText), nameof(Ready), nameof(Accepted),
+                     nameof(HasError), nameof(ErrorTip),
                      nameof(Configured),
                      nameof(PeersText), nameof(PeerOnline),
                      nameof(Copies), nameof(CopiesText), nameof(CopiesAtRisk), nameof(CopiesHint),
