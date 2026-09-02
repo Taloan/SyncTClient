@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="Google.Protobuf" Version="3.28.3" />
     <PackageReference Include="Grpc.Tools" Version="2.68.1" PrivateAssets="All" />
     <PackageReference Include="K4os.Compression.LZ4" Version="1.3.8" />
