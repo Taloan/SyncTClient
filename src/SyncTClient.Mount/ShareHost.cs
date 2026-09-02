@@ -1865,6 +1865,64 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
     }
 
+    /// <summary>Ob der letzte Abbruch an der fehlenden Markierung lag.</summary>
+    private bool _markerFehler;
+
+    /// <summary>Verhindert, dass zwei Anlaeufe gleichzeitig starten.</summary>
+    private bool _markerAnlauf;
+
+    private string MarkierungFehltText()
+        => $"Die Ordnermarkierung \"{MarkerFolder}\" fehlt, obwohl hier {_index?.LocalCount ?? 0} eigene " +
+           "Dateien gefuehrt werden. Der Ordner ist damit nicht erreichbar -- eine nicht " +
+           "eingehaengte Platte, ein getrenntes Netzlaufwerk, ein umbenannter Ordner. Es wird " +
+           "nichts abgeglichen, bis er wieder da ist. Ist es doch der richtige Ordner, stellt " +
+           "\"Ordnermarkierung wiederherstellen\" sie wieder her.";
+
+    /// <summary>
+    /// Sieht nach, ob die Ordnermarkierung noch da ist -- oder wieder.
+    /// </summary>
+    /// <remarks>
+    /// Eine eigene Pruefung, und sie muss es sein: die Markierung steht auf
+    /// der Verwaltungsliste, damit sie nie in den Index geraet und nie
+    /// uebertragen wird. Damit ist sie fuer die gesamte Aenderungserkennung
+    /// unsichtbar. Der Beobachter meldet ihr Anlegen und ihr Loeschen zwar,
+    /// aber die Auswertung uebergeht sie sofort.
+    ///
+    /// Und im Fehlerzustand laeuft ohnehin nichts, was etwas bemerken
+    /// koennte: die Hintergrundschleife startet erst nach der Pruefung.
+    /// Deshalb ruft die Oberflaeche hier von aussen an.
+    /// </remarks>
+    public async Task MarkierungNachsehen(CancellationToken ct)
+    {
+        if (_markerAnlauf || _config.LocalPath.Length == 0) return;
+
+        var da = Directory.Exists(MarkerPath);
+
+        // Sie verschwindet im laufenden Betrieb: anhalten, sofort.
+        if (da == false && State is ShareState.Bereit or ShareState.Wartet)
+        {
+            IsPaused = true;
+            _markerFehler = true;
+            Fehler = MarkierungFehltText();
+            State = ShareState.Fehler;
+            SetPhase(SyncPhase.Ruht);
+            _log($"[{FolderId}] {Fehler}");
+            return;
+        }
+
+        // Sie ist wieder da, und sie hat gefehlt: neu anlaufen.
+        if (da && _markerFehler && State == ShareState.Fehler)
+        {
+            _markerAnlauf = true;
+            _markerFehler = false;
+            IsPaused = false;
+
+            try { await CommitAsync(ct).ConfigureAwait(false); }
+            catch (Exception) { /* der Grund steht schon im Protokoll */ }
+            finally { _markerAnlauf = false; }
+        }
+    }
+
     /// <summary>Ob die Ordnermarkierung fehlt. Fuer die Oberflaeche.</summary>
     public bool MarkierungFehlt
         => _config.LocalPath.Length > 0 && !Directory.Exists(MarkerPath);
@@ -1910,12 +1968,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             return;
         }
 
-        throw new InvalidOperationException(
-            $"Die Ordnermarkierung \"{MarkerFolder}\" fehlt, obwohl hier {_index.LocalCount} eigene " +
-            "Dateien gefuehrt werden. Der Ordner ist damit nicht erreichbar -- eine nicht " +
-            "eingehaengte Platte, ein getrenntes Netzlaufwerk, ein umbenannter Ordner. Es wird " +
-            "nichts abgeglichen, bis er wieder da ist. Ist es doch der richtige Ordner, stellt " +
-            "\"Ordnermarkierung wiederherstellen\" sie wieder her.");
+        _markerFehler = true;
+        throw new InvalidOperationException(MarkierungFehltText());
     }
 
     /// <summary>

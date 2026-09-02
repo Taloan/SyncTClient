@@ -131,6 +131,7 @@ public partial class MainWindow : Window
 
         _meter = new ThroughputMeter(CollectWire);
         _refresh.Tick += (_, _) => Tick();
+        _refresh.Tick += (_, _) => MarkierungenNachsehen();
         _refresh.Start();
 
         // Der Draht zum Kontextmenue im Explorer. Er steht, sobald das
@@ -638,6 +639,27 @@ public partial class MainWindow : Window
     /// Protokollfeld und in der Datei daneben. Wer das Fenster gerade nicht
     /// bedienen kann, kommt an das Feld nicht heran.
     /// </remarks>
+    /// <summary>
+    /// Sieht bei jeder Freigabe nach ihrer Ordnermarkierung.
+    /// </summary>
+    /// <remarks>
+    /// Von hier aus, weil im Fehlerzustand innerhalb der Freigabe nichts mehr
+    /// laeuft: die Hintergrundschleife startet erst nach der Pruefung, und die
+    /// Pruefung ist gerade das, was fehlgeschlagen ist. Der Takt der
+    /// Oberflaeche ist der einzige, der dann noch geht.
+    ///
+    /// Der Aufruf kehrt sofort zurueck, wenn nichts zu tun ist. Nur wenn eine
+    /// Markierung verschwindet oder wiederkommt, geschieht ueberhaupt etwas.
+    /// </remarks>
+    private void MarkierungenNachsehen()
+    {
+        foreach (var zeile in _rows)
+        {
+            if (zeile.Share is { } share)
+                _ = share.MarkierungNachsehen(_cts.Token);
+        }
+    }
+
     private void Tick()
     {
         var uhr = System.Diagnostics.Stopwatch.StartNew();
