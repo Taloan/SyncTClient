@@ -124,7 +124,12 @@ public static class BepTls
         }
         catch
         {
-            Setzen(transport, vorherLesen, vorherSchreiben);
+            // Der Strom kann bereits verworfen sein -- dann wirft schon das
+            // Zuruecksetzen, und zwar "Cannot access a disposed object",
+            // womit der eigentliche Grund verlorenginge.
+            try { Setzen(transport, vorherLesen, vorherSchreiben); }
+            catch (ObjectDisposedException) { /* dann eben nicht */ }
+
             throw;
         }
     }
