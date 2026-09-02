@@ -565,6 +565,11 @@ public sealed partial class ShareHost
         LastScan = DateTime.Now;
         _mitInhalt = mitInhalt;
 
+        // Und was der Durchgang nicht mehr angetroffen hat. Vorher blieb das
+        // ungenutzt: die Liste sagte, was da ist, und niemand fragte, was
+        // fehlt.
+        FehlendeAusDemDurchgang(vorhanden);
+
         // Nur wenn es auffaellt. Ein Durchgang ueber fuenfundvierzigtausend
         // Dateien kostet Zeit, und er laeuft in jeder Minute; eine Zeile je
         // Minute je Freigabe waere aber Laerm. Gemeldet wird, was ueber einer
