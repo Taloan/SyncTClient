@@ -57,6 +57,20 @@ public sealed class ThumbnailStore(string directory)
 
     public bool KnownWithout(string localFilePath) => File.Exists(MarkerFor(Directory, localFilePath));
 
+    /// <summary>
+    /// Wo die Ausrichtung des Bildes vermerkt ist.
+    /// </summary>
+    /// <remarks>
+    /// Als Nebendatei, wie der Vermerk fuer "kein eingebettetes Bild". Das
+    /// eingebettete Bild selbst traegt die Ausrichtung nicht -- sie steht im
+    /// Kopf der Hauptdatei, und der liegt beim Anzeigen nicht mehr vor.
+    ///
+    /// Angelegt wird sie nur, wenn etwas zu drehen ist. Eine Datei je
+    /// aufrechtem Bild waere Aufwand fuer die Auskunft "nichts zu tun".
+    /// </remarks>
+    public static string AusrichtungFor(string directory, string localFilePath)
+        => Path.ChangeExtension(PathFor(directory, localFilePath), ".dreh");
+
     public void MarkWithout(string localFilePath)
     {
         var path = MarkerFor(Directory, localFilePath);
@@ -68,8 +82,19 @@ public sealed class ThumbnailStore(string directory)
         catch (IOException) { /* dann wird spaeter erneut gefragt */ }
     }
 
-    public void Save(string localFilePath, byte[] jpeg)
+    public void Save(string localFilePath, byte[] jpeg, int ausrichtung = 0)
     {
+        if (ausrichtung is >= 2 and <= 8)
+        {
+            try
+            {
+                var dreh = AusrichtungFor(Directory, localFilePath);
+                System.IO.Directory.CreateDirectory(Path.GetDirectoryName(dreh)!);
+                File.WriteAllText(dreh, ausrichtung.ToString());
+            }
+            catch (IOException) { /* dann eben aufrecht */ }
+        }
+
         var path = PathFor(localFilePath);
         System.IO.Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 

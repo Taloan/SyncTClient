@@ -2515,7 +2515,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 return Nein(local, $"{grund} ({head.Length} von {wanted} Bytes geholt)");
             }
 
-            _thumbnails.Save(local, thumbnail);
+            // Die Ausrichtung stammt aus dem Kopf der Hauptdatei; das
+            // eingebettete Bild traegt sie nicht.
+            _thumbnails.Save(local, thumbnail, ExifThumbnail.Ausrichtung(head));
             ThumbnailProduced?.Invoke(Interlocked.Increment(ref _thumbnailsMade));
             return true;
         }
