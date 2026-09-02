@@ -1351,6 +1351,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private async Task MaterialiseAsync(string path, CancellationToken ct)
     {
         if (NameOf(path) is not { } name) return;
+
+        // Eine Datei, deren Loeschung wir gerade melden wollen, darf nicht
+        // gleichzeitig als "fehlt hier" gelten.
+        //
+        // Gemessen an einem Abend: der Start fand die geloeschte Datei und
+        // merkte die Loeschung vor; im selben Augenblick sah "vollstaendig
+        // lokal" dieselbe Datei bei der Gegenstelle vorhanden und hier nicht
+        // -- und holte sie. Damit war sie wieder da, NoteLocalChange nahm sie
+        // aus der Liste der Loeschungen, und die Loeschung war nicht
+        // weitergegeben, sondern rueckgaengig gemacht.
+        if (_removed.ContainsKey(name)) return;
+
         if (!_imZugriff.TryAdd(name, 0)) return;
 
         try { await MaterialiseKernAsync(path, ct).ConfigureAwait(false); }
@@ -2755,6 +2767,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             .Where(e => !IsHousekeeping(e.Name))
             .Where(e => !_config.IsIgnored(e.Name))
             .Where(e => _config.Includes(e.Name, e.IsDirectory))
+
+            // Und nicht, was wir gerade als geloescht melden wollen.
+            //
+            // Der Bestand der Gegenstelle fuehrt die Datei noch -- sie hat
+            // von der Loeschung ja noch nicht erfahren. Ohne diese Zeile legt
+            // das Anlegen der Platzhalter sie sofort wieder an, der Inhalt
+            // wird nachgeholt, und weil die Datei damit wieder da ist, faellt
+            // sie aus der Liste der Loeschungen heraus. Gemessen: zweimal
+            // hintereinander geloescht, zweimal binnen einer Sekunde wieder
+            // da, beide Gegenstellen unveraendert.
+            .Where(e => !_removed.ContainsKey(e.Name))
             .Select(e => new VirtualEntry(
                 e.Name, e.Size, DateTimeOffset.FromUnixTimeSeconds(e.ModifiedS), e.IsDirectory))
             .ToList();
