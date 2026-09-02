@@ -24,6 +24,7 @@ public static class ExifThumbnail
     /// </summary>
     public const int RequiredPrefixBytes = 128 * 1024;
 
+    private const ushort TagOrientation = 0x0112;
     private const ushort TagJpegOffset = 0x0201;
     private const ushort TagJpegLength = 0x0202;
 
@@ -243,6 +244,56 @@ public static class ExifThumbnail
         => littleEndian
             ? BinaryPrimitives.ReadUInt32LittleEndian(data)
             : BinaryPrimitives.ReadUInt32BigEndian(data);
+
+    /// <summary>
+    /// Die Ausrichtung aus dem ersten Bildverzeichnis, 1 bis 8.
+    /// </summary>
+    /// <remarks>
+    /// Sie steht im Kopf der Hauptdatei, nicht im eingebetteten Bild -- das
+    /// traegt sie nie. Wer die Vorschau ohne sie anzeigt, bekommt liegende
+    /// Aufnahmen quer.
+    ///
+    /// 1 bedeutet aufrecht. 0 heisst, dass keine Angabe gefunden wurde; das
+    /// wird wie 1 behandelt, ist aber etwas anderes und soll unterscheidbar
+    /// bleiben.
+    /// </remarks>
+    public static int Ausrichtung(ReadOnlySpan<byte> jpegPrefix)
+    {
+        try
+        {
+            var tiff = FindExifSegment(jpegPrefix);
+            if (tiff.Length < 8) return 0;
+
+            bool littleEndian;
+            if (tiff[0] == 'I' && tiff[1] == 'I') littleEndian = true;
+            else if (tiff[0] == 'M' && tiff[1] == 'M') littleEndian = false;
+            else return 0;
+
+            if (ReadUInt16(tiff[2..], littleEndian) != 42) return 0;
+
+            var ifd0 = ReadUInt32(tiff[4..], littleEndian);
+            if (ifd0 + 2 > (uint)tiff.Length) return 0;
+
+            var anzahl = ReadUInt16(tiff[(int)ifd0..], littleEndian);
+
+            for (var i = 0; i < anzahl; i++)
+            {
+                var eintrag = (int)ifd0 + 2 + i * 12;
+                if (eintrag + 12 > tiff.Length) break;
+
+                if (ReadUInt16(tiff[eintrag..], littleEndian) != TagOrientation) continue;
+
+                // Eine SHORT-Angabe steht in den ersten beiden Bytes des
+                // Wertfeldes, in der Bytereihenfolge der Datei.
+                var wert = ReadUInt16(tiff[(eintrag + 8)..], littleEndian);
+                return wert is >= 1 and <= 8 ? wert : 0;
+            }
+
+            return 0;
+        }
+        catch (ArgumentOutOfRangeException) { return 0; }
+        catch (IndexOutOfRangeException) { return 0; }
+    }
 
     /// <summary>Dateiendungen, bei denen sich der Versuch lohnt.</summary>
     public static bool LooksLikeJpeg(string path)

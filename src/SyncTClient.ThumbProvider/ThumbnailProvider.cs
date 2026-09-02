@@ -155,8 +155,10 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
                 Trace.Write("  auf Zuruf beschafft");
             }
 
-            var ok = Gdi.LoadAsBitmap(cached, requestedSize, out bitmap);
-            Trace.Write($"  {requestedSize} px -> {(ok ? "geliefert" : "GDI+ fehlgeschlagen")}");
+            var drehung = Store.Ausrichtung(_filePath);
+            var ok = Gdi.LoadAsBitmap(cached, requestedSize, drehung, out bitmap);
+            Trace.Write($"  {requestedSize} px{(drehung > 1 ? $", Ausrichtung {drehung}" : "")} " +
+                        $"-> {(ok ? "geliefert" : "GDI+ fehlgeschlagen")}");
             return ok ? Ok : NoThumbnail;
         }
         catch (Exception ex)
@@ -217,6 +219,34 @@ internal static class Store
     private static string? _directory;
     private static bool _looked;
 
+    /// <summary>
+    /// Die vermerkte Ausrichtung, 1 bis 8. 0 heisst aufrecht.
+    /// </summary>
+    /// <remarks>
+    /// Das eingebettete Bild traegt sie nicht -- sie steht im Kopf der
+    /// Hauptdatei, und der liegt hier nicht vor. Der Client legt sie deshalb
+    /// als Nebendatei ab, und nur dann, wenn etwas zu drehen ist.
+    /// </remarks>
+    public static int Ausrichtung(string localFilePath)
+    {
+        try
+        {
+            if (PathFor(localFilePath) is not { } bild) return 0;
+
+            var dreh = System.IO.Path.ChangeExtension(bild, ".dreh");
+            if (!File.Exists(dreh)) return 0;
+
+            return int.TryParse(File.ReadAllText(dreh).Trim(), out var wert)
+                   && wert is >= 1 and <= 8
+                ? wert
+                : 0;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
     public static string? PathFor(string localFilePath)
     {
         var directory = Directory();
@@ -261,7 +291,28 @@ internal static partial class Gdi
     private static bool _started;
     private static readonly Lock Gate = new();
 
-    public static bool LoadAsBitmap(string path, uint requestedSize, out nint bitmap)
+    /// <summary>
+    /// Rechnet die Exif-Ausrichtung in die Angabe von GDI+ um.
+    /// </summary>
+    /// <remarks>
+    /// Exif zaehlt anders: 6 heisst "um 90 Grad im Uhrzeigersinn gedreht
+    /// aufgenommen", also muss beim Anzeigen um 90 Grad gedreht werden.
+    /// Die gespiegelten Faelle (2, 4, 5, 7) kommen selten vor, kosten aber
+    /// nur je eine Zeile.
+    /// </remarks>
+    private static int DrehungAus(int ausrichtung) => ausrichtung switch
+    {
+        2 => 4,   // waagerecht gespiegelt
+        3 => 2,   // 180 Grad
+        4 => 6,   // 180 Grad und gespiegelt
+        5 => 5,   // 90 Grad und gespiegelt
+        6 => 1,   // 90 Grad
+        7 => 7,   // 270 Grad und gespiegelt
+        8 => 3,   // 270 Grad
+        _ => 0    // aufrecht
+    };
+
+    public static bool LoadAsBitmap(string path, uint requestedSize, int ausrichtung, out nint bitmap)
     {
         bitmap = 0;
         if (!Start()) return false;
@@ -270,6 +321,12 @@ internal static partial class Gdi
         try
         {
             if (GdipCreateBitmapFromFile(path, out image) != 0 || image == 0) return false;
+
+            // Vor dem Messen, nicht danach: bei 90 Grad tauschen Breite und
+            // Hoehe die Plaetze, und das Einpassen rechnet sonst mit den
+            // falschen Kanten.
+            if (DrehungAus(ausrichtung) is var dreh && dreh != 0)
+                GdipImageRotateFlip(image, dreh);
 
             if (GdipGetImageWidth(image, out var width) != 0 ||
                 GdipGetImageHeight(image, out var height) != 0 ||
@@ -323,6 +380,9 @@ internal static partial class Gdi
 
     [LibraryImport("gdiplus.dll", StringMarshalling = StringMarshalling.Utf16)]
     private static partial int GdipCreateBitmapFromFile(string filename, out nint bitmap);
+
+    [LibraryImport("gdiplus.dll")]
+    private static partial int GdipImageRotateFlip(nint image, int rotateFlipType);
 
     [LibraryImport("gdiplus.dll")]
     private static partial int GdipGetImageWidth(nint image, out uint width);
