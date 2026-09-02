@@ -45,6 +45,7 @@ public partial class ShareSettingsWindow : Window
         // Aussage ein zweites Mal.
         VersionDaysBox.Text = (share.KeepVersions ? share.VersionDays : 0).ToString();
         IgnoreBox.Text = string.Join(Environment.NewLine, share.Ignored);
+        ExplorerBox.IsChecked = share.ShowInExplorer;
         UpdateCacheEnabled();
         _loading = false;
 
@@ -195,6 +196,7 @@ public partial class ShareSettingsWindow : Window
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
         _share.Conflict = (ConflictResolution)Math.Max(0, ConflictBox.SelectedIndex);
+        _share.ShowInExplorer = ExplorerBox.IsChecked == true;
 
         // Die Liste ist massgeblich. Der einzelne Eintrag bleibt daneben
         // stehen, solange der Abgleich je Gegenstelle gefuehrt wird; er ist

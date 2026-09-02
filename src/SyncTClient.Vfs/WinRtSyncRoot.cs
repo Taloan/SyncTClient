@@ -121,6 +121,49 @@ public static class WinRtSyncRoot
             }
         }).ConfigureAwait(false);
 
+    /// <summary>
+    /// Bestimmt, ob die Wurzel im Navigationsbereich des Explorers steht.
+    /// </summary>
+    /// <remarks>
+    /// Die Anmeldeschnittstelle kennt dafuer keinen Schalter. Windows legt
+    /// beim Anmelden einen Namensraum-Eintrag an und merkt sich dessen
+    /// Kennung bei der Wurzel; ob der Eintrag im Baum erscheint, entscheidet
+    /// die Eigenschaft "System.IsPinnedToNamespaceTree" an seiner Klasse.
+    /// OneDrive benutzt dieselbe.
+    ///
+    /// Gesetzt wird nach jedem Anmelden, denn das Anmelden setzt sie auf
+    /// eins zurueck.
+    ///
+    /// Die Wurzel selbst bleibt unberuehrt: Platzhalter, Wolkensymbole und
+    /// Kontextmenue haengen an ihr und nicht am Eintrag im Baum.
+    /// </remarks>
+    /// <returns>Ob die Eigenschaft gesetzt werden konnte.</returns>
+    public static bool ShowInTree(string id, bool sichtbar)
+    {
+        try
+        {
+            using var wurzel = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager\" + id);
+
+            if (wurzel?.GetValue("NamespaceCLSID") is not string clsid || clsid.Length == 0) return false;
+
+            using var klasse = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Classes\CLSID\" + clsid, writable: true);
+
+            if (klasse is null) return false;
+
+            klasse.SetValue("System.IsPinnedToNamespaceTree", sichtbar ? 1 : 0,
+                            Microsoft.Win32.RegistryValueKind.DWord);
+            return true;
+        }
+        catch (Exception)
+        {
+            // Kein Zugriff, kein Eintrag, umbenannte Schluessel. Der Ordner
+            // steht dann im Baum -- unschoen, aber nicht schaedlich.
+            return false;
+        }
+    }
+
     public static void Unregister(string id)
         => StorageProviderSyncRootManager.Unregister(id);
 

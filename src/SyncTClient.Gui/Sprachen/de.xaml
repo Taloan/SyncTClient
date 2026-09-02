@@ -352,6 +352,8 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="C.Hidden">{0} Zweige ausgeblendet.</s:String>
   <s:String x:Key="C.Blocked">Nicht möglich: {0} Dateien erreichen die Platzhalter-Schwelle nicht.</s:String>
   <s:String x:Key="S.Share.TreeHint">Angekreuzt: liegt hier, als Platzhalter oder mit Inhalt.&#10;Nicht angekreuzt: wird trotzdem übertragen und hier gelöscht, sobald die Platzhalter-Schwelle erreicht ist.</s:String>
+  <s:String x:Key="S.Share.InExplorer">Im Navigationsbereich des Explorers anzeigen</s:String>
+  <s:String x:Key="S.Share.InExplorerHint">Abgewählt verschwindet der Eintrag neben „Dieser PC“. Der Ordner bleibt an seinem Platz und wird weiter abgeglichen; Platzhalter, Wolkensymbole und das Kontextmenü arbeiten unverändert.</s:String>
   <s:String x:Key="S.Share.TabGeneral">Allgemein</s:String>
   <s:String x:Key="S.Share.TabSharing">Teilen</s:String>
   <s:String x:Key="S.Share.TabVersions">Versionierung</s:String>

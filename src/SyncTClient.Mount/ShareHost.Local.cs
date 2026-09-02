@@ -98,7 +98,7 @@ public sealed partial class ShareHost
     private const int MaximumAttempts = 5;
 
     /// <summary>Abstand zwischen zwei Durchgaengen ueber den Ordner.</summary>
-    private static readonly TimeSpan RescanInterval = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan RescanInterval = TimeSpan.FromMinutes(3);
 
     /// <summary>
     /// So lange nach der eigenen Ankuendigung bleibt eine Datei liegen, bevor

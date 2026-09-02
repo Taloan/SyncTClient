@@ -360,6 +360,8 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="C.Hidden">{0} branches hidden.</s:String>
   <s:String x:Key="C.Blocked">Not possible: {0} files have not reached the placeholder threshold.</s:String>
   <s:String x:Key="S.Share.TreeHint">Checked: kept here, as a placeholder or with content.&#10;Not checked: still transferred, then deleted here once the placeholder threshold is reached.</s:String>
+  <s:String x:Key="S.Share.InExplorer">Show in the Explorer navigation pane</s:String>
+  <s:String x:Key="S.Share.InExplorerHint">Unticked, the entry next to “This PC” disappears. The folder stays where it is and is still synchronised; placeholders, cloud icons and the context menu work unchanged.</s:String>
   <s:String x:Key="S.Share.TabGeneral">General</s:String>
   <s:String x:Key="S.Share.TabSharing">Sharing</s:String>
   <s:String x:Key="S.Share.TabVersions">Versioning</s:String>

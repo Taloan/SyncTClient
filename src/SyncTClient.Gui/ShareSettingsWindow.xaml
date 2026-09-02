@@ -57,6 +57,11 @@
               <ComboBoxItem Content="{DynamicResource S.Conflict.Local}" />
               <ComboBoxItem Content="{DynamicResource S.Conflict.Remote}" />
             </ComboBox>
+
+            <CheckBox x:Name="ExplorerBox" Content="{DynamicResource S.Share.InExplorer}" Margin="0,12,0,0" />
+            <TextBlock Text="{DynamicResource S.Share.InExplorerHint}"
+                       Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap"
+                       MaxWidth="520" HorizontalAlignment="Left" Margin="5,2,0,0" />
           </StackPanel>
         </ScrollViewer>
       </TabItem>
