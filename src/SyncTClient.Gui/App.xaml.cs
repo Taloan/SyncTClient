@@ -38,6 +38,30 @@ public partial class App : Application
     /// ueberschrieben: der zweite Absturz ist oft der aufschlussreichere, und
     /// der erste soll dabei nicht verschwinden.
     /// </remarks>
+    /// <summary>
+    /// Schreibt eine Zeile in dieselbe Datei, ohne dass ein Fehler vorliegt.
+    /// </summary>
+    /// <remarks>
+    /// Fuer Messwerte, die gerade dann gebraucht werden, wenn das Fenster
+    /// nicht mehr antwortet. Wer sie nur ins Protokollfeld schreibt, kann sie
+    /// in genau dem Fall nicht herausholen, in dem sie zaehlen -- das
+    /// Markieren mit der Maus verlangt dieselbe Oberflaeche, die gerade
+    /// steht.
+    /// </remarks>
+    public static void Vermerken(string zeile)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(FehlerDatei)!);
+            File.AppendAllText(FehlerDatei,
+                $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {zeile}{Environment.NewLine}");
+        }
+        catch (Exception)
+        {
+            // Ohne Datei bleibt das Protokollfeld.
+        }
+    }
+
     private static void Notieren(Exception exception, string herkunft)
     {
         try

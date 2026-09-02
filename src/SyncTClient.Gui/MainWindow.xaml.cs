@@ -2199,11 +2199,18 @@ public partial class MainWindow : Window
 
                 if (gewartet < TimeSpan.FromMilliseconds(400)) continue;
 
-                AppendLog(
+                var zeile =
                     $"Oberflaeche wartete {gewartet.TotalMilliseconds:0} ms " +
                     $"(davon Speicherbereinigung {pauseAnteil.TotalMilliseconds:0} ms; " +
                     $"Sammlungen {GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)}, " +
-                    $"belegt {GC.GetTotalMemory(false) / (1024 * 1024)} MB).");
+                    $"belegt {GC.GetTotalMemory(false) / (1024 * 1024)} MB).";
+
+                AppendLog(zeile);
+
+                // Und in die Datei. Wer das Fenster gerade nicht bedienen
+                // kann, kann auch nichts daraus herauskopieren -- und genau
+                // dann wird diese Zeile gebraucht.
+                App.Vermerken(zeile);
             }
         })
         {
