@@ -5,6 +5,7 @@ using SyncTClient.Vfs;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 using BepRequest = SyncTClient.Bep.Proto.Request;
 using ErrorCode = SyncTClient.Bep.Proto.ErrorCode;
+using FileInfoType = SyncTClient.Bep.Proto.FileInfoType;
 
 namespace SyncTClient.Mount;
 
@@ -1211,6 +1212,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Vergleich und kein Zugestaendnis.
         await AdoptLocalAsync();
 
+        // Vor dem Anlegen, und das ist die ganze Pointe: das Anlegen richtet
+        // sich nach dem Bestand der Gegenstelle. Eine Datei, die hier
+        // geloescht wurde, waehrend das Programm nicht lief, bekaeme dabei
+        // sofort wieder einen Platzhalter -- und die Loeschung waere nicht
+        // mehr zu sehen, sondern rueckgaengig gemacht.
+        OfflineGeloeschte();
+
         SetPhase(SyncPhase.Platzhalter);
         _mount.ProjectPlaceholders(
             (done, total) => SetPhase(SyncPhase.Platzhalter, done, total),
@@ -1772,6 +1780,98 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         // Was waehrend seiner Abwesenheit geschah, hat er nicht gemeldet.
         _lastScan = DateTime.MinValue;
+    }
+
+    /// <summary>Woran eine wirklich eingehaengte Freigabe zu erkennen ist.</summary>
+    private string MarkerPath => Path.Combine(_config.LocalPath, MarkerFolder);
+
+    /// <summary>
+    /// Legt die Ordnermarkierung an, falls sie fehlt.
+    /// </summary>
+    /// <remarks>
+    /// Ein leeres Verzeichnis, versteckt, das nie uebertragen wird. Sein Wert
+    /// liegt allein darin, dass es fehlt, wenn der Ordner nicht da ist: bei
+    /// einer nicht eingehaengten Platte, einem getrennten Netzlaufwerk, einer
+    /// fehlenden Speicherkarte sieht das Verzeichnis leer aus statt
+    /// unerreichbar. Ohne dieses Unterscheidungsmerkmal waere jede solche
+    /// Stoerung von einer Loeschung des gesamten Ordners nicht zu trennen --
+    /// und wir wuerden sie an die Gegenstelle weitergeben.
+    /// </remarks>
+    private void MarkierungAnlegen()
+    {
+        try
+        {
+            if (Directory.Exists(MarkerPath)) return;
+
+            var marker = Directory.CreateDirectory(MarkerPath);
+            marker.Attributes |= FileAttributes.Hidden;
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Ordnermarkierung liess sich nicht anlegen: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Findet, was geloescht wurde, waehrend das Programm nicht lief.
+    /// </summary>
+    /// <remarks>
+    /// Waehrend des Betriebs meldet das Dateisystem jede Loeschung. Was
+    /// dazwischen geschieht, meldet niemand, und aus blosser Abwesenheit wird
+    /// sonst nie auf eine Loeschung geschlossen -- eine fehlende Datei kann
+    /// verschoben, umbenannt oder von einem Laufwerk sein, das gerade nicht
+    /// da ist.
+    ///
+    /// Zwei Bedingungen machen den Schluss trotzdem sicher. Die Markierung
+    /// sagt, dass der Ordner wirklich da ist und nicht bloss leer aussieht.
+    /// Und gezaehlt wird nur, was wir selbst als vorhanden gefuehrt haben --
+    /// das trennt "der Benutzer hat geloescht" von "wir haben es nie geholt".
+    /// Ohne die zweite Bedingung meldete eine Freigabe im Modus
+    /// "vollstaendig lokal" beim ersten Start jede noch nicht geholte Datei
+    /// als geloescht.
+    /// </remarks>
+    private void OfflineGeloeschte()
+    {
+        if (_index is null) return;
+
+        if (!Directory.Exists(MarkerPath))
+        {
+            // Beim ersten Lauf einer Freigabe gibt es sie noch nicht. Dann ist
+            // auch nichts zu vergleichen: eigene Eintraege gibt es keine.
+            MarkierungAnlegen();
+            return;
+        }
+
+        var fehlend = new List<string>();
+
+        foreach (var eigen in _index.LocalFrom(0))
+        {
+            if (eigen.Deleted || IsHousekeeping(eigen.Name)) continue;
+
+            var path = LocalPathOf(eigen.Name);
+            var da = eigen.Type == FileInfoType.Directory
+                ? Directory.Exists(path)
+                : File.Exists(path);
+
+            if (!da) fehlend.Add(eigen.Name);
+        }
+
+        if (fehlend.Count == 0) return;
+
+        // Dieselbe Schranke wie im laufenden Betrieb. Eine grosse Zahl auf
+        // einmal ist fast nie eine Loeschung.
+        if (fehlend.Count > MaximumDeletions)
+        {
+            _log($"[{FolderId}] {fehlend.Count} eigene Dateien fehlen im Ordner. " +
+                 "Das sind zu viele fuer eine Loeschung von Hand; es wird nichts gemeldet. " +
+                 "Stimmt der Ausgangsordner noch?");
+            return;
+        }
+
+        foreach (var name in fehlend) _removed[name] = 0;
+
+        _log($"[{FolderId}] {fehlend.Count} Dateien wurden entfernt, waehrend das Programm nicht lief. " +
+             "Die Loeschung wird weitergegeben.");
     }
 
     /// <summary>
