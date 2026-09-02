@@ -1689,14 +1689,25 @@ public sealed partial class ShareHost
 
         var known = LocalCopy(announced);
 
-        // Schon angekuendigt und unveraendert. Die Zeit allein taugt hier als
-        // Vergleich: mehr hat ein Verzeichnis nicht.
-        if (known is not null && !known.Deleted
-            && known.Type == FileInfoType.Directory
-            && known.ModifiedS == modified)
-        {
+        // Schon angekuendigt: dann gibt es nichts mehr zu sagen.
+        //
+        // Hier stand ein Vergleich der Zeit, und das war eine Rueckkopplung.
+        // Die Zeit eines Verzeichnisses aendert sich, sobald irgendetwas
+        // darin entsteht oder verschwindet -- also bei jedem Platzhalter, den
+        // wir selbst anlegen, bei jeder Datei, die wir selbst holen, bei
+        // jeder ".synct-neu", die wir selbst daneben schreiben.
+        //
+        // Jede dieser Aenderungen wurde angekuendigt, die Gegenstelle nahm
+        // sie auf und schickte sie zurueck, und die naechste Datei im selben
+        // Ordner begann von vorn. Bei achtundvierzigtausend Verzeichnissen
+        // wird daraus ein Strom, der nicht abreisst: Sequenznummern in
+        // Millionenhoehe fuer sechsundsechzigtausend Dateien.
+        //
+        // Die Zeit eines Verzeichnisses traegt fuer niemanden eine
+        // Information. Was darin liegt, wird fuer sich abgeglichen; das
+        // Verzeichnis selbst ist nur die Aussage, dass es da ist.
+        if (known is not null && !known.Deleted && known.Type == FileInfoType.Directory)
             return Done(name);
-        }
 
         // Die Gegenstelle fuehrt es bereits. Dann ist es von dort gekommen und
         // wird nur in den eigenen Bestand uebernommen.
