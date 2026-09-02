@@ -1730,6 +1730,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _log($"[{FolderId}] Modus AlwaysLocal: lade {pending.Count} noch fehlende Dateien herunter ...");
 
         var done = 0;
+        var beschaedigt = 0;
         SetPhase(SyncPhase.Inhalte, 0, pending.Count);
 
         // Ausdruecklich auf einen eigenen Faden, und nicht bloss "await".
@@ -1748,6 +1749,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 {
                     await MaterialiseAsync(path, token).ConfigureAwait(false);
                 }
+                catch (Exception ex) when (IstBeschaedigt(ex))
+                {
+                    // Einmal zaehlen, nicht je Datei eine Zeile. Der Grund ist
+                    // fuer alle derselbe, und er steht unten in einem Satz.
+                    Interlocked.Increment(ref beschaedigt);
+                }
                 catch (Exception ex)
                 {
                     _log($"  {Path.GetFileName(path)}: {ex.Message}");
@@ -1758,8 +1765,31 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 if (fertig % 50 == 0) _log($"[{FolderId}] {fertig}/{pending.Count} heruntergeladen.");
             }), ct).ConfigureAwait(false);
 
+        if (beschaedigt > 0)
+        {
+            _log($"[{FolderId}] {beschaedigt} Platzhalter meldet Windows als beschaedigt. " +
+                 "Sie lassen sich weder lesen noch loeschen noch umbenennen, solange der " +
+                 "Ordner angemeldet ist. Abhilfe: den Ordner hier entfernen und neu anlegen; " +
+                 "der Inhalt liegt auf der Gegenstelle.");
+        }
+
         _log($"[{FolderId}] vollstaendig lokal.");
     }
+
+    /// <summary>
+    /// Ob Windows den Platzhalter selbst fuer beschaedigt haelt.
+    /// </summary>
+    /// <remarks>
+    /// ERROR_CLOUD_FILE_METADATA_CORRUPT (363). In diesem Zustand geht gar
+    /// nichts mehr: kein Lesen, kein Loeschen, kein Umbenennen, nicht einmal
+    /// ueber fsutil. Der Dateisystemfilter weist jeden Zugriff ab, weil er
+    /// die Verwaltungsdaten der Datei nicht entziffern kann.
+    ///
+    /// Es hat deshalb keinen Zweck, es Datei fuer Datei zu melden. Der Grund
+    /// ist fuer alle derselbe.
+    /// </remarks>
+    private static bool IstBeschaedigt(Exception ex)
+        => ex is IOException && (ex.HResult & 0xFFFF) == 363;
 
     // ------------------------------------------------------------ Vorschaubilder
 
