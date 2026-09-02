@@ -262,13 +262,6 @@ public sealed class ShareConfig
     /// </remarks>
     public bool ShowInExplorer { get; set; } = true;
 
-    /// <summary>
-    /// Vorschaubilder im Hintergrund vorbereiten. Das kostet je Bild einen
-    /// Block von 128 KiB. Ohne Vorschaubilder zeigt der Explorer ein
-    /// Ersatzsymbol.
-    /// </summary>
-    public bool GenerateThumbnails { get; set; } = true;
-
     [JsonIgnore]
     public string Display => string.IsNullOrWhiteSpace(Label) ? FolderId : $"{Label} ({FolderId})";
 

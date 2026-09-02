@@ -37,7 +37,6 @@ public partial class AcceptShareWindow : Window
         _loading = true;
         LocalPathBox.Text = share.LocalPath;
         ModeBox.SelectedIndex = share.Mode == ShareMode.AlwaysLocal ? 1 : 0;
-        ThumbsBox.IsChecked = share.GenerateThumbnails;
         UpdateModeHint();
         _loading = false;
 
@@ -162,7 +161,6 @@ public partial class AcceptShareWindow : Window
 
         _share.LocalPath = path;
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
-        _share.GenerateThumbnails = ThumbsBox.IsChecked == true;
 
         // Alles ausgewaehlt bedeutet: keine Einschraenkung. Das ist nicht
         // dasselbe wie eine Liste aller Zweige. Eine solche Liste waere

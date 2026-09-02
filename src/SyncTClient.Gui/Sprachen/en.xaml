@@ -104,7 +104,6 @@
   <s:String x:Key="S.Mode.OnDemand">Download on demand (placeholders)</s:String>
   <s:String x:Key="S.Mode.Always">Keep fully local</s:String>
   <s:String x:Key="S.Share.MinCopies">Placeholder threshold</s:String>
-  <s:String x:Key="S.Share.Thumbs">Create thumbnails on demand</s:String>
   <s:String x:Key="S.Share.CopiesHint">When the space is freed, the local content is gone and the file becomes a placeholder again. This happens only once this many other nodes carry the file completely. With a single server, 1 is right, with several nodes 2. Less than 1 is not allowed, because the last content in the network could then disappear.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">What should be shown?</s:String>
 

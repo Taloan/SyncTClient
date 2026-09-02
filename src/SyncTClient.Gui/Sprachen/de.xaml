@@ -98,7 +98,6 @@
   <s:String x:Key="S.Mode.OnDemand">on-demand herunterladen (Platzhalter)</s:String>
   <s:String x:Key="S.Mode.Always">Vollständig lokal bereithalten</s:String>
   <s:String x:Key="S.Share.MinCopies">Platzhalter-Schwelle</s:String>
-  <s:String x:Key="S.Share.Thumbs">Vorschaubilder on-demand erzeugen</s:String>
   <s:String x:Key="S.Share.CopiesHint">Wird der Speicherplatz freigegeben, verschwindet der lokale Inhalt und die Datei wird wieder zum Platzhalter. Das geschieht erst, wenn so viele andere Knoten die Datei vollständig führen. Bei einem einzelnen Server ist 1 richtig, bei mehreren Knoten 2. Weniger als 1 ist nicht möglich: dann könnte der letzte Inhalt im Netz verschwinden.</s:String>
   <s:String x:Key="S.Share.TreeQuestion">Was soll angezeigt werden?</s:String>
   <s:String x:Key="S.Accept.Title">Share verbinden</s:String>
