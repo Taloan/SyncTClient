@@ -678,6 +678,41 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
+    /// Raeumt den ganzen Index aus.
+    /// </summary>
+    /// <remarks>
+    /// Fuer das Loesen einer Bindung. Die Datei danach zu loeschen ist der
+    /// sauberere Weg, aber der unzuverlaessigere: sie muss dafuer erst
+    /// freigegeben sein, und ob das gelingt, haengt an Dingen, die hier
+    /// niemand in der Hand hat -- ein Vorrat offener Verbindungen, ein
+    /// Virenscanner, ein Explorer-Fenster.
+    ///
+    /// Ausraeumen gelingt immer, denn es geschieht ueber die offene
+    /// Verbindung. Bleibt die Datei danach liegen, ist sie leer, und der
+    /// naechste Versuch faengt bei null an -- darauf kommt es an.
+    ///
+    /// Der Schema-Vermerk bleibt stehen. Ohne ihn liefe beim naechsten
+    /// Oeffnen der Umbau noch einmal, und der baut Tabellen um, die schon
+    /// richtig stehen.
+    /// </remarks>
+    public void ClearAll()
+    {
+        using var gate = _gate.EnterScope();
+
+        Execute("""
+            DELETE FROM files;
+            DELETE FROM local_files;
+            DELETE FROM meta WHERE key <> 'schema';
+            """);
+
+        // Der Platz gehoert danach niemandem mehr. Bei fuenfundvierzigtausend
+        // Dateien sind das einige Dutzend Megabyte, die sonst als leere Seiten
+        // liegenblieben.
+        try { Execute("VACUUM"); }
+        catch (SqliteException) { /* Platz sparen ist kein Grund zu scheitern */ }
+    }
+
+    /// <summary>
     /// Schliesst die Datenbank und gibt die Datei frei.
     /// </summary>
     /// <remarks>

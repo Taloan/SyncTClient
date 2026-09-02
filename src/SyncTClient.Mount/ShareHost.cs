@@ -2297,6 +2297,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             _syncRootId = null;
         }
 
+        // Erst ausraeumen, dann schliessen.
+        //
+        // Das Loeschen der Datei ist der sauberere Weg, aber der
+        // unzuverlaessigere -- sie muss dafuer freigegeben sein. Ausgeraeumt
+        // wird ueber die offene Verbindung, und das gelingt immer. Bleibt die
+        // Datei danach liegen, ist sie wenigstens leer.
+        try { _index?.ClearAll(); }
+        catch (Exception ex) { _log($"[{FolderId}] Index liess sich nicht ausraeumen: {ex.Message}"); }
+
         _index?.Dispose();
         _index = null;
 
