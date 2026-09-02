@@ -202,6 +202,9 @@ Bereits heruntergeladene Dateien bleiben erhalten.</s:String>
   <s:String x:Key="A.HintAlways">Alle Inhalte werden sofort heruntergeladen und dauerhaft vorgehalten. Das Verbrauchs Limit gilt für diesen Share nicht.</s:String>
   <s:String x:Key="A.NoFolder">Ein lokaler Ordner ist erforderlich.</s:String>
   <s:String x:Key="A.PathNotFull">Der lokale Ordner braucht einen vollständigen Pfad.</s:String>
+  <s:String x:Key="A.PathSystemFolder">„{0}“ legt der Abgleich selbst in einer Freigabe an. Der Ordner kann deshalb nicht die Freigabe selbst sein — gemeint ist vermutlich der Ordner darüber.</s:String>
+  <s:String x:Key="A.PathInsideShare">Der Ordner liegt in der Freigabe „{0}“. Windows lässt keine Freigabe zu, die in einer anderen liegt.</s:String>
+  <s:String x:Key="A.PathContainsShare">Der Ordner enthält die Freigabe „{0}“. Windows lässt keine Freigabe zu, die eine andere enthält.</s:String>
   <s:String x:Key="A.TreeSummary">{0} Dateien, {1} insgesamt</s:String>
   <s:String x:Key="P.IdIncomplete">Die Device-ID ist unvollständig.</s:String>
   <s:String x:Key="G.ClearBody">Alle zwischengespeicherten Dateien werden wieder zu Platzhaltern, die Vorschaubilder werden verworfen.

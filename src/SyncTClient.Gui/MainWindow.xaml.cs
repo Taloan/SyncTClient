@@ -1827,7 +1827,8 @@ public partial class MainWindow : Window
 
         lauf.Close();
 
-        var dialog = new AcceptShareWindow(draft, HomeDirectory, row.Name) { Owner = this };
+        var dialog = new AcceptShareWindow(
+            draft, HomeDirectory, row.Name, AndereWurzeln(draft)) { Owner = this };
         if (dialog.ShowDialog() != true)
         {
             // Ein Abbruch soll nichts hinterlassen. Scheitert das Aufraeumen,
@@ -1908,13 +1909,26 @@ public partial class MainWindow : Window
         RefreshRows();
     }
 
+    /// <summary>
+    /// Die Ordner der uebrigen Freigaben, ohne die genannte.
+    /// </summary>
+    /// <remarks>
+    /// Die Dialoge pruefen damit den gewaehlten Pfad. Verglichen wird die
+    /// Freigabe selbst und nicht ihr Pfad: beim Uebernehmen steht der
+    /// Entwurf noch nicht in der Liste, beim Aendern steht er darin.
+    /// </remarks>
+    private IReadOnlyList<string> AndereWurzeln(ShareConfig ausser)
+        => [.. _config.Shares
+            .Where(s => !ReferenceEquals(s, ausser))
+            .Select(s => s.LocalPath)];
+
     private void OnShowSettings(object sender, RoutedEventArgs e)
     {
         var share = _row?.Share?.Config;
         if (share is null) { Status(App.S("M.NoShareSelected")); return; }
 
         var dialog = new ShareSettingsWindow(
-            share, _config.Peers, HomeDirectory, _row!.Name,
+            share, _config.Peers, HomeDirectory, _row!.Name, AndereWurzeln(share),
             id => _peers.FirstOrDefault(p =>
                 p.Config.DeviceId.Equals(id, StringComparison.OrdinalIgnoreCase))?.Host.ReportedName)
         { Owner = this };

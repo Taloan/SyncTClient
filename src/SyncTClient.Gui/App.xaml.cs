@@ -397,6 +397,27 @@ public partial class App : Application
         catch (FormatException) { return S(key); }
     }
 
+    /// <summary>
+    /// Der Satz zu einem Ordner, der keine Wurzel einer Freigabe sein kann --
+    /// oder null, wenn er taugt.
+    /// </summary>
+    /// <remarks>
+    /// Beide Dialoge, die einen Pfad annehmen, fragen hier. Das Urteil faellt
+    /// in <see cref="SyncTClient.Mount.ShareHost.PruefeWurzel"/>; hier steht
+    /// nur, wie es sich liest.
+    /// </remarks>
+    public static string? WurzelFehler(string pfad, IEnumerable<string> andere)
+        => SyncTClient.Mount.ShareHost.PruefeWurzel(pfad, andere, out var womit) switch
+        {
+            SyncTClient.Mount.ShareHost.Wurzelurteil.Systemordner
+                => S("A.PathSystemFolder", womit),
+            SyncTClient.Mount.ShareHost.Wurzelurteil.InAndererFreigabe
+                => S("A.PathInsideShare", womit),
+            SyncTClient.Mount.ShareHost.Wurzelurteil.EnthaeltFreigabe
+                => S("A.PathContainsShare", womit),
+            _ => null
+        };
+
     private static void Swap(ref ResourceDictionary? current, string path)
     {
         var next = new ResourceDictionary { Source = new Uri(path, UriKind.Relative) };
