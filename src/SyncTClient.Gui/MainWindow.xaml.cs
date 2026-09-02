@@ -135,6 +135,7 @@ public partial class MainWindow : Window
         // niemanden, der sie ausfuehrt, und zeigen das auch.
         CommandService.Handle = OnCommand;
         CommandService.EnsureStarted(AppendLog);
+        HorcheAufNetz();
     }
 
     private string HomeDirectory
@@ -605,7 +606,106 @@ public partial class MainWindow : Window
         UpdateThroughput();
         _tray?.Show(Zustand());
         EnforceLimits();
+        VersucheWiederzuverbinden();
     }
+
+    // ------------------------------------------------------------ Wiederverbinden
+
+    /// <summary>Wann zuletzt ein Verbindungsversuch lief.</summary>
+    private DateTime _letzterVersuch = DateTime.MinValue;
+
+    /// <summary>Der Abstand bis zum naechsten Versuch.</summary>
+    /// <remarks>
+    /// Er verdoppelt sich mit jedem Fehlschlag. Ein Netz, das seit einer
+    /// Stunde fort ist, kommt nicht dadurch zurueck, dass man alle fuenfzehn
+    /// Sekunden danach fragt -- es fuellt nur das Protokoll.
+    /// </remarks>
+    private TimeSpan _abstand = ErsterAbstand;
+
+    private static readonly TimeSpan ErsterAbstand = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan GroessterAbstand = TimeSpan.FromMinutes(5);
+
+    /// <summary>Laeuft gerade ein Versuch?</summary>
+    private int _versuchLaeuft;
+
+    /// <summary>
+    /// Nimmt getrennte Gegenstellen wieder auf.
+    /// </summary>
+    /// <remarks>
+    /// Eine Verbindung geht verloren, ohne dass jemand etwas falsch gemacht
+    /// hat: das WLAN bricht ab, ein VPN legt sich davor, der Server startet
+    /// neu. Bisher blieb der Zustand danach auf "getrennt" stehen, bis jemand
+    /// von Hand verband oder das Programm neu startete -- und "alles
+    /// angehalten" umzuschalten war der einzige Weg, der es nebenbei tat.
+    ///
+    /// Angehalten heisst angehalten: dann wird nicht verbunden.
+    /// </remarks>
+    private void VersucheWiederzuverbinden()
+    {
+        if (_config.Paused) return;
+        if (DateTime.UtcNow - _letzterVersuch < _abstand) return;
+
+        var offen = _peers
+            .Where(p => p.Config.AutoConnect && p.Host.State == PeerState.Getrennt)
+            .ToList();
+
+        if (offen.Count == 0)
+        {
+            // Alles steht. Der naechste Ausfall soll nicht erst in fuenf
+            // Minuten bemerkt werden.
+            _abstand = ErsterAbstand;
+            return;
+        }
+
+        // Ein Versuch dauert, bis eine Verbindung steht oder scheitert. Der
+        // Takt laeuft weiter; ohne diese Sperre lagen bald zehn Versuche
+        // uebereinander.
+        if (Interlocked.Exchange(ref _versuchLaeuft, 1) == 1) return;
+
+        _letzterVersuch = DateTime.UtcNow;
+
+        _ = Dispatcher.InvokeAsync(async () =>
+        {
+            try
+            {
+                foreach (var item in offen)
+                {
+                    Status(App.S("M.Reconnecting", item.Display));
+                    await ConnectAsync(item);
+                }
+
+                _abstand = _peers.Any(p => p.Config.AutoConnect && p.Host.State == PeerState.Getrennt)
+                    ? Verdoppeln(_abstand)
+                    : ErsterAbstand;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _versuchLaeuft, 0);
+            }
+        });
+    }
+
+    private static TimeSpan Verdoppeln(TimeSpan abstand)
+        => abstand * 2 > GroessterAbstand ? GroessterAbstand : abstand * 2;
+
+    /// <summary>
+    /// Horcht darauf, dass sich am Netz etwas aendert.
+    /// </summary>
+    /// <remarks>
+    /// Ein VPN, das sich verbindet oder trennt, aendert die Adressen dieses
+    /// Rechners -- ebenso ein WLAN, das zurueckkommt. Das ist der Augenblick,
+    /// in dem ein Versuch sich lohnt, und nicht erst der naechste Abstand.
+    ///
+    /// Das Ereignis kommt aus einem fremden Faden. Verbunden wird deshalb
+    /// nicht hier, sondern beim naechsten Takt: gesetzt wird nur, dass er
+    /// nicht mehr zu warten braucht.
+    /// </remarks>
+    private void HorcheAufNetz()
+        => System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) =>
+        {
+            _abstand = ErsterAbstand;
+            _letzterVersuch = DateTime.MinValue;
+        };
 
     /// <summary>
     /// Zieht die Grenzen der Datentraeger nach.
