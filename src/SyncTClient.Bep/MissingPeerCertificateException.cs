@@ -4,9 +4,9 @@ namespace SyncTClient.Bep;
 /// Der Handschlag stand, aber die Gegenstelle blieb ohne Zertifikat.
 /// </summary>
 /// <remarks>
-/// Eigene Ausnahme, weil dieser Fall anders behandelt wird als ein
-/// gescheiterter Handschlag. Er tritt eingehend unter Windows in TLS 1.3
-/// regelmaessig auf und ist kein Grund, die Gegenstelle abzuweisen -- die
-/// Verbindung laesst sich in der Gegenrichtung aufbauen.
+/// Eigene Ausnahme, weil dieser Fall eine eigene Ursache hat und nicht mit
+/// einem gescheiterten Handschlag zu verwechseln ist: TLS steht, das Hello
+/// ist ausgetauscht, nur die Identitaet fehlt. Unter Windows trifft das jede
+/// Gegenstelle, deren Zertifikat auf Ed25519 beruht.
 /// </remarks>
 public sealed class MissingPeerCertificateException(string message) : Exception(message);

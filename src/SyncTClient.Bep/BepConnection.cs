@@ -210,24 +210,27 @@ public sealed class BepConnection : IAsyncDisposable
             var peerHello = await HelloExchange
                 .ExchangeAsync(tls, OwnHello(deviceName), ct).ConfigureAwait(false);
 
-            // Unter Windows bleibt das Zertifikat in TLS 1.3 aus, und daran
-            // laesst sich hier nichts aendern.
+            // Kein Zertifikat heisst in aller Regel: Ed25519.
             //
-            // SChannel gibt das Zertifikat der Gegenseite nicht heraus, auch
-            // nicht nach dem ersten Lesen, obwohl ClientCertificateRequired
-            // gesetzt ist. Vorgesehen waere die Nachforderung nach dem
-            // Handschlag (NegotiateClientCertificateAsync); die kennt die
-            // TLS-Bibliothek von Go nicht, auf der Syncthing steht. Und auf
-            // TLS 1.2 auszuweichen scheidet aus: Syncthing 2 spricht es nicht.
+            // Syncthing erzeugt die Zertifikate fuer Sync-Verbindungen seit
+            // einiger Zeit mit Ed25519. Windows kennt dieses Verfahren nicht
+            // und fuehrt es deshalb in seiner Zertifikatsanforderung nicht
+            // auf; die Gegenstelle findet daraufhin kein verwendbares
+            // Zertifikat und schickt ein leeres. Hier kommt das als "keines"
+            // an.
+            //
+            // In der Gegenrichtung scheitert es genauso, nur frueher: der
+            // Handschlag bricht mit "peer doesn't support any of the
+            // certificate's signature algorithms" ab. Aeltere Gegenstellen
+            // mit einem Zertifikat auf ECDSA P-384 sind davon nicht
+            // betroffen.
             //
             // Ohne Zertifikat gibt es keine Geraete-ID und damit keine
-            // brauchbare Verbindung. Der Lauscher faengt diese Ausnahme
-            // gesondert ab und baut die Verbindung in der Gegenrichtung auf,
-            // denn ausgehend sind wir der Client und schicken unser
-            // Zertifikat selbst.
+            // brauchbare Verbindung.
             var remoteCert = tls.RemoteCertificate
                 ?? throw new MissingPeerCertificateException(
-                    "Die Gegenstelle hat kein Zertifikat geliefert. " + Handschlag(tls, peerHello));
+                    "Die Gegenstelle hat kein Zertifikat geliefert -- vermutlich verwendet es " +
+                    "Ed25519, das Windows nicht beherrscht. " + Handschlag(tls, peerHello));
 
             var peerId = DeviceId.FromCertificate(remoteCert.Export(X509ContentType.Cert));
 

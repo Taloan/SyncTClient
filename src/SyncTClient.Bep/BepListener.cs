@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
 
 namespace SyncTClient.Bep;
@@ -22,18 +22,6 @@ public sealed class BepListener : IAsyncDisposable
 {
     /// <summary>So lange darf eine Gegenstelle fuer TLS und Hello brauchen.</summary>
     private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(15);
-
-    /// <summary>Der Port, auf dem Syncthing lauscht.</summary>
-    private const int StandardPort = 22000;
-
-    /// <summary>
-    /// So lange wird dieselbe Adresse nach einem Versuch nicht erneut
-    /// angerufen.
-    /// </summary>
-    private static readonly TimeSpan Sperrfrist = TimeSpan.FromSeconds(30);
-
-    /// <summary>Wann eine Adresse zuletzt angerufen wurde.</summary>
-    private readonly Dictionary<IPAddress, DateTime> _zuletztAngerufen = [];
 
     private readonly DeviceIdentity _identity;
     private readonly string _deviceName;
@@ -140,81 +128,10 @@ public sealed class BepListener : IAsyncDisposable
 
             Incoming.Invoke(connection, remote);
         }
-        catch (MissingPeerCertificateException)
-        {
-            tcp.Dispose();
-            await ZurueckVerbindenAsync(remote?.Address, ct).ConfigureAwait(false);
-        }
         catch (Exception ex)
         {
             _log($"Verbindung von {remote?.Address.ToString() ?? "unbekannt"} kam nicht zustande: {Ursache(ex)}");
             tcp.Dispose();
-        }
-    }
-
-    /// <summary>
-    /// Baut die Verbindung zu einer Adresse auf, die uns angerufen hat.
-    /// </summary>
-    /// <remarks>
-    /// Eingehend gibt Windows in TLS 1.3 das Zertifikat der Gegenstelle nicht
-    /// heraus; ohne Zertifikat gibt es keine Geraete-ID. Ausgehend stellt sich
-    /// die Frage nicht: dort sind wir der Client, schicken unser Zertifikat
-    /// selbst und bekommen das der Gegenstelle als Serverzertifikat. Dieselbe
-    /// Verbindung, nur andersherum aufgebaut.
-    ///
-    /// Angerufen wird der Standardport, nicht der Absenderport der
-    /// eingehenden Verbindung -- der ist zufaellig vergeben. Lauscht die
-    /// Gegenstelle woanders, scheitert der Versuch, und das steht dann im
-    /// Protokoll.
-    ///
-    /// Die Sperrfrist verhindert, dass zwei Programme sich gegenseitig
-    /// anrufen, solange beide keine Verbindung zustande bringen.
-    /// </remarks>
-    private async Task ZurueckVerbindenAsync(IPAddress? address, CancellationToken ct)
-    {
-        if (address is null) return;
-
-        // Eine eingehende IPv4-Verbindung erreicht uns ueber den
-        // Doppelstack-Socket als ::ffff:a.b.c.d. So laesst sie sich nicht
-        // anrufen.
-        if (address.IsIPv4MappedToIPv6) address = address.MapToIPv4();
-
-        lock (_zuletztAngerufen)
-        {
-            if (_zuletztAngerufen.TryGetValue(address, out var vorhin)
-                && DateTime.UtcNow - vorhin < Sperrfrist)
-            {
-                return;
-            }
-
-            _zuletztAngerufen[address] = DateTime.UtcNow;
-        }
-
-        _log($"{address} hat kein Zertifikat geliefert. Baue die Verbindung in der Gegenrichtung auf.");
-
-        try
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(HandshakeTimeout);
-
-            // DeviceId.Empty heisst: jede Kennung wird angenommen. Welche es
-            // ist, entscheidet der Aufrufer -- genauso wie bei einer
-            // eingehenden Verbindung.
-            var connection = await BepConnection.ConnectAsync(
-                address.ToString(), StandardPort, _identity, DeviceId.Empty,
-                _deviceName, timeout.Token).ConfigureAwait(false);
-
-            if (Incoming is null)
-            {
-                await connection.DisposeAsync().ConfigureAwait(false);
-                return;
-            }
-
-            Incoming.Invoke(connection, new IPEndPoint(address, StandardPort));
-        }
-        catch (Exception ex)
-        {
-            _log($"Verbindung zu {address}:{StandardPort} kam nicht zustande: {Ursache(ex)}");
         }
     }
 
