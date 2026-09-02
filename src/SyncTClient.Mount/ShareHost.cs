@@ -1128,8 +1128,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// 0.2: ShowSiblingsAsGroup gesetzt.
     /// 0.3: und wieder zurueckgenommen -- Windows gruppiert damit nach
     /// Elternverzeichnis und benennt den Knoten danach.
+    /// 0.4: eigenes Symbol statt der Windows-Wolke.
     /// </remarks>
-    private const string SyncRootFassung = "0.3";
+    private const string SyncRootFassung = "0.4";
 
     private async Task ProjectAsync()
     {
