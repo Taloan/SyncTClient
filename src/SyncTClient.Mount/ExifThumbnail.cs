@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 
 namespace SyncTClient.Mount;
 
@@ -32,6 +32,18 @@ public static class ExifThumbnail
     /// keines vorhanden ist.
     /// </summary>
     public static byte[]? TryExtract(ReadOnlySpan<byte> jpegPrefix)
+        => TryExtract(jpegPrefix, out _);
+
+    /// <summary>
+    /// Wie oben, nennt aber, woran es lag.
+    /// </summary>
+    /// <remarks>
+    /// "Kein eingebettetes Bild" fasste mehrere Sachverhalte zusammen: ein
+    /// Dateianfang, der gar nicht ankam, ein fehlender Exif-Abschnitt und ein
+    /// Verzeichnis ohne Vorschaubild sahen im Protokoll gleich aus. Bei einer
+    /// Datei ist das gleichgueltig, bei tausend nicht.
+    /// </remarks>
+    public static byte[]? TryExtract(ReadOnlySpan<byte> jpegPrefix, out string grund)
     {
         // Ein Byte-Parser trifft auf abgeschnittenen Daten frueher oder
         // spaeter auf eine Laengenangabe, die nicht mehr passt. Das ist kein
@@ -39,13 +51,37 @@ public static class ExifThumbnail
         // diesem Fall gibt es keine Vorschau.
         try
         {
-            var exif = FindExifSegment(jpegPrefix);
-            if (exif.IsEmpty) return null;
+            if (jpegPrefix.Length < 4)
+            {
+                grund = "vom Dateianfang kam nichts an";
+                return null;
+            }
 
-            return TryReadFromTiff(exif, jpegPrefix);
+            if (jpegPrefix[0] != 0xFF || jpegPrefix[1] != 0xD8)
+            {
+                grund = $"der Dateianfang ist kein JPEG (beginnt mit {jpegPrefix[0]:X2} {jpegPrefix[1]:X2})";
+                return null;
+            }
+
+            var exif = FindExifSegment(jpegPrefix);
+            if (exif.IsEmpty)
+            {
+                grund = "im Dateianfang steht kein Exif-Abschnitt";
+                return null;
+            }
+
+            return TryReadFromTiff(exif, jpegPrefix, out grund);
         }
-        catch (ArgumentOutOfRangeException) { return null; }
-        catch (IndexOutOfRangeException) { return null; }
+        catch (ArgumentOutOfRangeException)
+        {
+            grund = "die Laengenangaben im Exif-Abschnitt passen nicht";
+            return null;
+        }
+        catch (IndexOutOfRangeException)
+        {
+            grund = "die Laengenangaben im Exif-Abschnitt passen nicht";
+            return null;
+        }
     }
 
     /// <summary>Sucht den APP1-Abschnitt mit der Kennung "Exif\0\0".</summary>
@@ -99,27 +135,60 @@ public static class ExifThumbnail
     /// Liest die zweite Bildverzeichnisstruktur (IFD1). Dort beschreibt die
     /// Kamera das Vorschaubild.
     /// </summary>
-    private static byte[]? TryReadFromTiff(ReadOnlySpan<byte> tiff, ReadOnlySpan<byte> wholeFile)
+    private static byte[]? TryReadFromTiff(
+        ReadOnlySpan<byte> tiff, ReadOnlySpan<byte> wholeFile, out string grund)
     {
-        if (tiff.Length < 8) return null;
+        grund = "";
+
+        if (tiff.Length < 8)
+        {
+            grund = "der Exif-Abschnitt ist zu kurz";
+            return null;
+        }
 
         bool littleEndian;
         if (tiff[0] == 'I' && tiff[1] == 'I') littleEndian = true;
         else if (tiff[0] == 'M' && tiff[1] == 'M') littleEndian = false;
-        else return null;
+        else
+        {
+            grund = "der Exif-Abschnitt nennt keine Bytereihenfolge";
+            return null;
+        }
 
-        if (ReadUInt16(tiff[2..], littleEndian) != 42) return null;
+        if (ReadUInt16(tiff[2..], littleEndian) != 42)
+        {
+            grund = "der Exif-Abschnitt traegt keine TIFF-Kennung";
+            return null;
+        }
 
         var ifd0Offset = ReadUInt32(tiff[4..], littleEndian);
-        if (ifd0Offset + 2 > (uint)tiff.Length) return null;
+        if (ifd0Offset + 2 > (uint)tiff.Length)
+        {
+            grund = "das erste Bildverzeichnis liegt ausserhalb des Abschnitts";
+            return null;
+        }
 
         // Am Ende von IFD0 steht der Verweis auf IFD1.
         var entryCount = ReadUInt16(tiff[(int)ifd0Offset..], littleEndian);
         var afterEntries = (int)ifd0Offset + 2 + entryCount * 12;
-        if (afterEntries + 4 > tiff.Length) return null;
+        if (afterEntries + 4 > tiff.Length)
+        {
+            grund = $"das erste Bildverzeichnis ist abgeschnitten ({afterEntries + 4} von {tiff.Length})";
+            return null;
+        }
 
         var ifd1Offset = ReadUInt32(tiff[afterEntries..], littleEndian);
-        if (ifd1Offset == 0 || ifd1Offset + 2 > (uint)tiff.Length) return null;
+        if (ifd1Offset == 0)
+        {
+            grund = "die Datei fuehrt kein zweites Bildverzeichnis";
+            return null;
+        }
+
+        if (ifd1Offset + 2 > (uint)tiff.Length)
+        {
+            grund = $"das zweite Bildverzeichnis liegt ausserhalb des Abschnitts ({ifd1Offset} von {tiff.Length})";
+            return null;
+        }
 
         var thumbCount = ReadUInt16(tiff[(int)ifd1Offset..], littleEndian);
         uint thumbOffset = 0, thumbLength = 0;
@@ -134,15 +203,33 @@ public static class ExifThumbnail
             else if (tag == TagJpegLength) thumbLength = ReadUInt32(tiff[(entry + 8)..], littleEndian);
         }
 
-        if (thumbOffset == 0 || thumbLength == 0) return null;
-        if (thumbOffset + thumbLength > (uint)tiff.Length) return null;
+        if (thumbOffset == 0 || thumbLength == 0)
+        {
+            grund = "das zweite Bildverzeichnis nennt kein Vorschaubild";
+            return null;
+        }
+
+        if (thumbOffset + thumbLength > (uint)tiff.Length)
+        {
+            grund = $"das Vorschaubild liegt ausserhalb des Abschnitts ({thumbOffset}+{thumbLength} von {tiff.Length})";
+            return null;
+        }
+
         // Unplausibel grossen Angaben wird nicht vertraut.
-        if (thumbLength > 4 * 1024 * 1024) return null;
+        if (thumbLength > 4 * 1024 * 1024)
+        {
+            grund = $"die genannte Groesse des Vorschaubildes ist unglaubwuerdig ({thumbLength})";
+            return null;
+        }
 
         var thumbnail = tiff.Slice((int)thumbOffset, (int)thumbLength);
 
         // Das Vorschaubild muss selbst ein JPEG sein.
-        if (thumbnail.Length < 4 || thumbnail[0] != 0xFF || thumbnail[1] != 0xD8) return null;
+        if (thumbnail.Length < 4 || thumbnail[0] != 0xFF || thumbnail[1] != 0xD8)
+        {
+            grund = "an der genannten Stelle steht kein JPEG";
+            return null;
+        }
 
         return thumbnail.ToArray();
     }
