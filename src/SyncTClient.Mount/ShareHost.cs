@@ -1212,7 +1212,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         await AdoptLocalAsync();
 
         SetPhase(SyncPhase.Platzhalter);
-        _mount.ProjectPlaceholders((done, total) => SetPhase(SyncPhase.Platzhalter, done, total));
+        _mount.ProjectPlaceholders(
+            (done, total) => SetPhase(SyncPhase.Platzhalter, done, total),
+            nurVerzeichnisse: _config.Mode == ShareMode.AlwaysLocal);
 
         // Das Anlegen der Platzhalter deckt nur einen Teil ab: es legt an, was
         // fehlt. Eine Datei, die die Gegenstelle inzwischen geloescht oder
@@ -1380,8 +1382,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Erst jetzt an die Stelle der leeren Datei. Ein Abbruch unterwegs
             // laesst den Platzhalter stehen, statt eine halbe Datei zu
             // hinterlassen.
+            // Bei "vollstaendig lokal" steht dort nichts mehr, was zu
+            // entfernen waere -- die Datei entsteht gleich hier zum ersten Mal.
             schritt = "den Platzhalter entfernen";
-            File.Delete(path);
+            if (File.Exists(path)) File.Delete(path);
 
             schritt = "die Datei einsetzen";
             File.Move(temp, path);
@@ -1770,6 +1774,27 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _lastScan = DateTime.MinValue;
     }
 
+    /// <summary>
+    /// Ob der Inhalt dieser Datei hier noch fehlt.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Faelle, und seit "vollstaendig lokal" ohne Platzhalter arbeitet,
+    /// ist der erste der Normalfall: die Datei ist gar nicht da. Der zweite
+    /// ist ein Platzhalter ohne Inhalt -- aus einer frueheren Fassung oder aus
+    /// einem Wechsel der Betriebsart.
+    ///
+    /// Dieselben drei Merkmale wie beim Durchgang ueber den Ordner. Ob eine
+    /// Datei Inhalt haelt, darf nicht an zwei Stellen unterschiedlich
+    /// beantwortet werden.
+    /// </remarks>
+    private static bool FehltHier(string path)
+    {
+        if (!File.Exists(path)) return true;
+
+        return ((uint)new System.IO.FileInfo(path).Attributes
+                & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0;
+    }
+
     private async Task ApplyModeAsync(CancellationToken ct)
     {
         if (_config.Mode != ShareMode.AlwaysLocal) return;
@@ -1780,15 +1805,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // nichts zu laden gibt -- aber "nichts zu laden" heisst nicht "schon
         // da": als Platzhalter blieben sie fuer immer leer.
         //
-        // Und dieselben drei Merkmale wie beim Durchgang ueber den Ordner.
-        // Ob eine Datei Inhalt haelt, darf nicht an zwei Stellen
-        // unterschiedlich beantwortet werden.
         var pending = Enumerate()
             .Where(e => !e.IsDirectory)
             .Select(e => LocalPathOf(e.RelativePath))
-            .Where(p => File.Exists(p)
-                        && ((uint)new System.IO.FileInfo(p).Attributes
-                            & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
+            .Where(FehltHier)
             .ToList();
 
         if (pending.Count == 0) return;

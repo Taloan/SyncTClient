@@ -397,7 +397,26 @@ public sealed class CloudFilterMount : IDisposable
         }
     }
 
-    public void ProjectPlaceholders(Action<int, int>? progress = null)
+    /// <summary>
+    /// Legt an, was die Gegenstelle fuehrt und hier noch fehlt.
+    /// </summary>
+    /// <param name="nurVerzeichnisse">
+    /// Bei "vollstaendig lokal" gesetzt. Dann entstehen nur die Verzeichnisse;
+    /// die Dateien kommen als gewoehnliche Dateien an ihren Platz.
+    /// </param>
+    /// <remarks>
+    /// Der Platzhalter ist der Zweck der Betriebsart "bei Bedarf": ohne ihn
+    /// gaebe es nichts zu sehen und nichts anzuklicken. Bei "vollstaendig
+    /// lokal" ist er ein Umweg -- jede Datei landet ohnehin auf der Platte,
+    /// und der Platzhalter wird angelegt, um ihn beim Fuellen wieder
+    /// fortzunehmen. Genau dieses Fortnehmen ist die Stelle, an der Windows
+    /// mit ERROR_CLOUD_FILE_METADATA_CORRUPT abbricht.
+    ///
+    /// Gekennzeichnet werden die Dateien trotzdem, aber erst wenn ihr Inhalt
+    /// da ist: dann zeigt der Explorer den gruenen Haken, und ein spaeterer
+    /// Wechsel auf "bei Bedarf" findet vorbereitete Dateien vor.
+    /// </remarks>
+    public void ProjectPlaceholders(Action<int, int>? progress = null, bool nurVerzeichnisse = false)
     {
         var entries = _source.Enumerate();
 
@@ -447,6 +466,13 @@ public sealed class CloudFilterMount : IDisposable
             .Where(e => !StehtSchonDa(e))
             .GroupBy(e => ParentOf(e.RelativePath))
             .ToDictionary(g => g.Key, g => g.ToList());
+
+        if (nurVerzeichnisse)
+        {
+            _log?.Invoke($"{directories.Count - 1} Verzeichnisse angelegt, " +
+                         $"{files.Sum(g => g.Value.Count)} Dateien folgen mit ihrem Inhalt.");
+            return;
+        }
 
         var erwartet = files.Sum(g => g.Value.Count);
         progress?.Invoke(0, erwartet);
