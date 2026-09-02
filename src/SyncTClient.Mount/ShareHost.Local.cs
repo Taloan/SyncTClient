@@ -1320,6 +1320,7 @@ public sealed partial class ShareHost
 
                 SweepHydrations();
                 SweepOutgoing();
+                PflegeBeobachter();
 
                 // Erst hereinnehmen, dann hinausgeben. Andernfalls wuerde eine
                 // Datei, die beide Seiten geaendert haben, als eigene Aenderung
