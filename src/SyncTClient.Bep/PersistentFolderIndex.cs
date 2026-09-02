@@ -678,6 +678,55 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
+    /// Verdichtet die Datenbank, hoechstens einmal im genannten Abstand.
+    /// </summary>
+    /// <remarks>
+    /// Eine Datenbank, aus der viel geloescht wurde, wird nicht kleiner: die
+    /// Seiten bleiben stehen und werden wiederverwendet. Bei einem Ordner,
+    /// der sich staendig aendert, sammelt sich das an. VACUUM schreibt sie neu.
+    ///
+    /// Beim Beenden, nicht im Betrieb: die Datenbank wird dabei vollstaendig
+    /// kopiert, und waehrenddessen geht nichts anderes. Beim Beenden wartet
+    /// niemand darauf.
+    ///
+    /// Der Zeitpunkt steht in der Datenbank selbst und nicht in der
+    /// Konfiguration. Er gehoert zu dieser Datei; wird sie geloescht, ist auch
+    /// die Frage nach ihrem letzten Verdichten gegenstandslos.
+    /// </remarks>
+    /// <returns>Ob verdichtet wurde.</returns>
+    public bool CompactIfDue(TimeSpan abstand)
+    {
+        using var gate = _gate.EnterScope();
+
+        var zuletzt = GetMeta("lastVacuum");
+
+        if (DateTimeOffset.TryParse(zuletzt, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out var wann)
+            && DateTimeOffset.UtcNow - wann < abstand)
+        {
+            return false;
+        }
+
+        try
+        {
+            Execute("VACUUM");
+            Execute("PRAGMA optimize");
+        }
+        catch (SqliteException)
+        {
+            // Verdichten ist eine Wohltat, keine Pflicht. Beim naechsten Mal.
+            return false;
+        }
+
+        // Auch bei einem Fehlschlag waere ein Vermerk richtig -- sonst wird es
+        // bei jedem Beenden neu versucht. Aber ein Fehlschlag ist selten, und
+        // ein Versuch je Beenden ist billiger als ein Vermerk, der eine
+        // Verdichtung behauptet, die nie stattfand.
+        SetMeta("lastVacuum", DateTimeOffset.UtcNow.ToString("O"));
+        return true;
+    }
+
+    /// <summary>
     /// Raeumt den ganzen Index aus.
     /// </summary>
     /// <remarks>

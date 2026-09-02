@@ -2328,9 +2328,33 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private string LocalPathOf(string relativePath)
         => Path.Combine(_config.LocalPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
+    /// <summary>Wie oft der Index verdichtet wird.</summary>
+    /// <remarks>
+    /// Beim Beenden geprueft, hoechstens einmal die Woche ausgefuehrt. Wer
+    /// sein Programm taeglich beendet, verdichtet sonst taeglich, und das ist
+    /// bei einem Ordner, an dem sich nichts aendert, vergeudete Zeit.
+    /// </remarks>
+    private static readonly TimeSpan Verdichtungsabstand = TimeSpan.FromDays(7);
+
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
+
+        // Beim Beenden, denn dabei wird die Datenbank vollstaendig neu
+        // geschrieben und waehrenddessen geht nichts anderes. Es wartet
+        // niemand mehr darauf.
+        try
+        {
+            var uhr = System.Diagnostics.Stopwatch.StartNew();
+            lock (_indexGate)
+                if (_index?.CompactIfDue(Verdichtungsabstand) == true)
+                    _log($"[{FolderId}] Index verdichtet in {uhr.ElapsedMilliseconds} ms.");
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Index verdichten: {ex.Message}");
+        }
+
         _index?.Dispose();
         _index = null;
         _indexArrived.Dispose();
