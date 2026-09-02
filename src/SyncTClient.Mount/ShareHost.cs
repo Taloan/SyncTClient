@@ -1402,13 +1402,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 InternalBufferSize = 64 * 1024
             };
 
-            wache.Created += (_, e) => NoteLocalChange(e.FullPath);
-            wache.Changed += (_, e) => NoteLocalChange(e.FullPath);
-            wache.Deleted += (_, e) => NoteLocalDelete(e.FullPath);
+            wache.Created += (_, e) => NoteLocalChange(Lang(e.FullPath));
+            wache.Changed += (_, e) => NoteLocalChange(Lang(e.FullPath));
+            wache.Deleted += (_, e) => NoteLocalDelete(Lang(e.FullPath));
             wache.Renamed += (_, e) =>
             {
-                NoteLocalDelete(e.OldFullPath);
-                NoteLocalChange(e.FullPath);
+                // Der alte Pfad wird selbst zusammengesetzt, nicht aus
+                // OldFullPath gelesen: bei sehr langen Pfaden wirft die
+                // Eigenschaft, und ein Wurf im Rueckruf des Beobachters nimmt
+                // den ganzen Beobachter mit.
+                var vorher = Path.Combine(Path.GetDirectoryName(e.FullPath) ?? "", e.OldName ?? "");
+                NoteLocalDelete(Lang(vorher));
+                NoteLocalChange(Lang(e.FullPath));
             };
 
             // Ein uebergelaufener Puffer heisst: wir wissen nicht, was uns
@@ -1431,6 +1436,69 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             _log($"[{FolderId}] kein Beobachter fuer \"{_config.LocalPath}\": {ex.Message}");
             OhneBeobachter();
         }
+    }
+
+    /// <summary>
+    /// Loest einen kurzen 8.3-Namen in den langen auf.
+    /// </summary>
+    /// <remarks>
+    /// Der Beobachter meldet gelegentlich Pfade in der alten Schreibweise --
+    /// "PROGRA~1" statt "Program Files". Unter einem solchen Namen findet
+    /// sich im Index nichts, und die Aenderung ginge verloren.
+    ///
+    /// Gefragt wird nur, wenn eine Tilde vorkommt. Der Aufruf kostet einen
+    /// Zugriff auf das Dateisystem, und der Normalfall soll ihn nicht zahlen.
+    /// </remarks>
+    private static string Lang(string pfad)
+    {
+        if (!pfad.Contains('~')) return pfad;
+
+        try
+        {
+            var puffer = new char[1024];
+            var laenge = GetLongPathNameW(pfad, puffer, (uint)puffer.Length);
+
+            // 0 heisst Fehler, groesser als der Puffer heisst zu lang. In
+            // beiden Faellen bleibt der gemeldete Pfad die beste Auskunft.
+            return laenge > 0 && laenge < puffer.Length ? new string(puffer, 0, (int)laenge) : pfad;
+        }
+        catch (Exception)
+        {
+            return pfad;
+        }
+    }
+
+    [System.Runtime.InteropServices.LibraryImport(
+        "kernel32.dll", EntryPoint = "GetLongPathNameW", StringMarshalling =
+            System.Runtime.InteropServices.StringMarshalling.Utf16)]
+    private static partial uint GetLongPathNameW(string kurz, char[] lang, uint groesse);
+
+    /// <summary>
+    /// Legt den Beobachter neu an, wenn er ausgefallen ist.
+    /// </summary>
+    /// <remarks>
+    /// Ein ausgehaengtes Laufwerk nimmt ihn mit: er meldet einen Fehler und
+    /// stellt die Arbeit ein. Kommt das Laufwerk zurueck, kommt er nicht von
+    /// selbst mit -- der Ordner waere danach still, ohne dass es jemand
+    /// bemerkt, bis der naechste vollstaendige Durchgang laeuft.
+    ///
+    /// Geprueft wird im Hintergrundlauf. Solange er steht, ist das ein
+    /// Vergleich zweier Flaggen.
+    /// </remarks>
+    private void PflegeBeobachter()
+    {
+        if (!_config.WatchChanges) return;
+        if (_wache is { EnableRaisingEvents: true }) return;
+        if (!Directory.Exists(_config.LocalPath)) return;
+
+        _wache?.Dispose();
+        _wache = null;
+
+        _log($"[{FolderId}] der Beobachter wird neu angelegt.");
+        BeobachteOrdner();
+
+        // Was waehrend seiner Abwesenheit geschah, hat er nicht gemeldet.
+        _lastScan = DateTime.MinValue;
     }
 
     private async Task ApplyModeAsync(CancellationToken ct)
