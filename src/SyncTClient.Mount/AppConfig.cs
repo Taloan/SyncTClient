@@ -217,6 +217,22 @@ public sealed class ShareConfig
         => Ignored.Count > 0 && Rules.Matches(relativePath);
 
     /// <summary>
+    /// Der Abstand zwischen zwei vollstaendigen Durchgaengen, in Sekunden.
+    /// </summary>
+    /// <remarks>
+    /// Eine Stunde als Vorgabe, wie bei Syncthing. Ein grosser Ordner, der
+    /// sich selten aendert, vertraegt mehr; ein Laufwerk, dessen Meldungen
+    /// man nicht traut, braucht weniger.
+    ///
+    /// Der tatsaechliche Abstand streut zwischen drei Vierteln und fuenf
+    /// Vierteln davon, damit mehrere Freigaben nicht im Gleichschritt laufen.
+    ///
+    /// Ohne Beobachter gilt hoechstens eine Minute, gleich was hier steht:
+    /// dann ist der Durchgang die einzige Quelle.
+    /// </remarks>
+    public int ScanIntervalSeconds { get; set; } = 3600;
+
+    /// <summary>
     /// Aenderungen im Ordner ueber das Dateisystem melden lassen.
     /// </summary>
     /// <remarks>

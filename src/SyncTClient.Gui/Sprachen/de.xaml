@@ -352,6 +352,8 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="C.Hidden">{0} Zweige ausgeblendet.</s:String>
   <s:String x:Key="C.Blocked">Nicht möglich: {0} Dateien erreichen die Platzhalter-Schwelle nicht.</s:String>
   <s:String x:Key="S.Share.TreeHint">Angekreuzt: liegt hier, als Platzhalter oder mit Inhalt.&#10;Nicht angekreuzt: wird trotzdem übertragen und hier gelöscht, sobald die Platzhalter-Schwelle erreicht ist.</s:String>
+  <s:String x:Key="S.Share.ScanInterval">Vollständiges Scanintervall (s)</s:String>
+  <s:String x:Key="S2.ScanInvalid">Das Scanintervall braucht eine Zahl ab 30 Sekunden.</s:String>
   <s:String x:Key="S.Share.Watch">Änderungen im Ordner überwachen</s:String>
   <s:String x:Key="S.Share.WatchHint">Das Dateisystem meldet Änderungen, sobald sie geschehen. Nicht jedes Laufwerk kann das — Netzlaufwerke und manche Treiber melden nichts oder nur einen Teil. Abgewählt wird der Ordner stattdessen jede Minute vollständig durchgegangen: langsamer und rechenintensiver, aber vollständig.</s:String>
   <s:String x:Key="S.Share.InExplorer">Im Navigationsbereich des Explorers anzeigen</s:String>

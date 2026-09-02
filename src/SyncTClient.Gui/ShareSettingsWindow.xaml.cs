@@ -47,6 +47,7 @@ public partial class ShareSettingsWindow : Window
         IgnoreBox.Text = string.Join(Environment.NewLine, share.Ignored);
         ExplorerBox.IsChecked = share.ShowInExplorer;
         WatchBox.IsChecked = share.WatchChanges;
+        ScanBox.Text = share.ScanIntervalSeconds.ToString();
         UpdateCacheEnabled();
         _loading = false;
 
@@ -193,6 +194,14 @@ public partial class ShareSettingsWindow : Window
             return;
         }
 
+        if (!int.TryParse(ScanBox.Text.Trim(), out var abstand) || abstand < 30)
+        {
+            SaveHint.Text = App.S("S2.ScanInvalid");
+            ScanBox.Focus();
+            return;
+        }
+
+        _share.ScanIntervalSeconds = abstand;
         _share.Label = LabelBox.Text.Trim();
         _share.LocalPath = LocalPathBox.Text.Trim();
         _share.Mode = ModeBox.SelectedIndex == 1 ? ShareMode.AlwaysLocal : ShareMode.OnDemand;
