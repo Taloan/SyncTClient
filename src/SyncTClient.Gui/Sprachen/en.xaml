@@ -360,6 +360,8 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="C.Hidden">{0} branches hidden.</s:String>
   <s:String x:Key="C.Blocked">Not possible: {0} files have not reached the placeholder threshold.</s:String>
   <s:String x:Key="S.Share.TreeHint">Checked: kept here, as a placeholder or with content.&#10;Not checked: still transferred, then deleted here once the placeholder threshold is reached.</s:String>
+  <s:String x:Key="S.Share.ScanInterval">Full rescan interval (s)</s:String>
+  <s:String x:Key="S2.ScanInvalid">The rescan interval needs a number of 30 seconds or more.</s:String>
   <s:String x:Key="S.Share.Watch">Watch the folder for changes</s:String>
   <s:String x:Key="S.Share.WatchHint">The file system reports changes as they happen. Not every drive can do this — network drives and some drivers report nothing, or only part of it. Unticked, the folder is scanned in full every minute instead: slower and more expensive, but complete.</s:String>
   <s:String x:Key="S.Share.InExplorer">Show in the Explorer navigation pane</s:String>

@@ -63,6 +63,12 @@
                        Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap"
                        MaxWidth="520" HorizontalAlignment="Left" Margin="5,2,0,0" />
 
+            <StackPanel Orientation="Horizontal" Margin="5,6,0,0">
+              <TextBlock Text="{DynamicResource S.Share.ScanInterval}" VerticalAlignment="Center" />
+              <TextBox x:Name="ScanBox" Width="80" Margin="8,0,0,0"
+                       VerticalContentAlignment="Center" TextAlignment="Right" />
+            </StackPanel>
+
             <CheckBox x:Name="ExplorerBox" Content="{DynamicResource S.Share.InExplorer}" Margin="0,12,0,0" />
             <TextBlock Text="{DynamicResource S.Share.InExplorerHint}"
                        Foreground="{DynamicResource Gedaempft}" FontSize="11" TextWrapping="Wrap"

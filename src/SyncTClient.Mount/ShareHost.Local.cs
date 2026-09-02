@@ -141,7 +141,22 @@ public sealed partial class ShareHost
     /// vom Laufwerk nicht getragen --, ist der Durchgang wieder die einzige
     /// Quelle, und dann darf er nicht stuendlich sein.
     /// </remarks>
-    private void OhneBeobachter() => _rescanInterval = Streuen(TimeSpan.FromMinutes(1));
+    private void OhneBeobachter()
+        => _rescanInterval = Streuen(Eingestellt() < TimeSpan.FromMinutes(1)
+            ? Eingestellt()
+            : TimeSpan.FromMinutes(1));
+
+    /// <summary>Mit Beobachter gilt, was eingestellt ist.</summary>
+    private void MitBeobachter() => _rescanInterval = Streuen(Eingestellt());
+
+    /// <summary>Der eingestellte Abstand, in vertretbaren Grenzen.</summary>
+    /// <remarks>
+    /// Unter dreissig Sekunden lohnt kein Durchgang -- er dauert bei einem
+    /// grossen Ordner laenger als der Abstand und liefe damit dauernd. Ueber
+    /// einer Woche ist es kein Netz mehr, sondern eine Behauptung.
+    /// </remarks>
+    private TimeSpan Eingestellt()
+        => TimeSpan.FromSeconds(Math.Clamp(_config.ScanIntervalSeconds, 30, 7 * 24 * 3600));
 
     /// <summary>
     /// So lange nach der eigenen Ankuendigung bleibt eine Datei liegen, bevor

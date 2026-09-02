@@ -1422,6 +1422,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
             wache.EnableRaisingEvents = true;
             _wache = wache;
+            MitBeobachter();
         }
         catch (Exception ex)
         {
