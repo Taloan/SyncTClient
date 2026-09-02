@@ -1133,6 +1133,24 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     private async Task ProjectAsync()
     {
+        // Ganz am Anfang, vor allem, was etwas anlegt.
+        //
+        // Stand die Pruefung weiter unten, hatte ein gescheiterter Anlauf
+        // bereits den Sync-Root angemeldet, den Cache geoeffnet und die
+        // Cloud-Files-Schicht verbunden. Ein zweiter Anlauf traf dann auf all
+        // das und legte es ein zweites Mal an. Jetzt hinterlaesst ein
+        // Fehlschlag nichts, und der naechste Versuch ist ein erster.
+        MarkierungPruefen();
+
+        // Und falls doch etwas steht -- etwa weil die Markierung erst im
+        // laufenden Betrieb verschwand --, wird es zuerst abgeraeumt.
+        if (_mount is not null)
+        {
+            await StopLocalLoopAsync().ConfigureAwait(false);
+            _mount.Dispose();
+            _mount = null;
+        }
+
         _log($"[{FolderId}] registriere Sync-Root: {_config.LocalPath}");
 
         // Ueber StorageProviderSyncRootManager statt CfRegisterSyncRoot: nur
@@ -1230,7 +1248,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // geloescht wurde, waehrend das Programm nicht lief, bekaeme dabei
         // sofort wieder einen Platzhalter -- und die Loeschung waere nicht
         // mehr zu sehen, sondern rueckgaengig gemacht.
-        MarkierungPruefen();
         OfflineGeloeschte();
 
         SetPhase(SyncPhase.Platzhalter);
