@@ -360,7 +360,42 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// das Netz. Ueber Knoten, mit denen gerade keine Verbindung besteht, ist
     /// nichts bekannt.
     /// </remarks>
-    public int ReachableCopies => (_index?.Count ?? 0) > 0 ? _connections.Count : 0;
+    private bool _kenntEtwas;
+    private DateTime _kenntGeprueft = DateTime.MinValue;
+
+    /// <summary>
+    /// Wie viele erreichbare Knoten den Inhalt vorhalten koennen.
+    /// </summary>
+    /// <remarks>
+    /// Hier stand "_index.Count > 0", und das ist ein SELECT COUNT(DISTINCT
+    /// name) ueber die ganze Tabelle. Gelesen wird die Zahl aus der Tabelle
+    /// der Oberflaeche, viermal je Zeile und Sekunde -- bei acht Freigaben
+    /// also zweiunddreissig vollstaendige Zaehlungen in der Sekunde, eine
+    /// davon ueber hundertvierzehntausend Zeilen, waehrend derselbe Index
+    /// gerade beschrieben wird.
+    ///
+    /// Der Sekundentakt der Oberflaeche brauchte dadurch sieben Sekunden.
+    /// Gemessen, nicht geraten: "Takt 7762 ms: ... Zeilen 7761 ...".
+    ///
+    /// Gefragt ist ohnehin nur, ob der Index etwas fuehrt. Das beantwortet
+    /// EXISTS beim ersten Treffer -- und auch das nur alle zwei Sekunden,
+    /// denn oefter aendert sich die Antwort nicht.
+    /// </remarks>
+    public int ReachableCopies
+    {
+        get
+        {
+            if (DateTime.UtcNow - _kenntGeprueft > TimeSpan.FromSeconds(2))
+            {
+                _kenntGeprueft = DateTime.UtcNow;
+
+                try { lock (_indexGate) _kenntEtwas = _index?.HasEntries ?? false; }
+                catch (Exception) { /* die vorige Antwort bleibt stehen */ }
+            }
+
+            return _kenntEtwas ? _connections.Count : 0;
+        }
+    }
 
     private long _bytesReceived;
     private long _bytesSent;
