@@ -65,6 +65,10 @@
   <s:String x:Key="S.Device.OwnIdHint">Add this ID as a device on the remote device and share the folders you want with it. The shares then appear in the list as offered.</s:String>
   <s:String x:Key="S.Device.OwnId">This device’s ID</s:String>
   <s:String x:Key="S.Device.Copy">Copy to clipboard</s:String>
+  <s:String x:Key="S.Device.DataDir">Data directory and indexes</s:String>
+  <s:String x:Key="S.Device.DbSummary">{0} databases, {1} in total. One per folder, named after the folder ID; the SQLite companion files are included.</s:String>
+  <s:String x:Key="S.Device.NoData">No databases yet.</s:String>
+  <s:String x:Key="S.Device.NoShare">— no folder for this —</s:String>
   <s:String x:Key="S.Device.ConfigFile">Configuration file</s:String>
   <s:String x:Key="S.Device.StartGroup">Start and window</s:String>
   <s:String x:Key="S.Device.Autostart">Start with Windows</s:String>
