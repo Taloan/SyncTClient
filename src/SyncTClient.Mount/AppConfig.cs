@@ -217,6 +217,21 @@ public sealed class ShareConfig
         => Ignored.Count > 0 && Rules.Matches(relativePath);
 
     /// <summary>
+    /// Ob diese Freigabe im Navigationsbereich des Explorers steht.
+    /// </summary>
+    /// <remarks>
+    /// Der Eintrag entsteht beim Anmelden der Sync-Wurzel und laesst sich
+    /// dort nicht abbestellen; die Schnittstelle kennt keinen Schalter
+    /// dafuer. Abgeschaltet wird er nachtraeglich, ueber dieselbe Eigenschaft,
+    /// die auch OneDrive dafuer benutzt.
+    ///
+    /// Die Wurzel bleibt in jedem Fall bestehen. Platzhalter, Wolkensymbole
+    /// und Kontextmenue arbeiten weiter -- der Ordner steht nur nicht mehr
+    /// neben "Dieser PC".
+    /// </remarks>
+    public bool ShowInExplorer { get; set; } = true;
+
+    /// <summary>
     /// Vorschaubilder im Hintergrund vorbereiten. Das kostet je Bild einen
     /// Block von 128 KiB. Ohne Vorschaubilder zeigt der Explorer ein
     /// Ersatzsymbol.

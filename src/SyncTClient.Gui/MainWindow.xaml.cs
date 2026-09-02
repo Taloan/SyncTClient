@@ -1654,6 +1654,8 @@ public partial class MainWindow : Window
             // Zuerst die Muster: was sie treffen, gehoert gar nicht mehr zum
             // Abgleich und braucht auch nicht mehr geprueft zu werden, ob es
             // hier liegen darf.
+            host.ApplyExplorerVisibility();
+
             var (ausgenommen, _) = host.PurgeIgnored();
             if (ausgenommen > 0)
                 Dispatcher.BeginInvoke(() => Status(App.S("M.Purged", _row.Name, ausgenommen)));

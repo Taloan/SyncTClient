@@ -840,6 +840,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         FinishOutgoing();
 
+        _wache?.Dispose();
+        _wache = null;
+
         _cache?.Save();
         _cache?.LeaveLimits();
         _mount?.Dispose();
@@ -967,11 +970,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", SyncRootFassung);
         _log($"[{FolderId}] Vorschau-Erweiterung und zweite Anmeldung in {uhr.ElapsedMilliseconds} ms.");
 
+        ApplyExplorerVisibility();
+
         _mount = new CloudFilterMount(_config.LocalPath, this, _log);
 
         // Die Meldungen der Cloud-Files-Schicht sind der Ausloeser fuer die
         // Erkennung lokaler Aenderungen. Sie melden nur das Ereignis; ob es
         // eine Aenderung war, entscheidet Evaluate anhand des blocks_hash.
+        BeobachteOrdner();
+
         _mount.FileClosed += NoteLocalChange;
         _mount.FileDeleted += NoteLocalDelete;
         _mount.FileRenamed += (before, after) =>
@@ -1333,6 +1340,88 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Der naechste Durchgang misst neu. Bis dahin gilt die Liste als
         // abgearbeitet -- sonst liefe sie im naechsten Takt noch einmal.
         _ohneInhalt = [];
+    }
+
+    /// <summary>
+    /// Setzt durch, ob diese Freigabe im Explorer-Baum steht.
+    /// </summary>
+    /// <remarks>
+    /// Nach jedem Anmelden und nach jeder Aenderung der Einstellung. Das
+    /// Anmelden setzt die Eigenschaft auf sichtbar zurueck.
+    /// </remarks>
+    public void ApplyExplorerVisibility()
+    {
+        if (_syncRootId is null) return;
+
+        if (!WinRtSyncRoot.ShowInTree(_syncRootId, _config.ShowInExplorer) && !_config.ShowInExplorer)
+            _log($"[{FolderId}] liess sich nicht aus dem Explorer-Baum nehmen.");
+    }
+
+    /// <summary>Meldet Aenderungen im Ordner, ohne dass jemand danach sucht.</summary>
+    private FileSystemWatcher? _wache;
+
+    /// <summary>
+    /// Haengt einen Beobachter an den Ordner.
+    /// </summary>
+    /// <remarks>
+    /// Die Meldungen der Cloud-Files-Schicht decken nur ab, was durch sie
+    /// hindurchgeht. Eine Datei, die ein anderes Programm neu in den Ordner
+    /// schreibt, war nie ein Platzhalter -- fuer sie kommt keine. Bisher fand
+    /// sie nur der Durchgang, und der musste deshalb jede Minute ueber jede
+    /// Datei laufen: bei einundsiebzigtausend Dateien der teuerste Posten des
+    /// Programms.
+    ///
+    /// Der Beobachter meldet sie sofort und kostet nichts, solange nichts
+    /// geschieht. Der Durchgang bleibt als Sicherheitsnetz, nur seltener.
+    ///
+    /// Was wir selbst schreiben, faellt in NoteLocalChange heraus -- dort
+    /// steht die Sperre, die eine laufende Hydration von einer fremden
+    /// Aenderung unterscheidet.
+    /// </remarks>
+    private void BeobachteOrdner()
+    {
+        try
+        {
+            var wache = new FileSystemWatcher(_config.LocalPath)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
+                               | NotifyFilters.LastWrite | NotifyFilters.Size,
+
+                // Der Kern haelt die Ereignisse in einem Puffer, bis wir sie
+                // abholen. Laeuft er ueber, gehen sie verloren -- und bei
+                // einem Programm, das tausend Dateien auf einmal schreibt,
+                // laeuft der voreingestellte schnell ueber.
+                InternalBufferSize = 64 * 1024
+            };
+
+            wache.Created += (_, e) => NoteLocalChange(e.FullPath);
+            wache.Changed += (_, e) => NoteLocalChange(e.FullPath);
+            wache.Deleted += (_, e) => NoteLocalDelete(e.FullPath);
+            wache.Renamed += (_, e) =>
+            {
+                NoteLocalDelete(e.OldFullPath);
+                NoteLocalChange(e.FullPath);
+            };
+
+            // Ein uebergelaufener Puffer heisst: wir wissen nicht, was uns
+            // entgangen ist. Dann hilft nur der Durchgang, und zwar sofort.
+            wache.Error += (_, e) =>
+            {
+                _log($"[{FolderId}] Beobachter: {e.GetException().Message} -- es wird neu durchgegangen.");
+                _lastScan = DateTime.MinValue;
+                Wake();
+            };
+
+            wache.EnableRaisingEvents = true;
+            _wache = wache;
+        }
+        catch (Exception ex)
+        {
+            // Ohne Beobachter faellt das Programm auf den Durchgang zurueck.
+            // Das ist langsamer, aber vollstaendig.
+            _log($"[{FolderId}] kein Beobachter fuer \"{_config.LocalPath}\": {ex.Message}");
+        }
     }
 
     private async Task ApplyModeAsync(CancellationToken ct)
