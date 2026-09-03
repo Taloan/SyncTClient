@@ -1411,7 +1411,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         using var hold = HoldHydration(name);
 
-        var temp = path + ".synct-neu";
+        var temp = path + TempSuffix;
 
         try
         {
@@ -1500,8 +1500,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
 
         // Ohne Bloecke, aber mit Groesse: die Gegenstelle fuehrt den Namen
-        // und haelt den Inhalt nicht. Hier ist nichts zu beschaffen.
-        if (file.Blocks.Count == 0) return;
+        // und haelt den Inhalt nicht. Hier ist nichts zu beschaffen -- und
+        // der Aufrufer darf es nicht als geholt zaehlen, sonst meldet er
+        // "vollstaendig lokal" ueber Dateien, die leer dastehen.
+        if (file.Blocks.Count == 0)
+            throw new InvalidOperationException(
+                $"Die Gegenstelle fuehrt \"{name}\", haelt den Inhalt aber nicht.");
 
         // Warum nicht ueber CfHydratePlaceholder, was viel einfacher waere:
         //
@@ -1528,7 +1532,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Waehrend wir schreiben, ist jede Meldung darueber unsere eigene.
         using var hold = HoldHydration(name);
 
-        var temp = path + ".synct-neu";
+        var temp = path + TempSuffix;
 
         // Welcher Schritt gerade laeuft. Die Meldung der Cloud-Files-Schicht
         // nennt die Datei, aber nicht den Aufruf; fuenf Schritte fassen
@@ -1797,7 +1801,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         var offen = _ohneInhalt;
         if (offen.Count == 0) return;
 
-        _log($"[{FolderId}] {offen.Count} Platzhalter werden nachgeholt ...");
+        // "Platzhalter" stand hier, seit "vollstaendig lokal" welche anlegte.
+        // Das tut es nicht mehr; fehlende Inhalte gibt es weiterhin.
+        _log($"[{FolderId}] {offen.Count} fehlende Inhalte werden nachgeholt ...");
 
         var done = 0;
         SetPhase(SyncPhase.Inhalte, 0, offen.Count);
@@ -1813,7 +1819,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _log($"  {name}: {ex.Message}");
+                    // Je Name einmal. Der Durchgang laeuft jede Minute, und
+                    // ein Grund, der sich nicht aendert, gehoert nicht
+                    // sechzigmal je Stunde ins Protokoll.
+                    if (_warned.TryAdd("nachholen:" + name, 0))
+                        _log($"  {name}: {ex.Message}");
                 }
 
                 SetPhase(SyncPhase.Inhalte, Interlocked.Increment(ref done), offen.Count);
