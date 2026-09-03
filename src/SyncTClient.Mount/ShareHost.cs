@@ -1195,6 +1195,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Sie liest seine Eigenschaften beim Anmelden. Deshalb wird danach
         // noch einmal angemeldet, damit sie den Vorschau-Erzeuger erfasst.
         uhr.Restart();
+        MeldeAlsLaufend();
         RegisterThumbnailProvider();
         _syncRootId = await WinRtSyncRoot.RegisterAsync(_config.LocalPath, $"SyncT {name}", SyncRootFassung);
         _log($"[{FolderId}] Vorschau-Erweiterung und zweite Anmeldung in {uhr.ElapsedMilliseconds} ms.");
@@ -1611,6 +1612,34 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>
+    /// Schreibt auf, welche Ordner gerade Freigaben sind.
+    /// </summary>
+    /// <remarks>
+    /// Die Erweiterung im Datei-Manager entscheidet an dieser Liste, ob und
+    /// welche Eintraege sie zeigt. Sie stand frueher am Ende der
+    /// Vorschau-Anmeldung und fiel damit mit ihr aus: waren Vorschauen
+    /// abgeschaltet oder scheiterte ein Schritt davor, blieb die Liste leer,
+    /// jeder Pfad galt als ausserhalb, und das Menue erschien nirgends. Die
+    /// Liste ist aber eine Tatsache ueber laufende Freigaben und haengt an
+    /// keiner DLL.
+    /// </remarks>
+    private void MeldeAlsLaufend()
+    {
+        try
+        {
+            lock (Laufende)
+            {
+                if (!Laufende.Contains(this)) Laufende.Add(this);
+                ThumbnailProviderRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Liste der Freigaben fuer den Datei-Manager: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Meldet die Shell-Erweiterung an, damit der Explorer die vorbereiteten
     /// Vorschauen zeigt statt eines Ersatzsymbols.
     /// </summary>
@@ -1644,12 +1673,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Die Vorschau-Kette laeuft ueber statische Einstiegspunkte und
             // kennt kein Protokoll. Hier bekommt sie eines.
             Melden ??= _log;
-
-            lock (Laufende)
-            {
-                if (!Laufende.Contains(this)) Laufende.Add(this);
-                ThumbnailProviderRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath));
-            }
         }
         catch (Exception ex)
         {
@@ -3217,7 +3240,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         if (_syncRootId is not null)
         {
-            lock (Laufende) Laufende.Remove(this);
+            lock (Laufende)
+            {
+                Laufende.Remove(this);
+
+                // Sonst bliebe der Ordner in der Liste stehen, und die
+                // Erweiterung boete Eintraege zu einer Freigabe an, die es
+                // nicht mehr gibt.
+                try { ThumbnailProviderRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath)); }
+                catch (Exception ex) { _log($"[{FolderId}] Liste der Freigaben: {ex.Message}"); }
+            }
             ThumbnailProviderRegistration.DetachFromSyncRoot(_syncRootId);
 
             // Die Wurzel bleibt angemeldet, solange auch nur ein Platzhalter
