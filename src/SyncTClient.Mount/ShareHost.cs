@@ -635,6 +635,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                         IReadOnlyList<string> changed;
                         lock (_indexGate) changed = _index!.Absorb(device, teil);
 
+                        // Der Bestand der Gegenstelle ist die Grundlage der
+                        // Zahlen in der Anzeige. Bewegt er sich, sind sie
+                        // ueberholt -- und ohne diesen Vermerk blieben sie es
+                        // bis zum naechsten Durchgang, also bis zu einer
+                        // Stunde lang.
+                        if (changed.Count > 0) _zahlenVeraltet = true;
+
                         if (QueueIncoming(changed) > 0) PeerBusy();
 
                         // Zwischen zwei Haeppchen aus der Hand geben.
