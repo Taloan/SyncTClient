@@ -372,6 +372,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Detail.Content">Content local</s:String>
   <s:String x:Key="S.Col.Details">Expand or collapse the row</s:String>
   <s:String x:Key="R.SyncPercent">{0} % · {1} pending</s:String>
+  <s:String x:Key="R.IndexSequence">sequence {0} of {1}</s:String>
   <s:String x:Key="N.Nothing">nothing</s:String>
   <s:String x:Key="N.Outstanding">{0} of {1}  ({2} files)</s:String>
   <s:String x:Key="S2.Locked">Cannot be unchecked: not every file in this branch is held in full by the remote.</s:String>

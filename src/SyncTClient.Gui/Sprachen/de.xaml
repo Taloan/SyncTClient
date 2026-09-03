@@ -364,6 +364,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Detail.Content">Inhalt lokal</s:String>
   <s:String x:Key="S.Col.Details">Zeile auf- und zuklappen</s:String>
   <s:String x:Key="R.SyncPercent">{0} % · {1} offen</s:String>
+  <s:String x:Key="R.IndexSequence">Sequenz {0} von {1}</s:String>
   <s:String x:Key="N.Nothing">nichts</s:String>
   <s:String x:Key="N.Outstanding">{0} von {1}  ({2} Dateien)</s:String>
   <s:String x:Key="S2.Locked">Kann nicht abgewählt werden: nicht jede Datei in diesem Zweig liegt vollständig bei der Gegenstelle.</s:String>
