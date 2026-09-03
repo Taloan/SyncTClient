@@ -320,7 +320,14 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Settings.ShellHint">Thumbnails and the context menu rely on registry entries. They are created automatically at startup and apply to the signed-in user only; no administrator rights are needed.</s:String>
   <s:String x:Key="S.Settings.ShellRegister">Register now</s:String>
   <s:String x:Key="S.Settings.ShellUnregister">Remove entries</s:String>
-  <s:String x:Key="M.ShellState">Shipped: {0}&#10;    {1}&#10;Registered: {2}&#10;    {3}&#10;Context menu: {4}&#10;Registered sync roots: {5}</s:String>
+  <s:String x:Key="S.Settings.ShellShipped">Shipped</s:String>
+  <s:String x:Key="S.Settings.ShellRegistered">Registered</s:String>
+  <s:String x:Key="S.Settings.ShellFile">File</s:String>
+  <s:String x:Key="S.Settings.ShellVersion">Version</s:String>
+  <s:String x:Key="S.Settings.ShellChanged">Changed</s:String>
+  <s:String x:Key="S.Settings.ShellFolder">Folder</s:String>
+  <s:String x:Key="M.ShellSummary">Context menu: {0}     Registered sync roots: {1}</s:String>
+  <s:String x:Key="M.ShellDash">—</s:String>
   <s:String x:Key="M.ShellYes">registered</s:String>
   <s:String x:Key="M.ShellNo">not registered</s:String>
   <s:String x:Key="M.ShellNoLibrary">not found — without it there are no thumbnails and no context menu</s:String>
