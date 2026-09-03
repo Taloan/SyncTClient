@@ -1866,6 +1866,40 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private static partial uint GetLongPathNameW(string kurz, char[] lang, uint groesse);
 
     /// <summary>
+    /// Sagt der Shell, dass sich unter diesem Ordner etwas geaendert hat.
+    /// </summary>
+    /// <remarks>
+    /// Fuer das Entfernen abgewaehlter Zweige. Eine Loeschung im Dateisystem
+    /// meldet Windows von sich aus, aber nicht jede Ansicht hoert darauf --
+    /// in einem Sync-Root beziehen die Datei-Manager ihre Liste zum Teil vom
+    /// Platzhalter-Dienst, und der weiss von dieser Loeschung nichts. Ohne
+    /// diesen Anstoss steht der Zweig weiter im Fenster.
+    ///
+    /// Ein Fehlschlag bleibt still: dann ist die Ansicht veraltet, mehr
+    /// nicht. Daran scheitern soll ein Aufraeumen nicht.
+    /// </remarks>
+    private static void AnsichtAuffrischen(string ordner)
+    {
+        // Ohne Flush-Kennzeichen: die Meldung wird abgelegt und die Shell
+        // holt sie ab. SHCNF_FLUSH wuerde hier warten, bis sie verarbeitet
+        // ist -- ein Warten auf den Datei-Manager, das der heutige Tag
+        // zweimal gelehrt hat zu vermeiden.
+        try { SHChangeNotify(ShcneUpdateDir, ShcnfPathW, ordner, null); }
+        catch (Exception) { /* dann eben beim naechsten Neulesen */ }
+    }
+
+    /// <summary>Der Inhalt eines Ordners hat sich geaendert.</summary>
+    private const uint ShcneUpdateDir = 0x00001000;
+
+    /// <summary>Die Angaben sind Pfade in Unicode.</summary>
+    private const uint ShcnfPathW = 0x0005;
+
+    [System.Runtime.InteropServices.LibraryImport(
+        "shell32.dll", EntryPoint = "SHChangeNotify", StringMarshalling =
+            System.Runtime.InteropServices.StringMarshalling.Utf16)]
+    private static partial void SHChangeNotify(uint ereignis, uint kennzeichen, string? erstes, string? zweites);
+
+    /// <summary>
     /// Legt den Beobachter neu an, wenn er ausgefallen ist.
     /// </summary>
     /// <remarks>
