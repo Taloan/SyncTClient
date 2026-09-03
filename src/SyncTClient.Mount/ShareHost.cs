@@ -896,6 +896,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         try
         {
+            // Eine hier entstandene Freigabe wartet nicht. Die Gegenstelle
+            // kennt den Ordner noch gar nicht: sie bekommt ihn angekuendigt
+            // und schickt ihren Index, sobald sie ihn angenommen hat. Bis
+            // dahin ist der Bestand hier der ganze Bestand.
+            if (_config.Own && _index!.Count == 0)
+            {
+                SetPhase(SyncPhase.Index, 0);
+                _log($"[{FolderId}] eigene Freigabe -- es wird kein Index der Gegenstelle erwartet.");
+                return;
+            }
+
             var wartete = System.Diagnostics.Stopwatch.StartNew();
             await WaitForIndexAsync(ct);
             _log($"[{FolderId}] Index der Gegenstelle da nach {wartete.ElapsedMilliseconds} ms.");
