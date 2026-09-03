@@ -883,6 +883,14 @@ public sealed class CloudFilterMount : IDisposable
             {
                 var take = (int)Math.Min(ChunkSize, alignedEnd - offset);
 
+                // Solange das Stueck unterwegs ist, wird gemeldet, dass es
+                // unterwegs ist. Ohne diese Meldungen sieht Windows nur eine
+                // Anfrage ohne Antwort und bricht sie irgendwann mit
+                // 0x800701AA ab ("Der Cloudvorgang wurde nicht abgeschlossen,
+                // bevor der Timeoutzeitraum abgelaufen ist") -- auch dann,
+                // wenn wir laengst laden und nur die Leitung belegt ist.
+                using var puls = Fortschrittsmelder(request, length, geliefert);
+
                 var data = await _source.ReadAsync(request.RelativePath, offset, take, CancellationToken.None)
                     .ConfigureAwait(false);
 
@@ -954,6 +962,76 @@ public sealed class CloudFilterMount : IDisposable
     /// den Rest des Sektors. Das war falsch und ausserdem gegen die
     /// Vorschrift: die Laenge darf nicht ueber das Dateiende hinausreichen.
     /// </remarks>
+    /// <summary>
+    /// Wie oft gemeldet wird, dass eine Uebertragung noch laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Windows misst nicht, ob wir arbeiten, sondern ob wir uns melden. Eine
+    /// Sekunde ist reichlich haeufig fuer eine Frist, die in Minuten zaehlt,
+    /// und billig: der Aufruf schreibt zwei Zahlen.
+    /// </remarks>
+    private static readonly TimeSpan Pulsschlag = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Meldet Windows im Takt, dass diese Uebertragung noch laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Gemeldet wird der Stand vor diesem Stueck, nicht ein geschaetzter
+    /// Fortschritt darin: was tatsaechlich durchgereicht ist, steht erst
+    /// fest, wenn das Stueck da ist. Die Meldung dient der Frist und dem
+    /// Balken im Explorer, nicht der Buchfuehrung.
+    /// </remarks>
+    private IDisposable Fortschrittsmelder(HydrationRequest request, long gesamt, long bisher)
+    {
+        var quelle = new CancellationTokenSource();
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (true)
+                {
+                    await Task.Delay(Pulsschlag, quelle.Token).ConfigureAwait(false);
+                    Fortschritt(request, gesamt, bisher);
+                }
+            }
+            catch (OperationCanceledException) { /* das Stueck ist da */ }
+            finally { quelle.Dispose(); }
+        });
+
+        return new Puls(quelle);
+    }
+
+    /// <summary>
+    /// Beendet den Melder.
+    /// </summary>
+    /// <remarks>
+    /// Nicht die Abbruchquelle selbst: deren Dispose bricht nichts ab, es
+    /// raeumt nur auf -- der Melder liefe weiter und stolperte beim naechsten
+    /// Takt ueber die verworfene Quelle. Abgeraeumt wird sie dort, wo die
+    /// Schleife endet.
+    /// </remarks>
+    private sealed class Puls(CancellationTokenSource quelle) : IDisposable
+    {
+        public void Dispose()
+        {
+            try { quelle.Cancel(); }
+            catch (ObjectDisposedException) { /* war schon vorbei */ }
+        }
+    }
+
+    private unsafe void Fortschritt(HydrationRequest request, long gesamt, long bisher)
+    {
+        try
+        {
+            PInvoke.CfReportProviderProgress(request.ConnectionKey, request.TransferKey, gesamt, bisher);
+        }
+        catch (Exception ex)
+        {
+            _log?.Invoke($"  Fortschritt liess sich nicht melden: {ex.Message}");
+        }
+    }
+
     private unsafe bool TransferData(HydrationRequest request, byte[] data, long offset)
     {
         var buffer = NativeMemory.AlignedAlloc((nuint)data.Length, SectorSize);

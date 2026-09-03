@@ -103,6 +103,92 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private readonly AppConfig _app;
     private readonly Action<string> _log;
     private readonly SemaphoreSlim _hydrationGate = new(ConcurrentHydrations);
+
+    // ------------------------------------------------------ Vorrang
+
+    /// <summary>
+    /// Haelt den Hintergrunddurchlauf an, solange jemand im Explorer auf eine
+    /// Datei wartet.
+    /// </summary>
+    /// <remarks>
+    /// Beide Wege gehen ueber dieselbe Verbindung und fragen je acht Bloecke
+    /// gleichzeitig an. Wer eine einzelne Datei oeffnet, waehrend ein Ordner
+    /// mit achtzigtausend Dateien geholt wird, steht in derselben Schlange und
+    /// bekommt bestenfalls die Haelfte -- und Windows bricht die Anforderung
+    /// ab, wenn sie zu lange braucht.
+    ///
+    /// Zu bremsen ist nur die eigene Seite. Was wir nicht anfragen, verstopft
+    /// die Gegenstelle auch nicht; sie liefert dann, worum sonst noch gebeten
+    /// wurde.
+    ///
+    /// Der Riegel gilt fuer alle Freigaben zusammen und nicht je Freigabe:
+    /// die Leitung teilen sie sich, nicht den Ordner.
+    /// </remarks>
+    private static readonly Lock VorrangSperre = new();
+
+    private static int _wartendeZugriffe;
+    private static TaskCompletionSource _freieBahn = FertigeBahn();
+
+    /// <summary>
+    /// Laenger als das steht der Hintergrunddurchlauf nicht zurueck.
+    /// </summary>
+    /// <remarks>
+    /// Ohne diese Grenze verhungerte er, solange jemand ununterbrochen
+    /// Dateien oeffnet -- und eine Freigabe, die "vollstaendig lokal" heisst,
+    /// waere es dann nie.
+    /// </remarks>
+    private static readonly TimeSpan Hoechstens = TimeSpan.FromSeconds(30);
+
+    private static TaskCompletionSource FertigeBahn()
+    {
+        var bahn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        bahn.SetResult();
+        return bahn;
+    }
+
+    /// <summary>Meldet einen Zugriff an, der Vorrang hat.</summary>
+    private static IDisposable Vorfahrt()
+    {
+        lock (VorrangSperre)
+            if (++_wartendeZugriffe == 1)
+                _freieBahn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        return new Vorfahrtsende();
+    }
+
+    private sealed class Vorfahrtsende : IDisposable
+    {
+        private bool _abgemeldet;
+
+        public void Dispose()
+        {
+            if (_abgemeldet) return;
+            _abgemeldet = true;
+
+            lock (VorrangSperre)
+                if (--_wartendeZugriffe == 0) _freieBahn.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// Laesst den Vorrang vorbei, bevor das naechste Stueck angefragt wird.
+    /// </summary>
+    /// <remarks>
+    /// Zwischen zwei Stuecken und nicht mitten in einem: was schon angefragt
+    /// ist, kommt ohnehin. Bei acht Megabyte je Stueck dauert das Anhalten
+    /// hoechstens so lange, wie ein Stueck unterwegs ist.
+    /// </remarks>
+    private static async Task ZurueckstehenAsync(CancellationToken ct)
+    {
+        Task bahn;
+        lock (VorrangSperre) bahn = _freieBahn.Task;
+
+        if (bahn.IsCompleted) return;
+
+        using var frist = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        await Task.WhenAny(bahn, Task.Delay(Hoechstens, frist.Token)).ConfigureAwait(false);
+        frist.Cancel();
+    }
     private readonly SemaphoreSlim _indexArrived = new(0);
 
     /// <summary>
@@ -1459,6 +1545,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 for (long offset = 0; offset < file.Size;)
                 {
                     var nehmen = (int)Math.Min(Stueck, file.Size - offset);
+
+                    // Vor jedem Stueck: wartet jemand im Explorer, bekommt er
+                    // die Leitung zuerst.
+                    await ZurueckstehenAsync(ct).ConfigureAwait(false);
 
                     var data = await FileFetcher.FetchRangeAsync(
                         leitung, FolderId, file, offset, nehmen, _app.Parallelism, null, ct)
@@ -3010,6 +3100,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Ein einzelnes Stueck kann auch ohne umschliessenden Bereich kommen.
         // Auch dann schreiben wir selbst in die Datei.
         using var hold = HoldHydration(relativePath);
+
+        // Ab hier wartet jemand. Der Hintergrunddurchlauf fragt von nun an
+        // nichts Neues mehr an, bis diese Anforderung durch ist.
+        using var vorfahrt = Vorfahrt();
 
         // Ab hier steht der Auftrag in der Warteschlange, bis ein Platz frei wird.
         var angestellt = Environment.TickCount64;
