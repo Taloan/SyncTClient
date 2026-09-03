@@ -852,10 +852,15 @@ public sealed class CloudFilterMount : IDisposable
 
         try
         {
-            _log?.Invoke($"Hydration: {request.RelativePath}");
+            // "Hydration" steht in der Schnittstelle von Windows und gehoert
+            // in den Quelltext, nicht ins Protokoll: dort liest es jemand,
+            // der CfHydratePlaceholder nicht kennt und auch nicht kennen
+            // muss. Gemeint ist, dass ein Programm den Inhalt einer Datei
+            // verlangt, die hier nur als Platzhalter steht.
+            _log?.Invoke($"Inhalt angefordert: {request.RelativePath}");
             _log?.Invoke($"  verlangt [{request.RequiredOffset}..{request.RequiredOffset + request.RequiredLength}), " +
                          $"optional [{request.OptionalOffset}..{request.OptionalOffset + request.OptionalLength})");
-            _log?.Invoke($"  Ausloeser: {request.Caller}");
+            _log?.Invoke($"  Angefordert von: {request.Caller}");
 
             // Stueckweise, nicht in einem Zug. Dafuer gibt es zwei gemessene
             // Gruende.
@@ -933,12 +938,12 @@ public sealed class CloudFilterMount : IDisposable
             var attribute = (uint)new FileInfo(voll).Attributes;
             var offline = (attribute & (FileAttributeRecallOnDataAccess | 0x00001000 | 0x00400000)) != 0;
 
-            _log?.Invoke($"  {request.RelativePath}: {geliefert} B durchgereicht, " +
+            _log?.Invoke($"  {request.RelativePath}: {geliefert} B an Windows uebergeben, " +
                          $"Attribute 0x{attribute:X}{(offline ? " -- weiterhin Platzhalter" : "")}.");
         }
         catch (Exception ex)
         {
-            _log?.Invoke($"Hydration fehlgeschlagen fuer {request.RelativePath}: {ex.Message}");
+            _log?.Invoke($"Inhalt konnte nicht bereitgestellt werden: {request.RelativePath}: {ex.Message}");
             // STATUS_UNSUCCESSFUL. Der Zugriff scheitert, statt
             // haengenzubleiben.
             TransferFailure(request, start);
