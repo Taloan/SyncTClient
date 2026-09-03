@@ -602,7 +602,11 @@
                                 SortMemberPath="PathText" CanUserSort="True">
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate>
-              <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center" Margin="4,0"
+              <!-- Gedehnt, nicht linksbuendig: nur so bleibt der Zelle ihre
+                   Breite, und ein zu langer Pfad endet in Puenktchen statt
+                   abgeschnitten zu werden. Der Text steht darin von selbst
+                   links. -->
+              <TextBlock VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="4,0"
                          TextTrimming="CharacterEllipsis">
                 <Hyperlink Click="OnOpenPath" ToolTip="{Binding PathText}">
                   <Run Text="{Binding PathText, Mode=OneWay}" />
