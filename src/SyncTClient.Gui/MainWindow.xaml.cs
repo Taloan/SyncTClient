@@ -2209,7 +2209,8 @@ public partial class MainWindow : Window
             () => _config.Paused,
             Restore,
             () => OnShowProgramSettings(this, new RoutedEventArgs()),
-            () => OnTogglePauseAll());
+            () => OnTogglePauseAll(),
+            OpenFolder);
 
         if (_status.IsVisible) _status.Hide();
         else _status.ZeigenAmRand();
