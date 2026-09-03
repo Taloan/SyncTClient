@@ -9,17 +9,19 @@ und der Computertechnik**.
 Das gilt für alles: Protokollzeilen, Texte in der Oberfläche, Fehlermeldungen,
 Quelltextkommentare, Commit-Nachrichten und die Unterhaltung über das Programm.
 
-Keine Umschreibungen aus der Alltagssprache, keine Metaphern, keine Bilder aus
-anderen Lebensbereichen. Ein Zustand, den das Programm technisch genau kennt,
-wird auch technisch genau benannt.
+Keine Umschreibungen aus der Alltagssprache, keine Metaphern, keine Bildsprache,
+kein Vokabular aus fremden Themengebieten. Ein Zustand, den das Programm
+technisch genau kennt, wird auch technisch genau benannt.
 
 | nicht | sondern |
 |---|---|
 | wird geholt, wird weggebracht | Übertragung läuft, wird übertragen |
 | ohne Inhalt | Platzhalter, nicht hydriert |
-| die Datei ist unterwegs | Übertragung läuft |
+| die Datei ist unterwegs, liegt auf der Leitung | Übertragung läuft |
+| die Bytes liegen bei der Gegenstelle | der Inhalt ist nicht übertragen |
 | aufräumen, wegräumen | löschen, verwerfen, freigeben |
 | die Gegenstelle redet noch | die Gegenstelle sendet noch Indexdaten |
+| der Balken hängt fest | die Phase wird nicht zurückgesetzt |
 
 Der Grund ist kein Geschmack: eine Umschreibung beschreibt einen anderen
 Zustand als den gemeinten. „Ohne Inhalt" stand einmal für einen Platzhalter und
