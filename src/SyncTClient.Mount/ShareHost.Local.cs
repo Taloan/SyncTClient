@@ -85,6 +85,23 @@ public sealed partial class ShareHost
     private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// So oft wird nachgeholt, was bei "vollstaendig lokal" leer dasteht.
+    /// </summary>
+    /// <remarks>
+    /// Nicht im Stundentakt des Ordnerdurchgangs. Dort hing es bisher allein,
+    /// und eine Datei, die beim Verbinden nicht ankam, blieb bis zu
+    /// fuenfundsiebzig Minuten leer -- waehrenddessen stand der Ordner auf
+    /// "gleicht ab" bei neunundneunzig Prozent, und im Protokoll standen
+    /// Lebenszeichen.
+    ///
+    /// Der Versuch kostet nichts, wenn nichts offen ist: die Liste kommt aus
+    /// dem Rueckstand, der ohnehin gefuehrt wird.
+    /// </remarks>
+    private static readonly TimeSpan FetchInterval = TimeSpan.FromMinutes(1);
+
+    private DateTime _lastFetch = DateTime.MinValue;
+
+    /// <summary>
     /// So lange nach dem Ende einer Hydration gelten Meldungen zu dieser Datei
     /// noch als eigenes Werk.
     /// </summary>
@@ -700,7 +717,19 @@ public sealed partial class ShareHost
 
         if (!vorhanden.TryGetValue(name, out var da)) return "liegt hier nicht";
 
-        if (da.Size != size) return $"hier {Format.Bytes(da.Size)} statt {Format.Bytes(size)}";
+        if (da.Size != size)
+        {
+            // Gerundet sehen 179964 und 179970 Bytes beide wie "176 KB" aus,
+            // und die Zeile behauptet dann einen Unterschied, den sie selbst
+            // nicht zeigt. In dem Fall die Bytes.
+            var hier = Format.Bytes(da.Size);
+            var dort = Format.Bytes(size);
+
+            return hier == dort
+                ? $"hier {da.Size} statt {size} Bytes"
+                : $"hier {hier} statt {dort}";
+        }
+
 
         return $"hier {Zeit(da.ModifiedS)} statt {Zeit(modifiedS)}";
     }
@@ -1494,6 +1523,12 @@ public sealed partial class ShareHost
                     // angehakt hat, ein Versuch, der abgebrochen ist --, blieb
                     // fuer immer leer: als Rueckstand gezaehlt, ohne dass
                     // irgendein Handgriff daran etwas geaendert haette.
+                    await FetchMissingAsync(ct).ConfigureAwait(false);
+                    _lastFetch = DateTime.UtcNow;
+                }
+                else if (DateTime.UtcNow - _lastFetch >= FetchInterval)
+                {
+                    _lastFetch = DateTime.UtcNow;
                     await FetchMissingAsync(ct).ConfigureAwait(false);
                 }
 
