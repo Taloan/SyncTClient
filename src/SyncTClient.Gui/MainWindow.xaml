@@ -606,10 +606,14 @@
                    Breite, und ein zu langer Pfad endet in Puenktchen statt
                    abgeschnitten zu werden. Der Text steht darin von selbst
                    links. -->
+              <!-- Der Text kommt aus PfadVerkuerzung, nicht aus einer Bindung
+                   am Run: was hineinpasst, entscheidet die Spaltenbreite.
+                   Der Hinweis nennt weiterhin den vollen Pfad. -->
               <TextBlock VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="4,0"
-                         TextTrimming="CharacterEllipsis">
+                         TextTrimming="CharacterEllipsis"
+                         local:PfadVerkuerzung.Pfad="{Binding PathText}">
                 <Hyperlink Click="OnOpenPath" ToolTip="{Binding PathText}">
-                  <Run Text="{Binding PathText, Mode=OneWay}" />
+                  <Run />
                 </Hyperlink>
               </TextBlock>
             </DataTemplate>
