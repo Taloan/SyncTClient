@@ -222,12 +222,151 @@ public static class ThumbnailProviderRegistration
         catch (UnauthorizedAccessException) { /* dann bleibt er stehen */ }
     }
 
+    /// <summary>
+    /// Was von diesem Programm in der Registrierung steht.
+    /// </summary>
+    /// <param name="Library">Wo die mitgelieferte Vorschau-DLL liegt, oder null.</param>
+    /// <param name="LibraryStamp">Fassung und Datum davon.</param>
+    /// <param name="Registered">Auf welche Datei der Eintrag zeigt, oder null.</param>
+    /// <param name="RegisteredStamp">Fassung und Datum davon.</param>
+    /// <param name="MenuRegistered">Ob das Kontextmenue eingetragen ist.</param>
+    /// <param name="SyncRoots">Wieviele Sync-Wurzeln angemeldet sind.</param>
+    public readonly record struct Zustand(
+        string? Library, string LibraryStamp,
+        string? Registered, string RegisteredStamp,
+        bool MenuRegistered, int SyncRoots)
+    {
+        /// <summary>Ob die Klasse ueberhaupt eingetragen ist.</summary>
+        public bool ClassRegistered => Registered is not null;
+
+        /// <summary>
+        /// Ob die mitgelieferte Datei eine andere ist als die eingetragene.
+        /// </summary>
+        /// <remarks>
+        /// Nach einem Umzug des Programms oder einer neuen Fassung zeigt der
+        /// Eintrag noch auf die alte Datei. Der Explorer laedt dann weiter
+        /// jene -- ein Fehler, der sich als "die Aenderung wirkt nicht"
+        /// zeigt und sonst nirgends.
+        /// </remarks>
+        public bool Veraltet
+            => Library is not null
+               && (Registered is null
+                   || !string.Equals(Library, Registered, StringComparison.OrdinalIgnoreCase)
+                   || LibraryStamp != RegisteredStamp);
+    }
+
+    /// <summary>
+    /// Sieht nach, was tatsaechlich eingetragen ist.
+    /// </summary>
+    /// <remarks>
+    /// Alles hier geschieht beim Start von selbst, und alles kann lautlos
+    /// scheitern: eine fehlende DLL, ein Eintrag, der nach einem Umzug ins
+    /// Leere zeigt, eine neuere Datei neben einem alten Eintrag. Wer das
+    /// nachsehen wollte, musste bisher die Registrierung durchsuchen.
+    /// </remarks>
+    public static Zustand Nachsehen()
+    {
+        var library = FindLibrary();
+        var eingetragen = Wert($@"Software\Classes\CLSID\{ClassId}\InprocServer32");
+
+        return new Zustand(
+            library, Kennung(library),
+            eingetragen, Kennung(eingetragen),
+            Eingetragen($@"Software\Classes\Directory\shellex\ContextMenuHandlers\SyncTClient"),
+            OwnSyncRootIds().Count());
+    }
+
+    /// <summary>
+    /// Fassung und Datum einer Datei, in einer Zeile.
+    /// </summary>
+    /// <remarks>
+    /// Die Fassung allein genuegt nicht: eine DLL, die zwischen zwei Builds
+    /// dieselbe Nummer traegt, ist trotzdem eine andere Datei. Das Datum
+    /// unterscheidet sie.
+    /// </remarks>
+    private static string Kennung(string? path)
+    {
+        if (path is null || !File.Exists(path)) return "";
+
+        try
+        {
+            var fassung = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).FileVersion;
+            var datum = File.GetLastWriteTime(path);
+
+            return string.IsNullOrWhiteSpace(fassung)
+                ? datum.ToString("dd.MM.yyyy HH:mm")
+                : $"{fassung}, {datum:dd.MM.yyyy HH:mm}";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
+    private static string? Wert(string pfad)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(pfad);
+            return key?.GetValue(null) as string is { Length: > 0 } wert ? wert : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static bool Eingetragen(string pfad)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(pfad);
+            return key?.GetValue(null) is string wert && wert.Length > 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Nimmt das Kontextmenue wieder heraus.
+    /// </summary>
+    /// <remarks>
+    /// Das Gegenstueck zu <see cref="RegisterMenu"/>. Bisher gab es keines --
+    /// wer das Programm entfernte, liess seine Eintraege stehen, und der
+    /// Explorer suchte fortan bei jedem Rechtsklick eine DLL, die es nicht
+    /// mehr gibt.
+    /// </remarks>
+    public static void UnregisterMenu()
+    {
+        foreach (var pfad in new[]
+                 {
+                     $@"Software\Classes\CLSID\{MenuClassId}",
+                     @"Software\Classes\Directory\shellex\ContextMenuHandlers\SyncTClient",
+                     @"Software\Classes\*\shellex\ContextMenuHandlers\SyncTClient"
+                 })
+        {
+            try { Registry.CurrentUser.DeleteSubKeyTree(pfad, throwOnMissingSubKey: false); }
+            catch (UnauthorizedAccessException) { /* dann bleibt er stehen */ }
+        }
+    }
+
+    /// <summary>
+    /// Nimmt die Vorschau-Klasse und die eigenen Werte wieder heraus.
+    /// </summary>
+    /// <remarks>
+    /// Auch "Software\SyncTClient": dort stehen der Vorrat, die Liste der
+    /// Freigaben und der Programmpfad. Sie sind fuer die Erweiterung
+    /// gedacht; ohne sie hat niemand mehr etwas davon.
+    /// </remarks>
     public static void UnregisterClass()
     {
         foreach (var path in new[]
                  {
                      $@"Software\Classes\CLSID\{ClassId}",
-                     $@"Software\Classes\AppID\{AppId}"
+                     $@"Software\Classes\AppID\{AppId}",
+                     @"Software\SyncTClient"
                  })
         {
             try { Registry.CurrentUser.DeleteSubKeyTree(path, throwOnMissingSubKey: false); }
