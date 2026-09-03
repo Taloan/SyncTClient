@@ -506,7 +506,50 @@ public sealed class PeerHost : IAsyncDisposable
             .OrderBy(f => f.Display, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
+        PruefeRueckzug(config);
+
         OfferedChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Freigaben, die hier uebernommen sind, die die Gegenstelle aber nicht
+    /// mehr anbietet.
+    /// </summary>
+    private readonly HashSet<string> _nichtAngeboten = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Haelt fest, welche uebernommenen Freigaben die Gegenstelle nicht mehr
+    /// anbietet.
+    /// </summary>
+    /// <remarks>
+    /// Wer eine Freigabe drueben entfernt, hinterlaesst hier einen Ordner
+    /// voller Platzhalter, die niemand mehr fuellen kann. Ohne diese Pruefung
+    /// faellt das erst auf, wenn jemand eine der Dateien oeffnet -- und dann
+    /// sieht es nach einem Fehler dieses Programms aus.
+    ///
+    /// Gemeldet wird der Wechsel und nicht der Zustand. Die Ordnerliste kommt
+    /// bei jedem Verbindungsaufbau; eine Zeile je Liste waere Rauschen. Der
+    /// Vermerk ueberdauert deshalb auch einen Verbindungsabbruch.
+    /// </remarks>
+    private void PruefeRueckzug(ClusterConfig config)
+    {
+        var angeboten = config.Folders.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var share in _shares.Values)
+        {
+            if (angeboten.Contains(share.FolderId))
+            {
+                if (_nichtAngeboten.Remove(share.FolderId))
+                    _log($"[{Display}] bietet \"{share.FolderId}\" wieder an.");
+
+                continue;
+            }
+
+            if (!_nichtAngeboten.Add(share.FolderId)) continue;
+
+            _log($"[{Display}] bietet \"{share.FolderId}\" nicht mehr an. Platzhalter " +
+                 "dieser Freigabe lassen sich von dieser Gegenstelle nicht mehr fuellen.");
+        }
     }
 
     // ------------------------------------------------------------ Protokoll
