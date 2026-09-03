@@ -223,21 +223,28 @@ public static class ThumbnailProviderRegistration
     }
 
     /// <summary>
+    /// Eine Datei, in ihre Bestandteile zerlegt.
+    /// </summary>
+    /// <remarks>
+    /// Getrennt und nicht als eine Zeile: die Anzeige stellt zwei davon
+    /// nebeneinander, und verglichen wird dabei Fassung mit Fassung und
+    /// Datum mit Datum. Als fortlaufender Satz war das nicht zu lesen.
+    /// </remarks>
+    public readonly record struct Datei(string? Pfad, string Fassung, string Geaendert)
+    {
+        public string Name => Pfad is null ? "" : Path.GetFileName(Pfad);
+
+        public string Ordner => Pfad is null ? "" : Path.GetDirectoryName(Pfad) ?? "";
+    }
+
+    /// <summary>
     /// Was von diesem Programm in der Registrierung steht.
     /// </summary>
-    /// <param name="Library">Wo die mitgelieferte Vorschau-DLL liegt, oder null.</param>
-    /// <param name="LibraryStamp">Fassung und Datum davon.</param>
-    /// <param name="Registered">Auf welche Datei der Eintrag zeigt, oder null.</param>
-    /// <param name="RegisteredStamp">Fassung und Datum davon.</param>
-    /// <param name="MenuRegistered">Ob das Kontextmenue eingetragen ist.</param>
-    /// <param name="SyncRoots">Wieviele Sync-Wurzeln angemeldet sind.</param>
     public readonly record struct Zustand(
-        string? Library, string LibraryStamp,
-        string? Registered, string RegisteredStamp,
-        bool MenuRegistered, int SyncRoots)
+        Datei Mitgeliefert, Datei Eingetragen, bool MenuRegistered, int SyncRoots)
     {
         /// <summary>Ob die Klasse ueberhaupt eingetragen ist.</summary>
-        public bool ClassRegistered => Registered is not null;
+        public bool ClassRegistered => Eingetragen.Pfad is not null;
 
         /// <summary>
         /// Ob die mitgelieferte Datei eine andere ist als die eingetragene.
@@ -249,10 +256,11 @@ public static class ThumbnailProviderRegistration
         /// zeigt und sonst nirgends.
         /// </remarks>
         public bool Veraltet
-            => Library is not null
-               && (Registered is null
-                   || !string.Equals(Library, Registered, StringComparison.OrdinalIgnoreCase)
-                   || LibraryStamp != RegisteredStamp);
+            => Mitgeliefert.Pfad is not null
+               && (Eingetragen.Pfad is null
+                   || !string.Equals(Mitgeliefert.Pfad, Eingetragen.Pfad, StringComparison.OrdinalIgnoreCase)
+                   || Mitgeliefert.Fassung != Eingetragen.Fassung
+                   || Mitgeliefert.Geaendert != Eingetragen.Geaendert);
     }
 
     /// <summary>
@@ -265,41 +273,32 @@ public static class ThumbnailProviderRegistration
     /// nachsehen wollte, musste bisher die Registrierung durchsuchen.
     /// </remarks>
     public static Zustand Nachsehen()
-    {
-        var library = FindLibrary();
-        var eingetragen = Wert($@"Software\Classes\CLSID\{ClassId}\InprocServer32");
-
-        return new Zustand(
-            library, Kennung(library),
-            eingetragen, Kennung(eingetragen),
+        => new(
+            Lesen(FindLibrary()),
+            Lesen(Wert($@"Software\Classes\CLSID\{ClassId}\InprocServer32")),
             Eingetragen($@"Software\Classes\Directory\shellex\ContextMenuHandlers\SyncTClient"),
             OwnSyncRootIds().Count());
-    }
 
     /// <summary>
-    /// Fassung und Datum einer Datei, in einer Zeile.
+    /// Fassung und Datum einer Datei.
     /// </summary>
     /// <remarks>
-    /// Die Fassung allein genuegt nicht: eine DLL, die zwischen zwei Builds
-    /// dieselbe Nummer traegt, ist trotzdem eine andere Datei. Das Datum
-    /// unterscheidet sie.
+    /// Beides, denn die Fassung allein genuegt nicht: eine DLL, die zwischen
+    /// zwei Builds dieselbe Nummer traegt, ist trotzdem eine andere Datei.
     /// </remarks>
-    private static string Kennung(string? path)
+    private static Datei Lesen(string? path)
     {
-        if (path is null || !File.Exists(path)) return "";
+        if (path is null) return new Datei(null, "", "");
+        if (!File.Exists(path)) return new Datei(path, "", "");
 
         try
         {
-            var fassung = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).FileVersion;
-            var datum = File.GetLastWriteTime(path);
-
-            return string.IsNullOrWhiteSpace(fassung)
-                ? datum.ToString("dd.MM.yyyy HH:mm")
-                : $"{fassung}, {datum:dd.MM.yyyy HH:mm}";
+            var fassung = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).FileVersion ?? "";
+            return new Datei(path, fassung, File.GetLastWriteTime(path).ToString("dd.MM.yyyy HH:mm"));
         }
         catch (Exception)
         {
-            return "";
+            return new Datei(path, "", "");
         }
     }
 

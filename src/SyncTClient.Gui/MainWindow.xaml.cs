@@ -745,7 +745,7 @@ public partial class MainWindow : Window
     {
         var zustand = ThumbnailProviderRegistration.Nachsehen();
 
-        if (zustand.Library is null) AppendLog(App.S("M.ShellMissing"));
+        if (zustand.Mitgeliefert.Pfad is null) AppendLog(App.S("M.ShellMissing"));
         else if (zustand.Veraltet && zustand.ClassRegistered) AppendLog(App.S("M.ShellStale"));
     }
 

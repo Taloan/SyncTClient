@@ -144,6 +144,53 @@
 
     <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ShellHint}" />
 
+    <!-- Zwei Spalten, Zeile fuer Zeile gegeneinander. Als fortlaufender Satz
+         standen Name, Fassung, Datum und Pfad beider Dateien hintereinander
+         in einem Absatz, und niemand konnte sie auseinanderhalten. -->
+    <Grid Margin="0,10,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" MinWidth="120" />
+        <ColumnDefinition Width="*" MinWidth="120" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Grid.Column="1" Margin="10,0,10,4" FontWeight="SemiBold"
+                 Text="{DynamicResource S.Settings.ShellShipped}" />
+      <TextBlock Grid.Row="0" Grid.Column="2" Margin="10,0,0,4" FontWeight="SemiBold"
+                 Text="{DynamicResource S.Settings.ShellRegistered}" />
+
+      <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource S.Settings.ShellFile}"
+                 Foreground="{DynamicResource Gedaempft}" />
+      <TextBlock Grid.Row="1" Grid.Column="1" x:Name="ShipName" Margin="10,0,10,0" TextTrimming="CharacterEllipsis" />
+      <TextBlock Grid.Row="1" Grid.Column="2" x:Name="RegName" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+
+      <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource S.Settings.ShellVersion}"
+                 Foreground="{DynamicResource Gedaempft}" />
+      <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ShipVersion" Margin="10,0,10,0" />
+      <TextBlock Grid.Row="2" Grid.Column="2" x:Name="RegVersion" Margin="10,0,0,0" />
+
+      <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource S.Settings.ShellChanged}"
+                 Foreground="{DynamicResource Gedaempft}" />
+      <TextBlock Grid.Row="3" Grid.Column="1" x:Name="ShipChanged" Margin="10,0,10,0" />
+      <TextBlock Grid.Row="3" Grid.Column="2" x:Name="RegChanged" Margin="10,0,0,0" />
+
+      <!-- Der Ordner ist lang und selten wichtig. Abgeschnitten, mit dem
+           ganzen Pfad beim Ueberfahren. -->
+      <TextBlock Grid.Row="4" Grid.Column="0" Text="{DynamicResource S.Settings.ShellFolder}"
+                 Foreground="{DynamicResource Gedaempft}" />
+      <TextBlock Grid.Row="4" Grid.Column="1" x:Name="ShipFolder" Margin="10,0,10,0"
+                 TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+      <TextBlock Grid.Row="4" Grid.Column="2" x:Name="RegFolder" Margin="10,0,0,0"
+                 TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Grid>
+
     <TextBlock x:Name="ShellStateText" Margin="0,10,0,0" TextWrapping="Wrap" />
 
     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">

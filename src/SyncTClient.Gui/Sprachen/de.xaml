@@ -312,7 +312,14 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Settings.ShellHint">Vorschaubilder und Kontextmenü hängen an Einträgen in der Registrierung. Sie entstehen beim Start von selbst und stehen nur für den angemeldeten Benutzer; Administratorrechte werden nicht gebraucht.</s:String>
   <s:String x:Key="S.Settings.ShellRegister">Jetzt eintragen</s:String>
   <s:String x:Key="S.Settings.ShellUnregister">Einträge entfernen</s:String>
-  <s:String x:Key="M.ShellState">Mitgeliefert: {0}&#10;    {1}&#10;Eingetragen: {2}&#10;    {3}&#10;Kontextmenü: {4}&#10;Angemeldete Sync-Wurzeln: {5}</s:String>
+  <s:String x:Key="S.Settings.ShellShipped">Mitgeliefert</s:String>
+  <s:String x:Key="S.Settings.ShellRegistered">Eingetragen</s:String>
+  <s:String x:Key="S.Settings.ShellFile">Datei</s:String>
+  <s:String x:Key="S.Settings.ShellVersion">Fassung</s:String>
+  <s:String x:Key="S.Settings.ShellChanged">Geändert</s:String>
+  <s:String x:Key="S.Settings.ShellFolder">Ordner</s:String>
+  <s:String x:Key="M.ShellSummary">Kontextmenü: {0}     Angemeldete Sync-Wurzeln: {1}</s:String>
+  <s:String x:Key="M.ShellDash">—</s:String>
   <s:String x:Key="M.ShellYes">eingetragen</s:String>
   <s:String x:Key="M.ShellNo">nicht eingetragen</s:String>
   <s:String x:Key="M.ShellNoLibrary">nicht gefunden — ohne sie gibt es keine Vorschaubilder und kein Kontextmenü</s:String>

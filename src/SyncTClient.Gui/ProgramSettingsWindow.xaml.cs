@@ -196,11 +196,10 @@ public partial class ProgramSettingsWindow : Window
     {
         var zustand = ThumbnailProviderRegistration.Nachsehen();
 
-        var text = App.S("M.ShellState",
-            zustand.Library ?? App.S("M.ShellNoLibrary"),
-            zustand.LibraryStamp,
-            zustand.Registered ?? App.S("M.ShellNo"),
-            zustand.RegisteredStamp,
+        Eintragen(zustand.Mitgeliefert, ShipName, ShipVersion, ShipChanged, ShipFolder);
+        Eintragen(zustand.Eingetragen, RegName, RegVersion, RegChanged, RegFolder);
+
+        var text = App.S("M.ShellSummary",
             App.S(zustand.MenuRegistered ? "M.ShellYes" : "M.ShellNo"),
             zustand.SyncRoots);
 
@@ -213,8 +212,23 @@ public partial class ProgramSettingsWindow : Window
 
         // Eintragen geht nur mit Datei; ohne sie waere der Eintrag ein
         // Verweis auf nichts.
-        ShellRegisterButton.IsEnabled = zustand.Library is not null;
+        ShellRegisterButton.IsEnabled = zustand.Mitgeliefert.Pfad is not null;
         ShellUnregisterButton.IsEnabled = zustand.ClassRegistered || zustand.MenuRegistered;
+    }
+
+    /// <summary>Traegt eine Datei in ihre Spalte ein.</summary>
+    private static void Eintragen(
+        ThumbnailProviderRegistration.Datei datei,
+        TextBlock name, TextBlock fassung, TextBlock geaendert, TextBlock ordner)
+    {
+        // Ein Strich, wo nichts ist. Ein leeres Feld sieht aus wie ein Fehler
+        // in der Anzeige.
+        var fehlt = App.S("M.ShellDash");
+
+        name.Text = datei.Pfad is null ? fehlt : datei.Name;
+        fassung.Text = datei.Fassung.Length > 0 ? datei.Fassung : fehlt;
+        geaendert.Text = datei.Geaendert.Length > 0 ? datei.Geaendert : fehlt;
+        ordner.Text = datei.Pfad is null ? fehlt : datei.Ordner;
     }
 
     private async void OnRegisterShell(object sender, RoutedEventArgs e)
