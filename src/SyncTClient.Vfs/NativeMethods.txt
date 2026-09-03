@@ -12,6 +12,7 @@ CfHydratePlaceholder
 CfUpdatePlaceholder
 CfGetPlaceholderStateFromFileInfo
 CfUpdateSyncProviderStatus
+CfReportProviderProgress
 
 CF_CALLBACK_REGISTRATION
 CF_CALLBACK_INFO
