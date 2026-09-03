@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using SyncTClient.Mount;
 
 namespace SyncTClient.Gui;
@@ -71,6 +71,12 @@ public partial class ProgressWindow : Window
 
         Bar.IsIndeterminate = false;
         Bar.Value = Math.Clamp(100.0 * host.PhaseDone / host.PhaseTotal, 0, 100);
-        CountText.Text = App.S("S.Work.Of", Format.Count(host.PhaseDone), Format.Count(host.PhaseTotal));
+
+        // Im Index zaehlt der Balken Sequenznummern der Gegenstelle, nicht
+        // Dateien. Ihre hoechste Sequenz liegt weit ueber der Anzahl der
+        // Dateien, denn sie zaehlt jede Aenderung seit dem ersten Tag mit.
+        CountText.Text = host.Phase == SyncPhase.Index
+            ? App.S("R.IndexSequence", Format.Count(host.PhaseDone), Format.Count(host.PhaseTotal))
+            : App.S("S.Work.Of", Format.Count(host.PhaseDone), Format.Count(host.PhaseTotal));
     }
 }

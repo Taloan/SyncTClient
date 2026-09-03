@@ -202,6 +202,42 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private readonly ConcurrentDictionary<string, BepConnection> _connections =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Bis zu welcher Sequenz die Gegenstelle Eintraege fuehrt.
+    /// </summary>
+    /// <remarks>
+    /// Sie nennt diese Zahl in ihrer Ordnerliste. Sie ist die einzige
+    /// verlaessliche Auskunft darueber, wann ein Index vollstaendig ist: das
+    /// Protokoll kennt kein Ende der Uebertragung, sondern nur eine Folge von
+    /// Nachrichten, und zwischen zwei Nachrichten sieht eine Pause genauso
+    /// aus wie ein Ende.
+    ///
+    /// Je Gegenstelle, denn jede vergibt ihre Sequenznummern selbst.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, long> _zielSequenz =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Die hoechste Sequenz, die von dieser Gegenstelle aufgenommen wurde.
+    /// </summary>
+    /// <remarks>
+    /// Dasselbe, was auch in der Datenbank steht -- nur ohne Abfrage. Der
+    /// Wert wird waehrend eines laufenden Index sehr oft gebraucht.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, long> _hoechsteSequenz =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Haelt fest, bis wohin der Index dieser Gegenstelle reicht.
+    /// </summary>
+    public void NoteZielSequenz(string device, long sequenz) => _zielSequenz[device] = sequenz;
+
+    /// <summary>
+    /// Die genannte Sequenz, oder 0, wenn die Gegenstelle keine genannt hat.
+    /// </summary>
+    private long Zielsequenz(string device)
+        => _zielSequenz.TryGetValue(device, out var genannt) ? genannt : 0;
+
     /// <summary>Irgendeine Verbindung. Fuer alles, was jede beantworten kann.</summary>
     private BepConnection? AnyLine => _connections.Values.FirstOrDefault();
 
@@ -875,9 +911,26 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                         Thread.Sleep(1);
                     }
 
+                    // Der Stand, den WaitForIndexAsync ablesen kann, ohne
+                    // dafuer die Datenbank zu befragen. Waehrend ein grosser
+                    // Index laeuft, kaeme diese Frage je Nachricht -- also
+                    // tausendmal ein Suchlauf ueber die ganze Tabelle, und
+                    // zwar genau dann, wenn geschrieben wird.
+                    var hoechste = 0L;
+                    foreach (var eintrag in stapel)
+                        if (eintrag.Sequence > hoechste) hoechste = eintrag.Sequence;
+
+                    _hoechsteSequenz.AddOrUpdate(device, hoechste, (_, bisher) => Math.Max(bisher, hoechste));
+
                     _indexArrived.Release();
 
-                    if (Phase == SyncPhase.Index)
+                    // Die Anzahl fuehrt die Anzeige nur, solange kein
+                    // Endstand bekannt ist. Nennt die Gegenstelle ihre
+                    // hoechste Sequenz, rechnet WaitForIndexAsync gegen sie
+                    // -- und zwei Faeden, die abwechselnd verschiedene
+                    // Groessen in denselben Balken schreiben, lassen ihn
+                    // zwischen Anteil und Suchlauf springen.
+                    if (Phase == SyncPhase.Index && Zielsequenz(device) == 0)
                         SetPhase(SyncPhase.Index, Interlocked.Add(ref _aufgenommen, stapel.Count));
                 }
                 catch (Exception ex)
@@ -1151,7 +1204,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             }
 
             var wartete = System.Diagnostics.Stopwatch.StartNew();
-            await WaitForIndexAsync(ct);
+            await WaitForIndexAsync(device, ct);
             _log($"[{FolderId}] Index der Gegenstelle da nach {wartete.ElapsedMilliseconds} ms.");
         }
         catch (Exception ex)
@@ -1256,20 +1309,103 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                string.Concat(stellen.Select(z => Environment.NewLine + "    " + z));
     }
 
-    private async Task WaitForIndexAsync(CancellationToken ct)
+    /// <summary>
+    /// So lange darf die Gegenstelle schweigen, bevor der Index als
+    /// abgeschlossen gilt.
+    /// </summary>
+    /// <remarks>
+    /// Nur die Rueckfallebene fuer eine Gegenstelle, die keine Sequenz nennt.
+    /// Wo die Zahl vorliegt, entscheidet sie, und dann ist eine Pause nur
+    /// eine Pause.
+    /// </remarks>
+    private static readonly TimeSpan Indexstille = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// So lange darf die Gegenstelle schweigen, bevor auch eine genannte
+    /// Sequenz aufgegeben wird.
+    /// </summary>
+    /// <remarks>
+    /// Die Notbremse. Sie greift, wenn die Verbindung steht, die Sequenz aber
+    /// nicht mehr steigt -- etwa weil die Gegenstelle Eintraege mitzaehlt, die
+    /// sie nicht schickt. Ohne diese Grenze wartete der Ordner auf eine
+    /// Nachricht, die nie kommt, und der Dialog erschiene nie.
+    ///
+    /// Jede eingegangene Nachricht setzt die Frist zurueck. Ein Index, der
+    /// vorankommt, laeuft deshalb beliebig lange.
+    /// </remarks>
+    private static readonly TimeSpan Indexabbruch = TimeSpan.FromMinutes(1);
+
+    private async Task WaitForIndexAsync(string device, CancellationToken ct)
     {
-        // Nach einem Neustart liegt der Index bereits vor. Diese Phase ist
-        // dann sofort beendet.
+        // Nach einem Neustart liegt der Index bereits vor. Was die
+        // Gegenstelle seither geaendert hat, kommt waehrend des Betriebs
+        // nach; darauf hier zu warten hiesse, den Ordner erst in Minuten
+        // anzulegen, obwohl er vollstaendig dasteht.
         SetPhase(SyncPhase.Index, _index!.Count);
         if (_index.Count > 0) return;
 
-        _log($"[{FolderId}] warte auf den Index ...");
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        // Wohin der Index laeuft. Die Gegenstelle hat die Zahl in ihrer
+        // Ordnerliste genannt; ohne sie bleibt nur die Stille als Anzeichen.
+        var ziel = Zielsequenz(device);
+        var begonnenBei = _index.MaxSequenceOf(device);
 
-        while (DateTime.UtcNow < deadline)
+        _log(ziel > 0
+            ? $"[{FolderId}] warte auf den Index bis Sequenz {ziel} ..."
+            : $"[{FolderId}] warte auf den Index (die Gegenstelle nennt keine Sequenz) ...");
+
+        var stillSeit = DateTime.UtcNow;
+
+        while (true)
         {
-            var signalled = await _indexArrived.WaitAsync(TimeSpan.FromSeconds(3), ct);
-            if (!signalled && _index.Count > 0) break;
+            var gemeldet = await _indexArrived.WaitAsync(Indexstille, ct);
+            if (gemeldet) stillSeit = DateTime.UtcNow;
+
+            // Mit genannter Sequenz ist die Frage beantwortet, sobald sie
+            // erreicht ist. Ohne sie zaehlt, dass drei Sekunden lang nichts
+            // mehr kam und bereits etwas dasteht.
+            if (ziel > 0)
+            {
+                var haben = _hoechsteSequenz.TryGetValue(device, out var stand)
+                    ? Math.Max(stand, begonnenBei)
+                    : begonnenBei;
+
+                // Gerechnet wird auf dem Abschnitt, der aussteht, nicht auf
+                // der Sequenz selbst: die zaehlt seit dem ersten Tag dieses
+                // Ordners und passt in keinen Balken.
+                SetPhase(SyncPhase.Index, (int)(haben - begonnenBei), (int)(ziel - begonnenBei));
+
+                if (haben >= ziel) break;
+
+                // Die Gegenstelle schweigt und ist trotzdem nicht fertig.
+                // Weiterzuwarten hiesse, auf eine Nachricht zu warten, die
+                // ueber eine abgerissene Verbindung nicht mehr kommt.
+                if (!gemeldet && !_connections.ContainsKey(device))
+                {
+                    _log($"[{FolderId}] Index unvollstaendig: Sequenz {haben} von {ziel}, " +
+                         "die Verbindung zur Gegenstelle besteht nicht mehr.");
+                    break;
+                }
+
+                // Die Verbindung steht, und trotzdem kommt nichts mehr.
+                if (DateTime.UtcNow - stillSeit > Indexabbruch)
+                {
+                    _log($"[{FolderId}] Index unvollstaendig: Sequenz {haben} von {ziel}, " +
+                         $"seit {Indexabbruch.TotalSeconds:0} Sekunden ohne weitere Indexdaten.");
+                    break;
+                }
+
+                continue;
+            }
+
+            if (gemeldet) continue;
+
+            // Ohne genannte Sequenz ist die Stille das Ende: es steht etwas
+            // da, und seit drei Sekunden kam nichts mehr dazu.
+            if (_index.Count > 0) break;
+
+            // Es steht nichts da, und es kommt auch nichts. Der Wurf unten
+            // sagt, was das bedeutet.
+            if (DateTime.UtcNow - stillSeit > Indexabbruch) break;
         }
 
         if (_index.Count == 0)

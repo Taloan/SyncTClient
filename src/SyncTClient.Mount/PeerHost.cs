@@ -464,6 +464,11 @@ public sealed class PeerHost : IAsyncDisposable
 
                 peerIndexId = peerDevice.IndexId;
                 maxSequence = share.MaxSequenceFor(DeviceId);
+
+                // Womit der Ordner sagen kann, wann sein Index vollstaendig
+                // ist. Diese Zahl ist die hoechste Sequenz, die die
+                // Gegenstelle fuehrt; alles darunter steht noch aus.
+                share.NoteZielSequenz(DeviceId, peerDevice.MaxSequence);
             }
 
             if (maxSequence > 0)

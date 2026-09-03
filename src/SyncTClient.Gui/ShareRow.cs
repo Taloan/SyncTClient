@@ -285,9 +285,15 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                 return App.S("R.SyncPercent", $"{anteil:0}", Format.Bytes(Share.OutstandingBytes));
             }
 
-            return Share.PhaseTotal == 0
-                ? $"{Share.PhaseDone:N0}"
-                : $"{Share.PhaseDone:N0} von {Share.PhaseTotal:N0}";
+            if (Share.PhaseTotal == 0) return $"{Share.PhaseDone:N0}";
+
+            // Im Index zaehlt der Balken Sequenznummern, nicht Dateien. Ohne
+            // dieses Wort liest sich "12.345 von 176.706" als Dateizahl -- und
+            // die ist eine ganz andere.
+            if (Share.Phase == SyncPhase.Index)
+                return App.S("R.IndexSequence", $"{Share.PhaseDone:N0}", $"{Share.PhaseTotal:N0}");
+
+            return $"{Share.PhaseDone:N0} von {Share.PhaseTotal:N0}";
         }
     }
 
