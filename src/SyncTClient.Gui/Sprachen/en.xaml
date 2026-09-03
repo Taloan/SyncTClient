@@ -356,6 +356,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="M.CacheNone">No share yet.</s:String>
   <s:String x:Key="R.PhaseSyncing">syncing</s:String>
   <s:String x:Key="R.Synced">in sync</s:String>
+  <s:String x:Key="R.Outgoing">{0} · {1} pending for the peer</s:String>
   <s:String x:Key="S.Detail.Global">Global state</s:String>
   <s:String x:Key="S.Detail.Local">Local state</s:String>
   <s:String x:Key="S.Detail.Outstanding">Out of sync</s:String>
