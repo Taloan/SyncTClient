@@ -146,7 +146,8 @@ public static class CommandService
             using (pipe)
             {
                 using var reader = new StreamReader(pipe, Encoding.UTF8, false, 1024, leaveOpen: true);
-                using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
+                using var writer = new StreamWriter(
+                    pipe, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true };
 
                 var zeile = reader.ReadLine();
                 if (string.IsNullOrWhiteSpace(zeile)) return;
@@ -194,8 +195,16 @@ public static class CommandService
             using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut);
             pipe.Connect(millisekunden);
 
-            using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
-            using var reader = new StreamReader(pipe, Encoding.UTF8);
+            // leaveOpen bei beiden, und das ist noetig: sonst raeumt der
+            // zuletzt angelegte zuerst auf, schliesst dabei die Pipe, und der
+            // andere will danach noch einmal leeren. Die Ausnahme daraus
+            // fliegt aus dem try heraus in den catch und ueberschreibt die
+            // Antwort, die laengst da ist. Die Pipe schliesst ihr eigenes
+            // using.
+            using var writer = new StreamWriter(
+                pipe, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true };
+            using var reader = new StreamReader(
+                pipe, Encoding.UTF8, false, 1024, leaveOpen: true);
 
             // Der Dienst trennt an Tabulatoren und braucht mindestens zwei
             // Felder. Ein Befehl ohne Argument bekommt deshalb einen Strich.
