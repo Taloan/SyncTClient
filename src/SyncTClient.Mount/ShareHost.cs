@@ -2548,6 +2548,22 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _log(geholt == pending.Count
             ? $"[{FolderId}] vollstaendig lokal."
             : $"[{FolderId}] {geholt} von {pending.Count} geholt, {pending.Count - geholt} fehlen weiterhin.");
+
+        // Und einen Durchgang anfordern, sonst luegt die Anzeige.
+        //
+        // Der Rueckstand rechnet auf dem Bestand des letzten Durchgangs, und
+        // der lief hier, bevor eine einzige Datei da war -- bei einer frisch
+        // verbundenen Freigabe ueber null Dateien. Im Fenster stand danach
+        // "0 % - 9,6 GB offen", waehrend im Protokoll darunter "vollstaendig
+        // lokal" stand. Bis zum naechsten Durchgang, und der laeuft
+        // stuendlich.
+        //
+        // Es genuegt nicht, die Zahlen fuer veraltet zu erklaeren: das
+        // Nachziehen rechnet auf demselben alten Bestand. Gebraucht wird ein
+        // neuer Durchgang ueber den Ordner, und der Hintergrundlauf wird
+        // dafuer geweckt.
+        _lastScan = DateTime.MinValue;
+        Wake();
     }
 
     /// <summary>
