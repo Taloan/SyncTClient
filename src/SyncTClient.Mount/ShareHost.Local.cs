@@ -574,6 +574,12 @@ public sealed partial class ShareHost
 
         LastScan = DateTime.Now;
         _mitInhalt = mitInhalt;
+        _vorhanden = vorhanden;
+
+        // Der Durchgang rechnet die Zahlen gleich selbst; was zwischen zwei
+        // Durchgaengen anfiel, ist damit erledigt.
+        _zahlenVeraltet = false;
+        _letzteZahlen = DateTime.UtcNow;
 
         // Und was der Durchgang nicht mehr angetroffen hat. Vorher blieb das
         // ungenutzt: die Liste sagte, was da ist, und niemand fragte, was
@@ -623,6 +629,56 @@ public sealed partial class ShareHost
     /// </remarks>
     /// <summary>Was beim letzten Durchgang wirklich Inhalt hielt.</summary>
     private Dictionary<string, (long Bytes, DateTimeOffset LastAccess)> _mitInhalt = [];
+
+    /// <summary>Was der letzte Durchgang im Ordner angetroffen hat.</summary>
+    /// <remarks>
+    /// Damit die Zahlen fuer die Anzeige neu gerechnet werden koennen, ohne
+    /// den Ordner noch einmal abzugehen. Der Durchgang ueber
+    /// sechsundsechzigtausend Dateien kostet Sekunden; der Lauf ueber den
+    /// Index kostet einen Bruchteil davon und liefert genau die Zahl, die
+    /// sich geaendert hat.
+    /// </remarks>
+    private Dictionary<string, (long Size, long ModifiedS)> _vorhanden = [];
+
+    /// <summary>Hat sich seit der letzten Zaehlung am Index etwas bewegt?</summary>
+    private bool _zahlenVeraltet;
+
+    /// <summary>Wann zuletzt gezaehlt wurde.</summary>
+    private DateTime _letzteZahlen = DateTime.MinValue;
+
+    /// <summary>
+    /// Nicht oefter als das. Bei einer Freigabe, in der jemand gerade
+    /// arbeitet, bewegt sich der Index im Sekundentakt -- und der Lauf ueber
+    /// hunderttausend Eintraege gehoert nicht in jede dieser Sekunden.
+    /// </summary>
+    private static readonly TimeSpan Zaehlabstand = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Rechnet die Zahlen fuer die Anzeige neu, wenn der Index sich bewegt
+    /// hat.
+    /// </summary>
+    /// <remarks>
+    /// Bisher hingen sie am Durchgang ueber den Ordner, und der laeuft
+    /// stuendlich. Eine Loeschung ging hinaus, der Index stimmte, die
+    /// Gegenstelle fuehrte die Datei nicht mehr -- und die Anzeige nannte
+    /// eine Stunde lang die alte Zahl. Von aussen sah das aus, als sei die
+    /// Loeschung nicht durchgegangen.
+    ///
+    /// Gerechnet wird auf dem Bestand des letzten Durchgangs. Fuer die
+    /// Zahlen der Gegenstelle spielt er ohnehin keine Rolle -- die kommen
+    /// aus dem Index. Fuer die eigenen kann er einen Augenblick nachhinken,
+    /// bis der naechste Durchgang ihn erneuert.
+    /// </remarks>
+    private void ZahlenNachziehen()
+    {
+        if (!_zahlenVeraltet) return;
+        if (DateTime.UtcNow - _letzteZahlen < Zaehlabstand) return;
+
+        _zahlenVeraltet = false;
+        _letzteZahlen = DateTime.UtcNow;
+
+        MeasureOutstanding(_vorhanden);
+    }
 
     /// <summary>
     /// Warum dieser Eintrag noch aussteht -- in Worten, mit den Zahlen, die
@@ -1403,6 +1459,11 @@ public sealed partial class ShareHost
                 ApplyIncoming();
                 SettlePhase();
                 SweepVersions();
+
+                // Und die Zahlen fuer die Anzeige, falls sich der Index
+                // bewegt hat. Nicht der Durchgang ueber den Ordner -- nur der
+                // Lauf ueber den Index, der die Zahlen ohnehin liefert.
+                ZahlenNachziehen();
 
                 // Die Meldungen der Cloud-Files-Schicht sind der schnelle Weg,
                 // aber nicht der einzige. Fuer eine Datei, die neu in den
@@ -2278,6 +2339,11 @@ public sealed partial class ShareHost
     private void Store(BepFileInfo file, int state)
     {
         lock (_indexGate) _index?.PutLocal(file, state);
+
+        // Auch der eigene Bestand geht in die Zahlen ein -- eine Loeschung,
+        // die wir gerade angekuendigt haben, ebenso wie eine Datei, die wir
+        // uebernommen haben.
+        _zahlenVeraltet = true;
     }
 
     private long NextSequence()
