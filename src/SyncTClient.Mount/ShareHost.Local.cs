@@ -709,7 +709,7 @@ public sealed partial class ShareHost
     /// man, und ein Verdacht wie "die Datei ist gesperrt" liegt naeher als
     /// die Wahrheit.
     /// </remarks>
-    private static string Grund(
+    private string Grund(
         string name, long size, long modifiedS,
         Dictionary<string, (long Size, long ModifiedS)> vorhanden, bool fehlt)
     {
@@ -717,7 +717,14 @@ public sealed partial class ShareHost
         // da, aber leer" -- das Gegenteil dessen, was gemeint ist. Gemeint
         // ist: der Eintrag steht richtig da, Name, Groesse und Zeit stimmen,
         // nur die Bytes liegen noch bei der Gegenstelle.
-        if (!fehlt) return "hier nur ein Platzhalter";
+        //
+        // Laeuft die Hydration bereits, gehoert das dazu. Der Rueckstand wird
+        // gemessen, waehrend uebertragen wird; ohne diesen Zusatz meldet die
+        // Zeile einen Zustand, der sich Sekunden spaeter erledigt hat.
+        if (!fehlt)
+            return IsHydrating(name)
+                ? "hier nur ein Platzhalter, Übertragung läuft"
+                : "hier nur ein Platzhalter";
 
         if (!vorhanden.TryGetValue(name, out var da)) return "liegt hier nicht";
 
