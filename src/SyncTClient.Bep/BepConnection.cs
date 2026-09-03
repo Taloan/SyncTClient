@@ -554,11 +554,22 @@ public sealed class BepConnection : IAsyncDisposable
                 waiter.TrySetException(ex);
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync() => DisposeAsync("fertig");
+
+    /// <summary>
+    /// Schliesst die Verbindung und nennt den Grund.
+    /// </summary>
+    /// <remarks>
+    /// Der Grund landet im Protokoll der Gegenstelle. Ohne ihn steht dort nur
+    /// "EOF", und das sagt nichts: abgewiesen, abgestuerzt, oder gleich wieder
+    /// zu versuchen sieht von aussen gleich aus. Wer eine Verbindung nicht
+    /// will, sagt warum.
+    /// </remarks>
+    public async ValueTask DisposeAsync(string grund)
     {
         try
         {
-            await SendAsync(MessageType.Close, new Close { Reason = "fertig" }, CancellationToken.None)
+            await SendAsync(MessageType.Close, new Close { Reason = grund }, CancellationToken.None)
                 .ConfigureAwait(false);
         }
         catch

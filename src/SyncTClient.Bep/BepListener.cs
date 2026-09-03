@@ -31,6 +31,10 @@ public sealed class BepListener : IAsyncDisposable
     private TcpListener? _listener;
     private Task? _loop;
 
+    private readonly object _abbruchGate = new();
+    private long _letzteAbbruchmeldung;
+    private int _abbrueche;
+
     public BepListener(DeviceIdentity identity, string deviceName, Action<string> log)
     {
         _identity = identity;
@@ -122,7 +126,7 @@ public sealed class BepListener : IAsyncDisposable
 
             if (Incoming is null)
             {
-                await connection.DisposeAsync().ConfigureAwait(false);
+                await connection.DisposeAsync("kein Empfaenger").ConfigureAwait(false);
                 return;
             }
 
@@ -130,10 +134,64 @@ public sealed class BepListener : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            _log($"Verbindung von {remote?.Address.ToString() ?? "unbekannt"} kam nicht zustande: {Ursache(ex)}");
+            if (VorDerVorstellung(ex)) MeldeAbbruch(remote);
+            else _log($"Verbindung von {Wer(remote)} kam nicht zustande: {Ursache(ex)}");
+
             tcp.Dispose();
         }
     }
+
+    /// <summary>
+    /// Ob die Gegenstelle aufgelegt hat, bevor sie sich vorgestellt hatte.
+    /// </summary>
+    /// <remarks>
+    /// Das ist kein Fehler. Syncthing waehlt alle bekannten Adressen eines
+    /// Geraets zugleich an und verwirft die ueberzaehligen sofort; ein Gerät
+    /// mit vier Adressen erzeugt damit drei Abbrueche je Versuch.
+    /// </remarks>
+    private static bool VorDerVorstellung(Exception ex)
+    {
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+            if (e is SocketException socket &&
+                socket.SocketErrorCode is SocketError.ConnectionReset or SocketError.ConnectionAborted)
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Meldet Abbrueche vor der Vorstellung, aber hoechstens einen je Minute.
+    /// </summary>
+    /// <remarks>
+    /// Alle zwanzig Sekunden eine Fehlerzeile fuer etwas Belangloses macht das
+    /// Protokoll unbrauchbar: wer darin nach einer echten Stoerung sucht,
+    /// findet sie nicht mehr. Ganz verschweigen laesst sich das aber auch
+    /// nicht, denn wenn <em>jede</em> Verbindung so endet, ist es sehr wohl
+    /// die Stoerung. Deshalb eine Zeile je Minute, mit der Anzahl.
+    /// </remarks>
+    private void MeldeAbbruch(IPEndPoint? remote)
+    {
+        string zeile;
+
+        lock (_abbruchGate)
+        {
+            _abbrueche++;
+
+            var jetzt = Environment.TickCount64;
+            if (jetzt - _letzteAbbruchmeldung < 60_000) return;
+
+            zeile = _abbrueche > 1
+                ? $"{_abbrueche} Verbindungsversuche endeten vor der Vorstellung, zuletzt von {Wer(remote)}."
+                : $"Ein Verbindungsversuch von {Wer(remote)} endete vor der Vorstellung.";
+
+            _letzteAbbruchmeldung = jetzt;
+            _abbrueche = 0;
+        }
+
+        _log(zeile);
+    }
+
+    private static string Wer(IPEndPoint? remote) => remote?.Address.ToString() ?? "unbekannt";
 
     public async ValueTask DisposeAsync()
     {

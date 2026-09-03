@@ -301,8 +301,10 @@ public sealed class PeerHost : IAsyncDisposable
         if (State is PeerState.Verbunden or PeerState.Verbindet)
         {
             // Eine zweite Verbindung zur selben Gegenstelle wird nicht
-            // gebraucht.
-            await connection.DisposeAsync();
+            // gebraucht. Der Grund geht mit, sonst liest die Gegenstelle nur
+            // ein Abreissen und waehlt unveraendert weiter an.
+            _log($"[{Display}] zweite eingehende Verbindung abgewiesen, es besteht bereits eine.");
+            await connection.DisposeAsync("bereits verbunden");
             return;
         }
 
