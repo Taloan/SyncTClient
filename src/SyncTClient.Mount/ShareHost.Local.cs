@@ -1191,18 +1191,22 @@ public sealed partial class ShareHost
             }
         }
 
-        if (anzahl > 0)
-        {
-            LeereVerzeichnisse(_config.LocalPath);
-
         // Die Regel ist richtig -- entfernt wird nur, was anderswo
         // vollstaendig liegt --, aber sie muss sich erklaeren. Sonst sieht
         // eine Abwahl aus, als haette sie nicht gewirkt.
+        //
+        // Und zwar gerade dann, wenn nichts entfernt wurde. Die Zeile stand
+        // versehentlich innerhalb der Bedingung darunter und schwieg damit in
+        // genau dem Fall, in dem jemand eine Erklaerung sucht.
         if (geblieben.Count > 0)
             _log($"[{FolderId}] {geblieben.Count} abgewaehlte Dateien bleiben liegen: " +
                  string.Join(", ", geblieben.Take(5).Select(n => $"\"{n}\"")) +
                  (geblieben.Count > 5 ? $" und {geblieben.Count - 5} weitere" : "") +
                  " -- die Gegenstelle fuehrt sie nicht, Entfernen waere die letzte Kopie.");
+
+        if (anzahl > 0)
+        {
+            LeereVerzeichnisse(_config.LocalPath);
 
             // Nicht "uebertragen": eine Datei, deren Bloecke die Gegenstelle
             // schon hatte, ist nie ueber die Leitung gegangen. Gesagt wird,
@@ -1210,6 +1214,14 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] {anzahl} Dateien liegen auf der Gegenstelle und " +
                  $"wurden hier entfernt ({bytes / (1024.0 * 1024.0):0.0} MB) -- " +
                  "sie sollen auf diesem Geraet nicht liegen.");
+
+            // Und dem Datei-Manager sagen, dass sich hier etwas geaendert hat.
+            //
+            // Ohne diesen Anstoss stand ein abgewaehlter Zweig weiter im
+            // Fenster, obwohl er von der Platte fort war, bis irgendetwas die
+            // Ansicht zum Neulesen brachte -- und das sah aus, als haette das
+            // Abwaehlen nicht gewirkt.
+            AnsichtAuffrischen(_config.LocalPath);
         }
 
         return (anzahl, bytes);
