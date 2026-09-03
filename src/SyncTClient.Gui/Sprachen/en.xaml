@@ -457,8 +457,9 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Work.Title">Reading the folder</s:String>
   <s:String x:Key="S.Work.Asking">Asking the remote device …</s:String>
   <s:String x:Key="S.Work.Of">{0} of {1}</s:String>
-  <s:String x:Key="S.Work.Hide">Hide</s:String>
-  <s:String x:Key="S.Work.Hint">Hiding stops nothing. The state stays visible in the overview.</s:String>
+  <s:String x:Key="S.Work.Cancel">Cancel</s:String>
+  <s:String x:Key="S.Work.Hint">Cancelling stops reading. The folder is not taken over and can be connected again later.</s:String>
+  <s:String x:Key="S.Work.Cancelled">Cancelling …</s:String>
   <s:String x:Key="S.Open.Title">Outstanding files</s:String>
   <s:String x:Key="S.Open.For">Outstanding – {0}</s:String>
   <s:String x:Key="S.Open.Name">File</s:String>
