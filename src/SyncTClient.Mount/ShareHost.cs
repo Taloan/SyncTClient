@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using SyncTClient.Bep;
 using SyncTClient.Vfs;
+using BepBlockInfo = SyncTClient.Bep.Proto.BlockInfo;
 using BepFileInfo = SyncTClient.Bep.Proto.FileInfo;
 using BepRequest = SyncTClient.Bep.Proto.Request;
 using ErrorCode = SyncTClient.Bep.Proto.ErrorCode;
@@ -450,6 +451,107 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             return VersionVectors.Compare(eigene.Version, ihre.Version)
                 is VersionOrder.Neuer or VersionOrder.Nebeneinander;
         }
+    }
+
+    /// <summary>
+    /// Der Beweis, dass diese Datei bei der Gegenstelle byteidentisch liegt.
+    /// </summary>
+    /// <remarks>
+    /// Gefordert vor jedem Freigeben von Speicherplatz. Dehydrieren loescht
+    /// den Inhalt hier; danach ist die Gegenstelle die einzige Quelle. Ob sie
+    /// wirklich dieselben Bytes hat, ist deshalb keine Frage der
+    /// Wahrscheinlichkeit.
+    ///
+    /// Geprueft wird nicht gegen Groesse und Zeitstempel und auch nicht gegen
+    /// den Versionsvektor. Die sagen, was angekuendigt wurde, nicht was auf
+    /// dem Datentraeger steht. Geprueft wird gegen die Blockhashes der
+    /// Gegenstelle, und der eigene Hash wird dafuer in diesem Augenblick neu
+    /// aus der Datei berechnet -- nicht aus dem eigenen Index gelesen, denn
+    /// der koennte veraltet sein.
+    ///
+    /// Jeder Zweifel faellt gegen das Freigeben aus: keine Blockliste, andere
+    /// Blockgroesse, andere Anzahl, ein abweichender Hash, eine Datei, die
+    /// sich nicht lesen laesst. Der Preis ist das Lesen der Datei; er faellt
+    /// nur an, wenn wirklich freigegeben werden soll.
+    /// </remarks>
+    private bool ByteIdentischDort(string relativePath)
+    {
+        var gefordert = Math.Max(1, _app.MinimumCopies);
+
+        IReadOnlyList<BepFileInfo> ankuendigungen;
+
+        lock (_indexGate)
+        {
+            if (_index is null) return false;
+            ankuendigungen = _index.All(relativePath);
+        }
+
+        // Ohne Blockliste ist nichts zu vergleichen: die Gegenstelle kennt
+        // dann nur den Namen. Solche Ankuendigungen zaehlen nicht mit.
+        var kandidaten = ankuendigungen
+            .Where(f => !f.Deleted && f.Type == FileInfoType.File)
+            .Where(f => f.Size == 0 || f.Blocks.Count > 0)
+            .ToList();
+
+        if (kandidaten.Count < gefordert) return false;
+
+        try
+        {
+            var info = new System.IO.FileInfo(LocalPathOf(relativePath));
+            if (!info.Exists) return false;
+
+            using var strom = new System.IO.FileStream(
+                info.FullName, System.IO.FileMode.Open, System.IO.FileAccess.Read,
+                System.IO.FileShare.Read);
+
+            // Neu gerechnet, nicht nachgeschlagen. Der eigene Index sagt, was
+            // angekuendigt wurde; hier zaehlt, was auf dem Datentraeger steht.
+            var (blockgroesse, bloecke, _) = BlockList.For(strom, info.Length);
+
+            var belegt = kandidaten.Count(k => Deckungsgleich(k, info.Length, blockgroesse, bloecke));
+            if (belegt >= gefordert) return true;
+
+            _log($"[{FolderId}] \"{relativePath}\" behaelt seinen Inhalt: {belegt} von {gefordert} " +
+                 "geforderten Gegenstellen halten nachweislich dieselben Bytes.");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            // Wer nicht lesen kann, kann nicht beweisen. Ohne Beweis bleibt
+            // der Inhalt hier.
+            _log($"[{FolderId}] \"{relativePath}\" liess sich nicht gegen die Gegenstellen " +
+                 $"pruefen und behaelt seinen Inhalt: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Ob diese Ankuendigung Block fuer Block dasselbe beschreibt.
+    /// </summary>
+    /// <remarks>
+    /// Groesse, Blockgroesse, Anzahl der Bloecke, dann jeder einzelne Hash.
+    /// Eine leere Datei hat keine Bloecke; dort entscheidet die Groesse
+    /// allein.
+    /// </remarks>
+    private static bool Deckungsgleich(
+        BepFileInfo ihre, long groesse, int blockgroesse, IReadOnlyList<BepBlockInfo> bloecke)
+    {
+        if (ihre.Size != groesse) return false;
+
+        // 0 bedeutet im Protokoll nicht "keine Bloecke", sondern die Vorgabe
+        // von 128 KiB.
+        var ihreBlockgroesse = ihre.BlockSize == 0 ? BlockList.MinimumBlockSize : ihre.BlockSize;
+
+        if (ihreBlockgroesse != blockgroesse) return false;
+        if (ihre.Blocks.Count != bloecke.Count) return false;
+
+        for (var i = 0; i < bloecke.Count; i++)
+        {
+            if (ihre.Blocks[i].Size != bloecke[i].Size) return false;
+            if (!ihre.Blocks[i].Hash.Span.SequenceEqual(bloecke[i].Hash.Span)) return false;
+        }
+
+        return true;
     }
 
     private bool LeerHier(string relativePath)
@@ -1332,7 +1434,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         {
             // Der Cache speichert nur Groessen und Zugriffszeiten. Ob eine
             // Datei wiederbeschaffbar ist, steht im Index der Gegenstelle.
-            MayEvict = MayEvict
+            //
+            // Zwei Stufen, und sie tun Verschiedenes: MayEvict siebt nach den
+            // Ankuendigungen aus, welche Dateien ueberhaupt in Frage kommen.
+            // Wiederbeschaffbar beweist dann Block fuer Block, dass die
+            // geforderte Anzahl Gegenstellen dieselben Bytes haelt -- erst
+            // danach wird Speicherplatz freigegeben.
+            MayEvict = MayEvict,
+            Wiederbeschaffbar = ByteIdentischDort
         };
 
         _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
