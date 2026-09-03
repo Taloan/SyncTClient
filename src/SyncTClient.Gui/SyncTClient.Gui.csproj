@@ -69,74 +69,79 @@
   </Target>
 
   <!--
-    Die Vorschau-DLL gehoert in den Veroeffentlichungsordner.
+    Die Vorschau-DLL: wo sie herkommt und wohin sie gehoert.
 
-    Sie ist ein eigenes NativeAOT-Projekt, das niemand referenziert. Ohne
-    diesen Schritt landet sie nirgends, und auf einem fremden Rechner gibt es
-    weder Vorschaubilder noch Kontextmenue. Das Programm sucht sie zuerst neben
-    der EXE; genau dorthin wird sie gelegt.
+    Sie ist ein eigenes NativeAOT-Projekt, das niemand referenziert. Es
+    entsteht nur beim Veroeffentlichen; anders laesst sich NativeAOT nicht
+    erzeugen. Daraus folgen zwei Schritte, die verschiedene Dinge tun und
+    deshalb beide bleiben.
 
-    Nur beim Veroeffentlichen, nicht bei jedem Build: waehrend der Entwicklung
-    laedt der Explorer die DLL aus ihrem eigenen Ordner und haelt sie fest.
-    Ein Kopierschritt bei jedem Build wuerde deshalb regelmaessig scheitern.
+    Beide rufen denselben Befehl. Das Verzeichnis von vswhere.exe kommt dabei
+    in den Suchpfad: die NativeAOT-Werkzeuge finden den C++-Binder auf
+    manchen Rechnern nur so, und sonst bricht das Binden mit einer Meldung
+    ab, die nach einem fehlenden Visual Studio aussieht, obwohl eines da ist.
 
-    Schlaegt das Veroeffentlichen fehl, etwa weil NativeAOT die
-    C++-Werkzeuge nicht findet, bricht der Lauf ab. Ein Paket, dem sie fehlt, sieht
-    vollstaendig aus und ist es nicht.
+    Immer Release, gleich in welcher Fassung das Programm gebaut wird: nur
+    dort sucht ThumbnailProviderRegistration.FindLibrary im Entwicklungsbaum
+    nach ihr. Je nach Plattformwahl liegt sie mit oder ohne x64-Zwischenstufe.
   -->
-  <Target Name="VorschauDllMitnehmen" AfterTargets="Publish">
-    <PropertyGroup>
-      <VorschauProjekt>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\SyncTClient.ThumbProvider.csproj</VorschauProjekt>
-      <VorschauDll>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\$(Configuration)\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDll>
-    </PropertyGroup>
+  <PropertyGroup>
+    <VorschauProjekt>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\SyncTClient.ThumbProvider.csproj</VorschauProjekt>
+    <VorschauDllRelease>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllRelease>
+    <VorschauDllReleaseX64>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\x64\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllReleaseX64>
 
-    <Exec Command="dotnet publish &quot;$(VorschauProjekt)&quot; -c $(Configuration) -r win-x64 --nologo" />
+    <VsInstallerVerzeichnis>$([System.Environment]::GetFolderPath(SpecialFolder.ProgramFilesX86))\Microsoft Visual Studio\Installer</VsInstallerVerzeichnis>
+    <VorschauBefehl>set "PATH=%25PATH%25;$(VsInstallerVerzeichnis)" &amp;&amp; dotnet publish "$(VorschauProjekt)" -c Release -r win-x64 --nologo</VorschauBefehl>
+  </PropertyGroup>
 
-    <Error Condition="!Exists('$(VorschauDll)')"
-           Text="synctthumbs.dll wurde nicht erzeugt. Ohne sie gibt es im veroeffentlichten Programm keine Vorschaubilder und kein Kontextmenue." />
+  <!--
+    Erstens: beim ersten Bauen auf einem Rechner gibt es sie noch nicht.
 
-    <Copy SourceFiles="$(VorschauDll)" DestinationFolder="$(PublishDir)" />
+    Wer die Projektmappe uebersetzt und startet, findet unter Einstellungen
+    sonst zwei Striche und einen gesperrten Knopf, ohne einen Hinweis darauf,
+    dass ein Schritt fehlt, den die Projektmappe nirgends nennt.
+
+    Nur wenn sie fehlt: liegt sie erst einmal da, laedt der Explorer sie von
+    dort und haelt sie fest. Ein Erzeugen bei jedem Build wuerde daran
+    regelmaessig scheitern. Wer die Erweiterung selbst aendert,
+    veroeffentlicht sie also von Hand und weiss dann auch, dass der Explorer
+    dafuer erst loslassen muss.
+
+    Schlaegt es fehl, bleibt es bei einer Warnung. Das Programm laeuft dann
+    ohne Vorschaubilder weiter, was beim Entwickeln zu verschmerzen ist.
+  -->
+  <Target Name="VorschauDllBereitstellen" BeforeTargets="Build">
+    <Exec Condition="!Exists('$(VorschauDllRelease)') and !Exists('$(VorschauDllReleaseX64)')"
+          Command="$(VorschauBefehl)"
+          ContinueOnError="WarnAndContinue" />
   </Target>
 
   <!--
-    Beim ersten Bauen auf einem Rechner gibt es die Vorschau-DLL noch nicht.
+    Zweitens: in ein Paket gehoert sie hinein.
 
-    Sie entsteht nur beim Veroeffentlichen ihres eigenen Projekts; NativeAOT
-    laesst sich nicht anders erzeugen. Wer die Projektmappe uebersetzt und
-    startet, findet unter Einstellungen deshalb zwei Striche und einen
-    gesperrten Knopf, ohne einen Hinweis darauf, dass ein Schritt fehlt, den
-    die Projektmappe nirgends nennt.
+    Das Programm sucht sie zuerst neben der EXE; genau dorthin wird sie
+    gelegt. Ohne diesen Schritt gibt es auf einem fremden Rechner weder
+    Vorschaubilder noch Kontextmenue.
 
-    Nur wenn sie fehlt, und das ist der Unterschied zum Kopierschritt oben:
-    liegt sie erst einmal da, laedt der Explorer sie von dort und haelt sie
-    fest. Ein Erzeugen bei jedem Build wuerde daran regelmaessig scheitern.
-    Wer die Erweiterung selbst aendert, veroeffentlicht sie also von Hand,
-    und weiss dann auch, dass der Explorer dafuer erst loslassen muss.
+    Hier wird sie in jedem Fall neu erzeugt, nicht nur wenn sie fehlt: ein
+    Paket soll die Fassung tragen, die zum uebrigen Programm gehoert, und
+    nicht die, die zufaellig noch herumliegt.
 
-    Immer Release: nur dort sucht ThumbnailProviderRegistration.FindLibrary
-    im Entwicklungsbaum nach ihr.
-
-    Schlaegt es fehl, etwa weil die C++-Werkzeuge fehlen, bleibt es bei einer
-    Warnung. Das Programm laeuft dann ohne Vorschaubilder weiter, was beim
-    Entwickeln zu verschmerzen ist; beim Veroeffentlichen bricht der Lauf
-    weiterhin ab.
+    Fehlt sie danach, bricht der Lauf ab. Ein Paket ohne sie sieht
+    vollstaendig aus und ist es nicht.
   -->
-  <Target Name="VorschauDllBereitstellen" BeforeTargets="Build">
-    <PropertyGroup>
-      <VorschauDllRelease>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllRelease>
-      <VorschauDllReleaseX64>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\x64\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllReleaseX64>
+  <Target Name="VorschauDllMitnehmen" AfterTargets="Publish">
+    <Exec Command="$(VorschauBefehl)" />
 
-      <!-- Das Verzeichnis von vswhere.exe. Die NativeAOT-Werkzeuge suchen
-           darueber den C++-Binder, und auf manchen Rechnern finden sie es
-           nur, wenn es im Suchpfad steht; sonst bricht das Binden mit einer
-           Meldung ab, die nach einem fehlenden Visual Studio aussieht,
-           obwohl eines da ist. -->
-      <VsInstallerVerzeichnis>$([System.Environment]::GetFolderPath(SpecialFolder.ProgramFilesX86))\Microsoft Visual Studio\Installer</VsInstallerVerzeichnis>
+    <PropertyGroup>
+      <VorschauDll Condition="Exists('$(VorschauDllRelease)')">$(VorschauDllRelease)</VorschauDll>
+      <VorschauDll Condition="'$(VorschauDll)' == '' and Exists('$(VorschauDllReleaseX64)')">$(VorschauDllReleaseX64)</VorschauDll>
     </PropertyGroup>
 
-    <Exec Condition="!Exists('$(VorschauDllRelease)') and !Exists('$(VorschauDllReleaseX64)')"
-          Command="set &quot;PATH=%25PATH%25;$(VsInstallerVerzeichnis)&quot; &amp;&amp; dotnet publish &quot;$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\SyncTClient.ThumbProvider.csproj&quot; -c Release -r win-x64 --nologo"
-          ContinueOnError="WarnAndContinue" />
+    <Error Condition="'$(VorschauDll)' == ''"
+           Text="synctthumbs.dll wurde nicht erzeugt. Ohne sie gibt es im veroeffentlichten Programm keine Vorschaubilder und kein Kontextmenue." />
+
+    <Copy SourceFiles="$(VorschauDll)" DestinationFolder="$(PublishDir)" />
   </Target>
 
 </Project>
