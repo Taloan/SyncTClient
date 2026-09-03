@@ -5,6 +5,7 @@ using System.Net;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Threading;
 using SyncTClient.Bep;
@@ -109,6 +110,13 @@ public partial class MainWindow : Window
         UploadList.ItemsSource = _outgoing;
         DownloadList.ItemsSource = _incoming;
         ShareGrid.ItemsSource = _rows;
+
+        // Der Filter sitzt auf der Ansicht, nicht auf der Liste: die Zeilen
+        // bleiben vollstaendig, ausgewaehlt wird nur, was davon zu sehen ist.
+        // Alles, was ueber _rows rechnet -- Summen, Statistik, der Blick aus
+        // dem Infobereich --, sieht damit weiterhin alle.
+        CollectionViewSource.GetDefaultView(_rows).Filter =
+            o => o is ShareRow zeile && PasstZumFilter(zeile);
         CacheList.ItemsSource = _cacheRows;
 
         _configPath = AppConfig.DefaultConfigPath();
@@ -235,6 +243,11 @@ public partial class MainWindow : Window
         // Sie gelten ab hier und nicht erst beim naechsten Start.
         App.ApplyTheme(_config.Theme);
         App.ApplyLanguage(_config.Language);
+
+        // Ebenso die gewaehlte Ansicht. Erst hier, denn vorher stand die
+        // Konfiguration noch nicht; der Wechsel meldet sich zurueck und
+        // findet dann seinen eigenen Wert vor.
+        FilterBox.SelectedIndex = (int)_config.Filter;
 
         _peers.Clear();
 
@@ -402,9 +415,47 @@ public partial class MainWindow : Window
         return row;
     }
 
+    /// <summary>Gehoert diese Zeile in die gewaehlte Ansicht?</summary>
+    private bool PasstZumFilter(ShareRow zeile) => _config.Filter switch
+    {
+        // "Verbunden" heisst: es laeuft eine Freigabe dazu. Angeboten, aber
+        // nicht uebernommen zaehlt nicht dazu -- die Zeile sagt genau das
+        // auch in ihrer Spalte "Status".
+        ShareFilter.Verbunden => zeile.Accepted,
+        ShareFilter.Getrennt => !zeile.Accepted,
+        _ => true
+    };
+
+    /// <summary>Wie viele Zeilen zuletzt liefen. Daran merkt der Filter, dass er nachziehen muss.</summary>
+    private int _zuletztLaufend = -1;
+
+    private void OnFilterChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var gewaehlt = (ShareFilter)Math.Max(0, FilterBox.SelectedIndex);
+        if (gewaehlt == _config.Filter) return;
+
+        _config.Filter = gewaehlt;
+        Persist();
+
+        CollectionViewSource.GetDefaultView(_rows).Refresh();
+    }
+
     private void RefreshRows()
     {
         ApplyPause();
+
+        // Der Filter fragt nach einem Zustand, und der aendert sich waehrend
+        // des Laufs: eine Freigabe wird bereit, eine Verbindung faellt aus.
+        // Nachgezogen wird aber nur, wenn sich die Zahl auch geaendert hat --
+        // ein Auffrischen im Sekundentakt setzte Auswahl und Bildlauf jedesmal
+        // zurueck.
+        var laufend = _rows.Count(r => r.Accepted);
+        if (laufend != _zuletztLaufend)
+        {
+            _zuletztLaufend = laufend;
+            if (_config.Filter != ShareFilter.Alle)
+                CollectionViewSource.GetDefaultView(_rows).Refresh();
+        }
 
         foreach (var row in _rows) row.AppPaused = _config.Paused;
         foreach (var peer in _peers) peer.Refresh();

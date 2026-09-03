@@ -50,6 +50,19 @@ public enum ConflictResolution
     Remote
 }
 
+/// <summary>Welche Freigaben die Uebersicht zeigt.</summary>
+public enum ShareFilter
+{
+    /// <summary>Alle, auch die blosz angebotenen.</summary>
+    Alle,
+
+    /// <summary>Nur die, die gerade laufen.</summary>
+    Verbunden,
+
+    /// <summary>Nur die, die gerade nicht laufen.</summary>
+    Getrennt
+}
+
 /// <summary>Eine Gegenstelle. Das ist ein Server oder ein anderer Rechner.</summary>
 public sealed class PeerConfig
 {
@@ -383,6 +396,17 @@ public sealed class AppConfig
     /// orange, und die Schaltflaeche heisst "Fortsetzen".
     /// </remarks>
     public bool Paused { get; set; }
+
+    /// <summary>
+    /// Welche Freigaben die Uebersicht zeigt.
+    /// </summary>
+    /// <remarks>
+    /// Eine Ansicht und keine Handlung: gefiltert wird, was zu sehen ist,
+    /// nicht, was laeuft. Sie ueberlebt den Neustart, weil sie sonst bei
+    /// jedem Start zurueckspraenge -- und wer auf die nicht verbundenen sieht,
+    /// tut das meist ueber mehrere Sitzungen hinweg.
+    /// </remarks>
+    public ShareFilter Filter { get; set; } = ShareFilter.Alle;
 
     /// <summary>Verzeichnis fuer Geraetezertifikat, Index-Datenbanken und Cache-Zustand.</summary>
     public string HomeDirectory { get; set; } = "synct-home";

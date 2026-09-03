@@ -118,6 +118,16 @@
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Device}" Click="OnShowDevice" Margin="0" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Peers}" Click="OnManagePeers" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Settings}" Click="OnShowProgramSettings" />
+      <!-- Ein Ansichtsfilter, keine Handlung: er waehlt aus, was zu sehen
+           ist, nicht, was laeuft. Die Wahl steht in der Konfiguration und
+           ueberlebt den Neustart. -->
+      <ComboBox x:Name="FilterBox" DockPanel.Dock="Right" Width="190" Margin="0,0,10,0"
+                VerticalAlignment="Center" SelectionChanged="OnFilterChanged"
+                ToolTip="{DynamicResource S.Main.FilterHint}">
+        <ComboBoxItem Content="{DynamicResource S.Main.FilterAll}" />
+        <ComboBoxItem Content="{DynamicResource S.Main.FilterConnected}" />
+        <ComboBoxItem Content="{DynamicResource S.Main.FilterDisconnected}" />
+      </ComboBox>
       <Button x:Name="PauseAllButton" DockPanel.Dock="Left"
               Content="{DynamicResource S.Main.PauseAll}" Click="OnTogglePauseAll" />
       <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Gedaempft}"

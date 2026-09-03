@@ -361,6 +361,10 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Status.Recent">RECENTLY TRANSFERRED</s:String>
   <s:String x:Key="S.Status.Quiet">Nothing is being transferred right now.</s:String>
   <s:String x:Key="C.NoShare">No share for this path.</s:String>
+  <s:String x:Key="S.Main.FilterAll">Show all</s:String>
+  <s:String x:Key="S.Main.FilterConnected">Connected only</s:String>
+  <s:String x:Key="S.Main.FilterDisconnected">Not connected only</s:String>
+  <s:String x:Key="S.Main.FilterHint">Chooses which shares the list shows. It filters the view, not the syncing.</s:String>
   <s:String x:Key="C.Pinned">{0} files ({1}) will stay local.</s:String>
   <s:String x:Key="C.Freed">{0} files ({1}) turned into placeholders.</s:String>
   <s:String x:Key="C.Hidden">{0} branches hidden.</s:String>
