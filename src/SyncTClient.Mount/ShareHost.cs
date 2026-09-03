@@ -1832,6 +1832,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Der naechste Durchgang misst neu. Bis dahin gilt die Liste als
         // abgearbeitet -- sonst liefe sie im naechsten Takt noch einmal.
         _ohneInhalt = [];
+
+        // Und die Phase zurueckgeben, aus demselben Grund wie beim ersten
+        // Herunterladen: "Inhalte" beendet niemand von selbst.
+        SetPhase(SyncPhase.Abgleich);
     }
 
     /// <summary>
@@ -2564,6 +2568,19 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // dafuer geweckt.
         _lastScan = DateTime.MinValue;
         Wake();
+
+        // Und die Phase zurueckgeben.
+        //
+        // "Inhalte" kennt niemand, der sie beenden koennte: SettlePhase
+        // steigt aus, wenn die Phase nicht "Abgleich" ist, und
+        // UpdateOutstandingPhase ebenso. Wer hier stehen bleibt, bleibt fuer
+        // immer stehen -- mit done gleich total, also einem vollen Balken und
+        // "laedt herunter" daneben, waehrend der Rueckstand darunter laengst
+        // auf null steht.
+        //
+        // Abgleich und nicht Fertig: ob es wirklich fertig ist, entscheidet
+        // SettlePhase, und die weiss mehr als diese Schleife.
+        SetPhase(SyncPhase.Abgleich);
     }
 
     /// <summary>
