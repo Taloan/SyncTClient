@@ -98,4 +98,45 @@
     <Copy SourceFiles="$(VorschauDll)" DestinationFolder="$(PublishDir)" />
   </Target>
 
+  <!--
+    Beim ersten Bauen auf einem Rechner gibt es die Vorschau-DLL noch nicht.
+
+    Sie entsteht nur beim Veroeffentlichen ihres eigenen Projekts; NativeAOT
+    laesst sich nicht anders erzeugen. Wer die Projektmappe uebersetzt und
+    startet, findet unter Einstellungen deshalb zwei Striche und einen
+    gesperrten Knopf, ohne einen Hinweis darauf, dass ein Schritt fehlt, den
+    die Projektmappe nirgends nennt.
+
+    Nur wenn sie fehlt, und das ist der Unterschied zum Kopierschritt oben:
+    liegt sie erst einmal da, laedt der Explorer sie von dort und haelt sie
+    fest. Ein Erzeugen bei jedem Build wuerde daran regelmaessig scheitern.
+    Wer die Erweiterung selbst aendert, veroeffentlicht sie also von Hand,
+    und weiss dann auch, dass der Explorer dafuer erst loslassen muss.
+
+    Immer Release: nur dort sucht ThumbnailProviderRegistration.FindLibrary
+    im Entwicklungsbaum nach ihr.
+
+    Schlaegt es fehl, etwa weil die C++-Werkzeuge fehlen, bleibt es bei einer
+    Warnung. Das Programm laeuft dann ohne Vorschaubilder weiter, was beim
+    Entwickeln zu verschmerzen ist; beim Veroeffentlichen bricht der Lauf
+    weiterhin ab.
+  -->
+  <Target Name="VorschauDllBereitstellen" BeforeTargets="Build">
+    <PropertyGroup>
+      <VorschauDllRelease>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllRelease>
+      <VorschauDllReleaseX64>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\x64\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllReleaseX64>
+
+      <!-- Das Verzeichnis von vswhere.exe. Die NativeAOT-Werkzeuge suchen
+           darueber den C++-Binder, und auf manchen Rechnern finden sie es
+           nur, wenn es im Suchpfad steht; sonst bricht das Binden mit einer
+           Meldung ab, die nach einem fehlenden Visual Studio aussieht,
+           obwohl eines da ist. -->
+      <VsInstallerVerzeichnis>$([System.Environment]::GetFolderPath(SpecialFolder.ProgramFilesX86))\Microsoft Visual Studio\Installer</VsInstallerVerzeichnis>
+    </PropertyGroup>
+
+    <Exec Condition="!Exists('$(VorschauDllRelease)') and !Exists('$(VorschauDllReleaseX64)')"
+          Command="set &quot;PATH=%25PATH%25;$(VsInstallerVerzeichnis)&quot; &amp;&amp; dotnet publish &quot;$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\SyncTClient.ThumbProvider.csproj&quot; -c Release -r win-x64 --nologo"
+          ContinueOnError="WarnAndContinue" />
+  </Target>
+
 </Project>
