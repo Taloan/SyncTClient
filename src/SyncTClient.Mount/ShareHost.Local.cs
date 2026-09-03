@@ -713,7 +713,11 @@ public sealed partial class ShareHost
         string name, long size, long modifiedS,
         Dictionary<string, (long Size, long ModifiedS)> vorhanden, bool fehlt)
     {
-        if (!fehlt) return "hier ohne Inhalt";
+        // "Ohne Inhalt" hiess das einmal, und das las sich wie "die Datei ist
+        // da, aber leer" -- das Gegenteil dessen, was gemeint ist. Gemeint
+        // ist: der Eintrag steht richtig da, Name, Groesse und Zeit stimmen,
+        // nur die Bytes liegen noch bei der Gegenstelle.
+        if (!fehlt) return "hier nur ein Platzhalter";
 
         if (!vorhanden.TryGetValue(name, out var da)) return "liegt hier nicht";
 
@@ -987,7 +991,7 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] Rueckstand: {offen} von {vereint} Dateien, " +
                  $"{bytes / (1024.0 * 1024.0):0.0} von {vereintBytes / (1024.0 * 1024.0):0.0} MB " +
                  $"(Gegenstelle {gesamt}, hier {vorhanden.Count}" +
-                 (wartend > 0 ? $", {wartend} ohne Inhalt bei der Gegenstelle" : "") + ")." +
+                 (wartend > 0 ? $", {wartend} haelt die Gegenstelle selbst nicht" : "") + ")." +
                  (offeneNamen.Count > 0 ? " Offen: " + string.Join(", ", offeneNamen) +
                      (offen > offeneNamen.Count ? $" und {offen - offeneNamen.Count} weitere" : "") + "." : ""));
 
