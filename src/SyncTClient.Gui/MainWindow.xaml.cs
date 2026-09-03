@@ -145,6 +145,7 @@ public partial class MainWindow : Window
         // Der Draht zum Kontextmenue im Explorer. Er steht, sobald das
         // Programm laeuft -- ohne laufenden Client haben die Eintraege
         // niemanden, der sie ausfuehrt, und zeigen das auch.
+        EinbindungPruefen();
         CommandService.Handle = OnCommand;
         CommandService.Danach = NachDemBefehl;
         CommandService.EnsureStarted(AppendLog);
@@ -729,6 +730,25 @@ public partial class MainWindow : Window
     /// Der Aufruf kehrt sofort zurueck, wenn nichts zu tun ist. Nur wenn eine
     /// Markierung verschwindet oder wiederkommt, geschieht ueberhaupt etwas.
     /// </remarks>
+    /// <summary>
+    /// Sagt einmal beim Start, wenn die Einbindung nicht steht.
+    /// </summary>
+    /// <remarks>
+    /// Die Eintraege entstehen von selbst, sobald eine Freigabe anlaeuft --
+    /// aber nur, wenn die Vorschau-DLL neben dem Programm liegt. Sie ist ein
+    /// eigenes Projekt und fehlt einem Ordner, in den jemand nur die
+    /// uebrigen Dateien kopiert hat. Ohne diesen Hinweis bleibt es dabei,
+    /// dass "die Vorschaubilder eben nicht gehen", ohne dass irgendwo stuende,
+    /// warum.
+    /// </remarks>
+    private void EinbindungPruefen()
+    {
+        var zustand = ThumbnailProviderRegistration.Nachsehen();
+
+        if (zustand.Library is null) AppendLog(App.S("M.ShellMissing"));
+        else if (zustand.Veraltet && zustand.ClassRegistered) AppendLog(App.S("M.ShellStale"));
+    }
+
     private void MarkierungenNachsehen()
     {
         foreach (var zeile in _rows)

@@ -137,6 +137,22 @@
     <Button x:Name="ClearButton" Content="{DynamicResource S.Settings.ClearThumbs}" Padding="10,3"
             HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnClearThumbnails" />
 
+    <!-- Was das Programm in der Registrierung eintraegt, geschieht beim Start
+         von selbst und kann lautlos scheitern. Hier steht, was tatsaechlich
+         eingetragen ist, und hier laesst es sich wieder entfernen. -->
+    <TextBlock Text="{DynamicResource S.Settings.ShellGroup}" Style="{StaticResource Gruppe}" />
+
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ShellHint}" />
+
+    <TextBlock x:Name="ShellStateText" Margin="0,10,0,0" TextWrapping="Wrap" />
+
+    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+      <Button x:Name="ShellRegisterButton" Content="{DynamicResource S.Settings.ShellRegister}"
+              Padding="10,3" Click="OnRegisterShell" />
+      <Button x:Name="ShellUnregisterButton" Content="{DynamicResource S.Settings.ShellUnregister}"
+              Padding="10,3" Margin="8,0,0,0" Click="OnUnregisterShell" />
+    </StackPanel>
+
     <TextBlock Text="{DynamicResource S.Settings.DataGroup}" Style="{StaticResource Gruppe}" />
 
     <Label Content="{DynamicResource S.Settings.DataDir}" />

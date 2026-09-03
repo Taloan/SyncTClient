@@ -122,6 +122,7 @@ public partial class ProgramSettingsWindow : Window
         ThresholdBox.Text = Math.Max(1, config.MinimumCopies).ToString();
         ThumbsBox.IsChecked = config.GenerateThumbnails;
         ShowUsage();
+        ShowShellState();
         ParallelismBox.Text = config.Parallelism.ToString();
         ListenBox.IsChecked = config.Listen;
         ListenPortBox.Text = config.ListenPort.ToString();
@@ -182,6 +183,112 @@ public partial class ProgramSettingsWindow : Window
     /// Oberflaeche waere das ein Stocken alle paar Sekunden, mitten im
     /// Tippen.
     /// </remarks>
+    /// <summary>
+    /// Zeigt, was tatsaechlich in der Registrierung steht.
+    /// </summary>
+    /// <remarks>
+    /// Die Eintraege entstehen beim Start von selbst und koennen dabei
+    /// lautlos scheitern -- eine fehlende DLL, ein Eintrag, den etwas anderes
+    /// ueberschrieben hat. Wer das nachsehen wollte, musste bisher die
+    /// Registrierung von Hand durchsuchen.
+    /// </remarks>
+    private void ShowShellState()
+    {
+        var zustand = ThumbnailProviderRegistration.Nachsehen();
+
+        var text = App.S("M.ShellState",
+            zustand.Library ?? App.S("M.ShellNoLibrary"),
+            zustand.LibraryStamp,
+            zustand.Registered ?? App.S("M.ShellNo"),
+            zustand.RegisteredStamp,
+            App.S(zustand.MenuRegistered ? "M.ShellYes" : "M.ShellNo"),
+            zustand.SyncRoots);
+
+        // Der Hinweis nur, wenn er zutrifft. Eine Zeile, die immer dasteht,
+        // wird nicht mehr gelesen.
+        if (zustand.Veraltet && zustand.ClassRegistered)
+            text += Environment.NewLine + Environment.NewLine + App.S("M.ShellOutdated");
+
+        ShellStateText.Text = text;
+
+        // Eintragen geht nur mit Datei; ohne sie waere der Eintrag ein
+        // Verweis auf nichts.
+        ShellRegisterButton.IsEnabled = zustand.Library is not null;
+        ShellUnregisterButton.IsEnabled = zustand.ClassRegistered || zustand.MenuRegistered;
+    }
+
+    private async void OnRegisterShell(object sender, RoutedEventArgs e)
+    {
+        if (ThumbnailProviderRegistration.FindLibrary() is not { } library) return;
+
+        ThumbnailProviderRegistration.RegisterClass(library);
+        ThumbnailProviderRegistration.RegisterMenu(library);
+
+        ShowShellState();
+        await ExplorerAnbieten();
+    }
+
+    /// <summary>
+    /// Nimmt die Eintraege wieder heraus.
+    /// </summary>
+    /// <remarks>
+    /// Die angemeldeten Sync-Wurzeln bleiben stehen. Sie zu entfernen hiesse,
+    /// die Platzhalter darunter unbrauchbar zu machen -- das geschieht beim
+    /// Loesen einer Freigabe und nirgends sonst.
+    /// </remarks>
+    private async void OnUnregisterShell(object sender, RoutedEventArgs e)
+    {
+        ThumbnailProviderRegistration.UnregisterMenu();
+        ThumbnailProviderRegistration.UnregisterClass();
+
+        ShowShellState();
+        await ExplorerAnbieten();
+    }
+
+    /// <summary>
+    /// Bietet an, den Explorer neu zu starten.
+    /// </summary>
+    /// <remarks>
+    /// Er liest diese Eintraege beim Start und laedt die DLL in seinen
+    /// eigenen Prozess. Solange er laeuft, bleibt es bei dem, was er einmal
+    /// geladen hat -- die Aenderung wirkt dann scheinbar nicht.
+    ///
+    /// Gefragt statt getan: offene Fenster gehen dabei zu, und wer gerade
+    /// etwas kopiert, will das selbst entscheiden.
+    /// </remarks>
+    private async Task ExplorerAnbieten()
+    {
+        var antwort = MessageBox.Show(this,
+            App.S("M.ShellRestartAsk"), App.S("S.Settings.ShellGroup"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+
+        if (antwort != MessageBoxResult.Yes) return;
+
+        try
+        {
+            foreach (var prozess in System.Diagnostics.Process.GetProcessesByName("explorer"))
+            {
+                try { prozess.Kill(); } catch (Exception) { /* einer genuegt */ }
+            }
+
+            // Windows startet ihn meist von selbst. Tut es das nicht, bleibt
+            // der Bildschirm leer -- und das waere schlimmer als alles, was
+            // hier behoben werden sollte.
+            await Task.Delay(2000);
+
+            if (System.Diagnostics.Process.GetProcessesByName("explorer").Length == 0)
+            {
+                System.Diagnostics.Process.Start(
+                    new System.Diagnostics.ProcessStartInfo("explorer.exe") { UseShellExecute = true });
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, App.S("S.Settings.ShellGroup"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private async void ShowUsage()
     {
         IReadOnlyList<VolumeUsage> volumes;

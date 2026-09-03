@@ -68,4 +68,34 @@
     <Error Text="RuntimeIdentifier ist &quot;$(RuntimeIdentifier)&quot;. SyncTClient laeuft nur als win-x64 -- siehe die Anmerkung in dieser Projektdatei." />
   </Target>
 
+  <!--
+    Die Vorschau-DLL gehoert in den Veroeffentlichungsordner.
+
+    Sie ist ein eigenes NativeAOT-Projekt, das niemand referenziert. Ohne
+    diesen Schritt landet sie nirgends, und auf einem fremden Rechner gibt es
+    weder Vorschaubilder noch Kontextmenue. Das Programm sucht sie zuerst neben
+    der EXE; genau dorthin wird sie gelegt.
+
+    Nur beim Veroeffentlichen, nicht bei jedem Build: waehrend der Entwicklung
+    laedt der Explorer die DLL aus ihrem eigenen Ordner und haelt sie fest.
+    Ein Kopierschritt bei jedem Build wuerde deshalb regelmaessig scheitern.
+
+    Schlaegt das Veroeffentlichen fehl, etwa weil NativeAOT die
+    C++-Werkzeuge nicht findet, bricht der Lauf ab. Ein Paket, dem sie fehlt, sieht
+    vollstaendig aus und ist es nicht.
+  -->
+  <Target Name="VorschauDllMitnehmen" AfterTargets="Publish">
+    <PropertyGroup>
+      <VorschauProjekt>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\SyncTClient.ThumbProvider.csproj</VorschauProjekt>
+      <VorschauDll>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\$(Configuration)\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDll>
+    </PropertyGroup>
+
+    <Exec Command="dotnet publish &quot;$(VorschauProjekt)&quot; -c $(Configuration) -r win-x64 --nologo" />
+
+    <Error Condition="!Exists('$(VorschauDll)')"
+           Text="synctthumbs.dll wurde nicht erzeugt. Ohne sie gibt es im veroeffentlichten Programm keine Vorschaubilder und kein Kontextmenue." />
+
+    <Copy SourceFiles="$(VorschauDll)" DestinationFolder="$(PublishDir)" />
+  </Target>
+
 </Project>
