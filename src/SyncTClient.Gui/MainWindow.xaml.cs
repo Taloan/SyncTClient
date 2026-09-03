@@ -2311,15 +2311,12 @@ public partial class MainWindow : Window
         if (host.Blocking(namen) is var offen && offen > 0)
             return App.S("C.Blocked", Format.Count(offen));
 
-        // Die Auswahl steht als Liste der eingeschlossenen Zweige. Fehlt sie
-        // ganz, ist alles eingeschlossen -- dann muss sie erst ausgeschrieben
-        // werden, bevor sich etwas herausnehmen laesst.
-        if (share.Included.Count == 0) share.Included = host.TopLevelNames();
-
-        foreach (var name in namen)
-            share.Included.RemoveAll(p =>
-                p.Equals(name, StringComparison.OrdinalIgnoreCase) ||
-                p.StartsWith(name + "/", StringComparison.OrdinalIgnoreCase));
+        // Die Auswahl steht als Liste der eingeschlossenen Zweige, und die
+        // fuehrt Praefixe. Ein Zweig laesst sich daraus nicht einfach
+        // streichen -- die Ebenen darueber muessen erst ausgeschrieben
+        // werden, sonst steht der Unterordner weiterhin in einem Praefix und
+        // nichts geschieht.
+        share.Included = host.AufgeklappteAuswahl(namen);
 
         Persist();
 

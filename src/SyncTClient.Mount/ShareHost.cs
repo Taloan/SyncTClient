@@ -2590,17 +2590,92 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// herausnehmen laesst. Die losen Dateien werden dabei durch ihren
     /// Sammeleintrag vertreten, sonst stuenden sie einzeln in der Datei.
     /// </remarks>
-    public List<string> TopLevelNames()
+    /// <summary>
+    /// Die Auswahl, aufgeklappt bis zu diesen Zweigen -- und ohne sie.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="ShareConfig.Included"/> fuehrt Praefixe: steht "Bilder"
+    /// darin, gehoert alles darunter dazu. Ein Unterordner laesst sich daraus
+    /// nicht herausnehmen, indem man ihn streicht -- er steht dort gar nicht.
+    /// Vorher muessen die Ebenen darueber ausgeschrieben werden: je Ebene ihre
+    /// losen Dateien und ihre uebrigen Unterordner. Genau das tut der
+    /// Auswahlbaum, wenn man einen Unterknoten abwaehlt; hier steht es fuer
+    /// das Kontextmenue, das keinen Baum hat.
+    ///
+    /// Vorher wurde stattdessen die oberste Ebene ausgeschrieben. Fuer einen
+    /// Ordner der obersten Ebene stimmte das; bei einem Unterordner fand das
+    /// Streichen nichts, was passte, und es geschah gar nichts -- gemeldet
+    /// wurde trotzdem ein ausgeblendeter Zweig.
+    /// </remarks>
+    public List<string> AufgeklappteAuswahl(IReadOnlyList<string> zweige)
     {
-        var namen = new List<string> { "*" };
-        if (_index is null) return namen;
+        // Ohne Index waere jedes Verzeichnis unbekannt, und die Auswahl
+        // bestuende danach nur noch aus losen Dateien: alles andere waere
+        // stillschweigend abgewaehlt. Dann lieber nichts aendern.
+        if (_index is null) return [.. _config.Included];
+
+        var ausgenommen = new HashSet<string>(zweige, StringComparer.OrdinalIgnoreCase);
+
+        // Die Ebenen, die ausgeschrieben werden muessen: die Wurzel und jeder
+        // Ordner oberhalb eines ausgeblendeten Zweiges.
+        var ebenen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "" };
+
+        foreach (var zweig in zweige)
+            for (var eltern = Eltern(zweig); eltern.Length > 0; eltern = Eltern(eltern))
+                ebenen.Add(eltern);
+
+        var neu = new List<string>(_config.Included);
+        var bekannt = new HashSet<string>(neu, StringComparer.OrdinalIgnoreCase);
+
+        void Aufnehmen(string eintrag)
+        {
+            if (bekannt.Add(eintrag)) neu.Add(eintrag);
+        }
+
+        // Ob die losen Dateien eines Ordners bisher dazugehoeren. Die Frage
+        // laesst sich nur an einer Datei stellen; welcher Name dabei steht,
+        // ist gleichgueltig -- geprueft wird der Ordner darueber.
+        bool LoseDrin(string ordner)
+            => _config.Includes(ordner.Length == 0 ? "?" : ordner + "/?");
+
+        foreach (var ebene in ebenen)
+            if (LoseDrin(ebene))
+                Aufnehmen(ebene.Length == 0 ? "*" : ebene + "/*");
 
         lock (_indexGate)
             foreach (var (name, _, _, isDirectory, _) in _index.EnumerateLight())
-                if (isDirectory && !name.Contains('/') && name.Length > 0)
-                    namen.Add(name);
+            {
+                if (!isDirectory || name.Length == 0) continue;
 
-        return namen;
+                // Nur die Kinder der aufgeklappten Ebenen. Alles andere
+                // steckt weiterhin in einem Praefix darueber.
+                if (!ebenen.Contains(Eltern(name))) continue;
+
+                // Der ausgeblendete Zweig selbst nicht, und die Ebenen der
+                // Kette auch nicht: die schreiben sich gleich selbst aus.
+                if (ausgenommen.Contains(name) || ebenen.Contains(name)) continue;
+
+                // Und nur, was vorher dazugehoerte. Wer eine Auswahl schon
+                // eingeschraenkt hatte, bekaeme sonst das Abgewaehlte zurueck.
+                if (_config.Includes(name, isDirectory: true)) Aufnehmen(name);
+            }
+
+        // Heraus kommt der Zweig selbst, alles darunter -- und jeder Praefix
+        // darueber, denn der ist eben durch seine Aufzaehlung ersetzt worden.
+        neu.RemoveAll(eintrag =>
+            ausgenommen.Contains(eintrag)
+            || zweige.Any(zweig =>
+                eintrag.StartsWith(zweig + "/", StringComparison.OrdinalIgnoreCase)
+                || zweig.StartsWith(eintrag + "/", StringComparison.OrdinalIgnoreCase)));
+
+        return neu;
+    }
+
+    /// <summary>Der Ordner ueber diesem Namen, oder "" fuer die Wurzel.</summary>
+    private static string Eltern(string name)
+    {
+        var schnitt = name.LastIndexOf('/');
+        return schnitt < 0 ? "" : name[..schnitt];
     }
 
     /// <summary>Loest Verzeichnisse in ihre Dateien auf, Auswahl bleibt Auswahl.</summary>
