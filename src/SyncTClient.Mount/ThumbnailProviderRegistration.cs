@@ -103,6 +103,14 @@ public static class ThumbnailProviderRegistration
     {
         using var own = Registry.CurrentUser.CreateSubKey(@"Software\SyncTClient");
         own.SetValue("Shares", localPaths.ToArray(), RegistryValueKind.MultiString);
+
+        // Der Programmpfad steht hier ebenfalls, obwohl ihn auch RegisterMenu
+        // schreibt: jenes laeuft nur, wenn die DLL im Baum gefunden wird, und
+        // es steht in derselben Kette wie das Eintragen am Sync-Root. Faellt
+        // die Kette aus, fehlt sonst das Symbol vor einem Eintrag, den die
+        // bereits eingetragene Klasse durchaus noch anzeigt.
+        if (Environment.ProcessPath is { } programm)
+            own.SetValue("Programm", programm);
     }
 
     /// <summary>
