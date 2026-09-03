@@ -252,24 +252,17 @@ public sealed class HydrationCache
 
     // ------------------------------------------------------------ Invalidierung
 
-    /// <summary>
-    /// Verwirft die lokalen Bytes der genannten Dateien, weil sie sich geaendert
-    /// haben. Nicht zwischengespeicherte Dateien werden uebergangen.
-    /// </summary>
-    public int Invalidate(IEnumerable<string> relativePaths)
-    {
-        var dropped = 0;
-        foreach (var path in relativePaths)
-        {
-            if (!_entries.ContainsKey(path)) continue;
-            if (!Dehydrate(path, "geaendert")) continue;
-            _entries.TryRemove(path, out _);
-            dropped++;
-        }
-
-        if (dropped > 0) _log?.Invoke($"Cache: {dropped} geaenderte Dateien verworfen.");
-        return dropped;
-    }
+    // Hier stand einmal Invalidate: verwirf die lokalen Bytes der genannten
+    // Dateien, weil die Gegenstelle eine andere Fassung ankuendigt. Aufgerufen
+    // wurde die Methode von niemandem, und angeschlossen waere sie gefaehrlich
+    // gewesen: sie rief Dehydrate unmittelbar auf und ging damit an allem
+    // vorbei, was hier schuetzt -- an der Ablage im Papierkorb, am
+    // Versionsvergleich und am blockweisen Beweis, den Evict verlangt.
+    //
+    // Die Aufgabe selbst erledigt ShareHost.Apply, und zwar in der richtigen
+    // Reihenfolge: erst nach ".stversions" sichern, dann den Platzhalter neu
+    // anlegen. Wer den Weg spaeter doch braucht, baut ihn ueber dieselben
+    // Pruefungen neu, statt einen zweiten an ihnen vorbei zu erben.
 
     // -------------------------------------------------- Speicherplatz freigeben
 

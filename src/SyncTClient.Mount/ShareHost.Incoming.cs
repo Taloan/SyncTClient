@@ -403,9 +403,7 @@ public sealed partial class ShareHost
 
         if (!neu)
         {
-            // Nur was Inhalt hat, ist es wert gesichert zu werden. Ein
-            // Platzhalter haelt keinen.
-            if (IsPlaceholder(path) || !KeepVersion(name, path)) File.Delete(path);
+            if (!NimmFort(name, path)) return;
             _cache?.Forget(name);
         }
 
@@ -456,7 +454,7 @@ public sealed partial class ShareHost
 
         if (File.Exists(path))
         {
-            if (IsPlaceholder(path) || !KeepVersion(name, path)) File.Delete(path);
+            if (!NimmFort(name, path)) return;
             _cache?.Forget(name);
             bilanz.Entfernt++;
         }
@@ -668,6 +666,59 @@ public sealed partial class ShareHost
         }
     }
 
+    /// <summary>
+    /// Nimmt den bisherigen Inhalt fort, und zwar nur mit Ablage.
+    /// </summary>
+    /// <remarks>
+    /// Ein Platzhalter haelt keinen Inhalt, da gibt es nichts abzulegen; und
+    /// ist der Papierkorb abgeschaltet, ist das Loeschen die eingestellte
+    /// Absicht. In jedem anderen Fall gilt: gelingt die Ablage nicht, bleibt
+    /// die Datei stehen.
+    ///
+    /// Vorher wurde sie auch dann geloescht. Der Papierkorb war eingeschaltet,
+    /// im Protokoll stand "liess sich nicht sichern", und der Inhalt war
+    /// trotzdem fort -- in genau dem Fall, fuer den es ihn gibt. Erreichbar
+    /// war das unter anderem ueber die Pfadlaenge: die Ablage haengt an den
+    /// Namen ".stversions/" und einen Zeitstempel, gut dreissig Zeichen, und
+    /// das Verschieben scheiterte, waehrend das Loeschen auf den kuerzeren
+    /// urspruenglichen Pfad gelang.
+    ///
+    /// Der Rueckgabewert sagt, ob der Aufrufer fortfahren darf. Bei "nein"
+    /// steht der Name wieder in der Warteschlange, und der naechste Takt
+    /// versucht es erneut.
+    /// </remarks>
+    private bool NimmFort(string name, string path)
+    {
+        if (IsPlaceholder(path) || !_config.KeepVersions)
+        {
+            File.Delete(path);
+            return true;
+        }
+
+        if (KeepVersion(name, path)) return true;
+
+        _incoming[name] = 0;
+
+        // Je Name einmal. Der Grund aendert sich nicht, und der Versuch
+        // laeuft in jedem Takt.
+        if (_warned.TryAdd("sichern:" + name, 0))
+            _log($"[{FolderId}] \"{name}\" bleibt unveraendert stehen: die bisherige Fassung " +
+                 "liess sich nicht im Papierkorb ablegen, und ohne Ablage wird nichts entfernt.");
+
+        return false;
+    }
+
+    /// <summary>
+    /// Der Pfad in der Form, die Windows ohne Laengengrenze annimmt.
+    /// </summary>
+    /// <remarks>
+    /// Ohne dieses Praefix gilt MAX_PATH von 260 Zeichen. Die Ablage
+    /// verlaengert jeden Namen um gut dreissig Zeichen und trifft die Grenze
+    /// deshalb frueher als der Ordner selbst.
+    /// </remarks>
+    private static string OhneLaengengrenze(string pfad)
+        => pfad.StartsWith(@"\\", StringComparison.Ordinal) ? pfad : @"\\?\" + pfad;
+
     private bool KeepVersion(string name, string path)
     {
         if (!_config.KeepVersions) return false;
@@ -678,7 +729,7 @@ public sealed partial class ShareHost
             var extension = Path.GetExtension(name);
             var stem = name[..^extension.Length];
 
-            var target = LocalPathOf($"{VersionsFolder}/{stem}~{stamp}{extension}");
+            var target = OhneLaengengrenze(LocalPathOf($"{VersionsFolder}/{stem}~{stamp}{extension}"));
             VersteckeWurzel();
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
@@ -690,7 +741,8 @@ public sealed partial class ShareHost
             // ist. Zwei Aenderungen innerhalb einer Sekunde sind selten, und
             // genau deshalb faellt so etwas nie auf.
             for (var nummer = 1; File.Exists(target) && nummer < 1000; nummer++)
-                target = LocalPathOf($"{VersionsFolder}/{stem}~{stamp}-{nummer}{extension}");
+                target = OhneLaengengrenze(
+                    LocalPathOf($"{VersionsFolder}/{stem}~{stamp}-{nummer}{extension}"));
 
             if (File.Exists(target))
             {
