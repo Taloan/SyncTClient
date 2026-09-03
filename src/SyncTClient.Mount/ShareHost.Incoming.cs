@@ -249,7 +249,26 @@ public sealed partial class ShareHost
         // Ein Name, der schon so dastand, war nie ein Rueckstand.
         Fortschritt(bilanz.Angelegt + bilanz.Ersetzt + bilanz.Entfernt);
 
-        if (!bilanz.Leer) _log($"[{FolderId}] von der Gegenstelle uebernommen: {bilanz}.");
+        if (!bilanz.Leer)
+        {
+            _log($"[{FolderId}] von der Gegenstelle uebernommen: {bilanz}.");
+
+            // Und einen Durchgang anfordern, sonst zeigt die Anzeige das
+            // Gegenteil dessen, was gerade geschehen ist.
+            //
+            // Der Rueckstand vergleicht den Index der Gegenstelle mit dem
+            // Bestand des letzten Durchgangs, und den setzt allein der
+            // Durchgang. Eben uebernommen heisst: die Datei liegt mit ihrer
+            // neuen Zeit auf der Platte, im Bestand steht aber noch die alte.
+            // Gemessen: "Ross.sub (11 MB, hier 03.09. 10:35:26 statt 03.09.
+            // 12:41:59)" -- eine Sekunde nachdem genau diese Datei
+            // hereingeholt worden war.
+            //
+            // Nur wenn wirklich etwas hergestellt wurde. Ein Durchgang je
+            // Takt waere zu teuer; ein Durchgang je Uebernahme ist es nicht,
+            // denn er liest bloss Attribute, und uebernommen wird selten.
+            _lastScan = DateTime.MinValue;
+        }
 
         // Einmal je Durchgang, nicht je Name: haengt eine Loeschung fest,
         // weil die Gegenstelle gerade nicht erreichbar ist, waere jede Zeile
