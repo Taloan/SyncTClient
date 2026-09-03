@@ -1645,7 +1645,7 @@ public partial class MainWindow : Window
 
             if (answer != MessageBoxResult.Yes)
             {
-                await connection.DisposeAsync();
+                await connection.DisposeAsync("abgelehnt");
                 Status(App.S("M.Rejected", name));
                 return;
             }
@@ -1657,10 +1657,26 @@ public partial class MainWindow : Window
             peer = _peers.FirstOrDefault(p => p.Config.DeviceId == id);
         }
 
-        if (peer is null || peer.Host.State is PeerState.Verbunden or PeerState.Verbindet)
+        if (peer is null)
         {
-            // Eine zweite Verbindung zur selben Gegenstelle wird nicht gebraucht.
-            await connection.DisposeAsync();
+            // Das Eintragen ist nicht durchgekommen. Ohne Eintrag gibt es
+            // niemanden, der die Verbindung fuehren koennte.
+            AppendLog($"{name} von {address} liess sich nicht eintragen.");
+            await connection.DisposeAsync("nicht eingetragen");
+            return;
+        }
+
+        if (peer.Host.State is PeerState.Verbunden or PeerState.Verbindet)
+        {
+            // Eine zweite Verbindung zur selben Gegenstelle wird nicht
+            // gebraucht. Beide Seiten waehlen einander an, das trifft sich
+            // regelmaessig; eine der beiden muss weichen.
+            //
+            // Der Grund geht mit, und die Zeile steht auch im eigenen
+            // Protokoll: sonst wirkt das Abweisen auf beiden Seiten wie ein
+            // Abriss, den niemand zu verantworten scheint.
+            AppendLog($"[{peer.Display}] zweite Verbindung von {address} abgewiesen, es besteht bereits eine.");
+            await connection.DisposeAsync("bereits verbunden");
             return;
         }
 
