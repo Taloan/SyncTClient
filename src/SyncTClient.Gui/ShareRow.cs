@@ -240,6 +240,14 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         {
             if (Share is null) return "";
 
+            // Angekuendigt und noch nicht abgerufen ist kein Rueckstand, aber
+            // auch nicht abgeglichen: die Gegenstelle fuehrt diese Dateien
+            // dann selbst als offen. Stuende hier "abgeglichen", sagten beide
+            // Seiten Verschiedenes ueber denselben Ordner.
+            if (Share.Outgoing > 0)
+                return App.S("R.Outgoing",
+                    Format.Count(Share.Outgoing), Format.Bytes(Share.OutgoingBytes));
+
             // Die Spalte daneben nennt den Zustand bereits. Ihn hier zu
             // wiederholen fuellt Platz und sagt nichts.
             if (!Busy)

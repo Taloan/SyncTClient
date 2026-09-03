@@ -348,6 +348,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="M.CacheNone">Noch keine Freigabe.</s:String>
   <s:String x:Key="R.PhaseSyncing">gleicht ab</s:String>
   <s:String x:Key="R.Synced">abgeglichen</s:String>
+  <s:String x:Key="R.Outgoing">{0} · {1} an die Gegenstelle offen</s:String>
   <s:String x:Key="S.Detail.Global">Globaler Status</s:String>
   <s:String x:Key="S.Detail.Local">Lokaler Status</s:String>
   <s:String x:Key="S.Detail.Outstanding">Nicht abgeglichen</s:String>

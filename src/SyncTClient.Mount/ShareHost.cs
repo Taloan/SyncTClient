@@ -397,6 +397,20 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </summary>
     private bool MayEvict(string relativePath)
     {
+        // Zuerst die Fassung, dann die Anzahl.
+        //
+        // Wiederbeschaffbar ist eine Datei nur, wenn die Gegenstelle
+        // dieselbe Fassung fuehrt. Fuehrt sie eine aeltere, ist die Pruefung
+        // auf Bloecke trotzdem erfuellt -- und was zurueckbliebe, waere ein
+        // Platzhalter, der beim naechsten Zugriff die aeltere Fassung
+        // anfordert. Die neuere waere verloren, und zwar unbemerkt: hier
+        // steht danach eine Datei mit gueltigem Inhalt, nur mit dem falschen.
+        //
+        // Der Fall ist nicht selten: er tritt jedes Mal ein, solange eine
+        // eigene Aenderung angekuendigt, aber von der Gegenstelle noch nicht
+        // abgerufen ist.
+        if (NurHierNeuer(relativePath)) return false;
+
         var wanted = _app.MinimumCopies;
         if (wanted <= 0) return true;
         if (HoldersOf(relativePath) >= wanted) return true;
@@ -411,6 +425,31 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // grosse Datei nur kennt und nicht haelt; wer sich darauf verliesse,
         // gaebe den Platz der letzten Kopie einer Datei frei.
         return LeerHier(relativePath) && LeerDortAuch(relativePath);
+    }
+
+    /// <summary>
+    /// Ob die neueste Fassung dieser Datei nur hier liegt.
+    /// </summary>
+    /// <remarks>
+    /// Verglichen werden die Versionsvektoren, nicht die Zeitstempel: ein
+    /// Zeitstempel sagt, welche Aenderung spaeter geschah, nicht ob eine
+    /// Seite die andere kannte.
+    ///
+    /// Kennt die Gegenstelle die Datei ueberhaupt nicht, gilt dasselbe. Auch
+    /// dann ist hier die einzige Kopie.
+    /// </remarks>
+    private bool NurHierNeuer(string relativePath)
+    {
+        lock (_indexGate)
+        {
+            if (_index is null) return false;
+            if (!_index.TryGetLocal(relativePath, out var eigene) || eigene.Deleted) return false;
+
+            if (!_index.TryGet(relativePath, out var ihre) || ihre.Deleted) return true;
+
+            return VersionVectors.Compare(eigene.Version, ihre.Version)
+                is VersionOrder.Neuer or VersionOrder.Nebeneinander;
+        }
     }
 
     private bool LeerHier(string relativePath)
@@ -851,6 +890,22 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public int Awaiting { get; private set; }
 
     public long AwaitingBytes { get; private set; }
+
+    /// <summary>
+    /// Dateien, deren neueste Fassung hier liegt und die die Gegenstelle noch
+    /// nicht abgerufen hat.
+    /// </summary>
+    /// <remarks>
+    /// Getrennt vom Rueckstand, denn hier ist nichts zu tun ausser die
+    /// Bloecke bereitzuhalten. Zusammengezaehlt behauptete die Anzeige
+    /// Arbeit, die es nicht gibt; verschwiegen behauptete sie
+    /// Uebereinstimmung, die es auch nicht gibt -- die Gegenstelle fuehrt
+    /// diese Dateien dann als nicht abgeglichen, und beide Seiten sagen
+    /// Verschiedenes ueber denselben Ordner.
+    /// </remarks>
+    public int Outgoing { get; private set; }
+
+    public long OutgoingBytes { get; private set; }
 
     /// <summary>
     /// Was im Ordner steht, Platzhalter eingerechnet.

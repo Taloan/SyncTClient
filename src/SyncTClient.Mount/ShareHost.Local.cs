@@ -807,6 +807,13 @@ public sealed partial class ShareHost
         // stehen bleiben, ist genau das die Frage.
         var offeneNamen = new List<string>();
 
+        // Und die andere Richtung: angekuendigt, aber von der Gegenstelle
+        // noch nicht abgerufen. Kein Rueckstand von uns, denn hier ist nichts
+        // zu tun ausser die Bloecke bereitzuhalten.
+        var ausgehend = 0;
+        long ausgehendBytes = 0;
+        var ausgehendeNamen = new List<string>();
+
         // Und die vollstaendige Liste fuer das Fenster. Gedeckelt: bei einer
         // frisch verbundenen Freigabe stehen alle Dateien offen, und
         // hunderttausend Zeilen liest niemand.
@@ -905,6 +912,23 @@ public sealed partial class ShareHost
                                && !_mitInhalt.ContainsKey(name);
 
                     if (!fehlt && hatInhalt && !leer) continue;
+
+                    // Wessen Rueckstand ist das?
+                    //
+                    // Steht hier eine neuere Fassung, als die Gegenstelle
+                    // fuehrt, fehlt uns nichts: sie hat unsere Ankuendigung
+                    // noch nicht abgerufen. Zusammen mit dem eigenen
+                    // Rueckstand gezaehlt behauptet die Anzeige, hier sei
+                    // etwas zu tun -- und wenn beides auf null steht, obwohl
+                    // die Gegenstelle noch zwei Dateien offen fuehrt, sagen
+                    // beide Seiten verschiedene Dinge ueber denselben Ordner.
+                    if (fehlt && NurHierNeuer(name))
+                    {
+                        ausgehend++;
+                        ausgehendBytes += vorhanden.TryGetValue(name, out var meins) ? meins.Size : size;
+                        if (ausgehendeNamen.Count < 5) ausgehendeNamen.Add(name);
+                        continue;
+                    }
 
                     // Eine Datei, die die Gegenstelle selbst nicht haelt, ist
                     // nicht abgeglichen -- aber auch nicht zu beschaffen. Sie
@@ -1014,6 +1038,20 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] wartet auf die Gegenstelle: " +
                  string.Join(", ", wartendeNamen.Select(n => $"\"{n}\"")) +
                  (wartend > wartendeNamen.Count ? $" und {wartend - wartendeNamen.Count} weitere" : "") + ".");
+
+        // Nur wenn sich die Menge geaendert hat, und auch die Rueckkehr auf
+        // null gehoert dazu: sie ist die Nachricht, dass die Gegenstelle
+        // abgerufen hat.
+        if (ausgehend != Outgoing)
+            _log(ausgehend > 0
+                ? $"[{FolderId}] an die Gegenstelle offen: {ausgehend} Dateien, " +
+                  $"{ausgehendBytes / (1024.0 * 1024.0):0.0} MB. Angekuendigt, noch nicht abgerufen: " +
+                  string.Join(", ", ausgehendeNamen) +
+                  (ausgehend > ausgehendeNamen.Count ? $" und {ausgehend - ausgehendeNamen.Count} weitere" : "") + "."
+                : $"[{FolderId}] die Gegenstelle hat alles Angekuendigte abgerufen.");
+
+        Outgoing = ausgehend;
+        OutgoingBytes = ausgehendBytes;
 
         Outstanding = offen;
         OutstandingBytes = bytes;
@@ -2402,6 +2440,13 @@ public sealed partial class ShareHost
         // die wir gerade angekuendigt haben, ebenso wie eine Datei, die wir
         // uebernommen haben.
         _zahlenVeraltet = true;
+
+        // Und ein Durchgang, denn das Nachziehen allein genuegt nicht: es
+        // rechnet auf dem Bestand des letzten Durchgangs, und der kennt die
+        // gerade angekuendigte Groesse und Zeit noch nicht. Ohne ihn stuende
+        // die eigene Aenderung bis zum naechsten stuendlichen Durchgang mit
+        // ihren alten Zahlen da.
+        _lastScan = DateTime.MinValue;
     }
 
     private long NextSequence()
