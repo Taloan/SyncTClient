@@ -55,6 +55,16 @@ public sealed partial class ShareHost
     /// </remarks>
     public const string MarkerFolder = ".stfolder";
 
+    /// <summary>
+    /// Woran die eigene Nebendatei zu erkennen ist.
+    /// </summary>
+    /// <remarks>
+    /// Sie entsteht neben der Zieldatei, waehrend deren Inhalt geholt wird,
+    /// und verschwindet, sobald er vollstaendig ist. Fuer den Abgleich
+    /// existiert sie nicht.
+    /// </remarks>
+    public const string TempSuffix = ".synct-neu";
+
     /// <summary>Die Musterliste von Syncthing.</summary>
     /// <remarks>
     /// Sie gehoert demselben Geraet wie die Liste, die hier unter
@@ -107,9 +117,22 @@ public sealed partial class ShareHost
     private static bool IstArbeitsdatei(string name)
     {
         foreach (var teil in name.Split('/'))
+        {
             if (teil.StartsWith("~syncthing~", StringComparison.OrdinalIgnoreCase)
                 || teil.StartsWith(".syncthing.", StringComparison.OrdinalIgnoreCase))
                 return true;
+
+            // Und unsere eigene.
+            //
+            // Der Inhalt wird nach "X.synct-neu" geholt und erst danach an
+            // seinen Platz geschoben. Dazwischen meldet der Beobachter eine
+            // neue Datei; sie kam in den Bestand, wurde angekuendigt, und das
+            // Verschieben galt anschliessend als Loeschung. Elf davon
+            // erschienen bei jedem Durchgang aufs Neue als Rueckstand, obwohl
+            // sie nur der Weg zu den elf richtigen Dateien waren.
+            if (teil.EndsWith(TempSuffix, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
 
         return false;
     }
