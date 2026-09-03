@@ -176,18 +176,38 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
         // CMF_DEFAULTONLY: der Aufrufer will nur die Standardaktion wissen.
         if ((flags & 0x00000001) != 0) return 0;
 
-        // Nur innerhalb einer Freigabe. Ausserhalb hat keiner der Eintraege
-        // eine Bedeutung, und ein Menue, das ueberall auftaucht, ist eine
-        // Zumutung.
-        if (!_paths.All(Sync.Inside)) return 0;
-
         _first = idFirst;
-
-        var untermenue = CreatePopupMenu();
-        if (untermenue == 0) return 0;
 
         var laeuft = Sync.ClientLaeuft();
         var grau = laeuft ? 0u : MfGrayed;
+
+        // Ausserhalb jeder Freigabe gibt es genau eine sinnvolle Handlung:
+        // aus dem Ordner eine machen. Die uebrigen Eintraege setzen einen
+        // Abgleich voraus, den es dort nicht gibt.
+        if (!_paths.Any(Sync.Inside))
+        {
+            // Und nur fuer einen einzelnen Ordner. Eine Freigabe hat einen
+            // Pfad; bei mehreren waere nicht zu sagen, welcher gemeint ist,
+            // und eine Datei kann keine Wurzel sein.
+            if (_paths.Length != 1 || !Directory.Exists(_paths[0])) return 0;
+
+            var einzeln = CreatePopupMenu();
+            if (einzeln == 0) return 0;
+
+            AppendMenuW(einzeln, MfString | grau, idFirst + 3, "Als Freigabe anbieten ...");
+            InsertMenuW(menu, indexMenu, MfByPosition | MfPopup, einzeln, "SyncTClient");
+            SetzeSymbol(menu, indexMenu);
+
+            return unchecked((int)(0x00000000 | 4u));
+        }
+
+        // Sonst nur innerhalb einer Freigabe, und dann ganz. Eine Auswahl,
+        // die halb darin und halb daneben liegt, hat keine Handlung, die auf
+        // beide Haelften passt.
+        if (!_paths.All(Sync.Inside)) return 0;
+
+        var untermenue = CreatePopupMenu();
+        if (untermenue == 0) return 0;
 
         AppendMenuW(untermenue, MfString | grau, idFirst + 0, "Immer auf diesem Gerät behalten");
         AppendMenuW(untermenue, MfString | grau, idFirst + 1, "Speicherplatz freigeben");
@@ -306,6 +326,7 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
             0 => "PIN",
             1 => "FREE",
             2 => "HIDE",
+            3 => "ADD",
             _ => null
         };
 

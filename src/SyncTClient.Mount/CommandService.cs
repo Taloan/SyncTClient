@@ -37,6 +37,23 @@ public static class CommandService
     /// </remarks>
     public static Func<string, IReadOnlyList<string>, string>? Handle { get; set; }
 
+    /// <summary>
+    /// Was nach dem Absenden der Antwort noch geschieht.
+    /// </summary>
+    /// <remarks>
+    /// Fuer alles, was ein Fenster nach vorn holt. Der Datei-Manager wartet
+    /// waehrend <see cref="Handle"/> auf die Antwort und bearbeitet solange
+    /// keine Nachrichten. Ein Fenster von hier aus in den Vordergrund zu
+    /// bringen schickt ihm aber genau solche Nachrichten und wartet auf ihre
+    /// Bearbeitung -- beide Seiten stehen dann still, bis eine von ihnen
+    /// abgeschossen wird.
+    ///
+    /// Deshalb: erst antworten, dann handeln. Der Befehl wird ein zweites Mal
+    /// uebergeben, damit hier kein Zustand zwischen zwei Faeden zu fuehren
+    /// ist.
+    /// </remarks>
+    public static Action<string, IReadOnlyList<string>>? Danach { get; set; }
+
     public static void EnsureStarted(Action<string> log)
     {
         lock (Gate)
@@ -122,6 +139,8 @@ public static class CommandService
     /// </remarks>
     private static void Bedienen(NamedPipeServerStream pipe, Action<string> log)
     {
+        Action? nachlauf = null;
+
         try
         {
             using (pipe)
@@ -141,7 +160,13 @@ public static class CommandService
                 // Ohne dieses Warten schliesst das Verwerfen der Pipe den
                 // Puffer, bevor die Gegenseite gelesen hat.
                 pipe.WaitForPipeDrain();
+
+                nachlauf = () => Danach?.Invoke(teile[0], teile[1..]);
             }
+
+            // Ausserhalb des using: die Pipe ist zu, der Fragende hat seine
+            // Antwort und ist wieder ansprechbar.
+            nachlauf?.Invoke();
         }
         catch (Exception ex)
         {

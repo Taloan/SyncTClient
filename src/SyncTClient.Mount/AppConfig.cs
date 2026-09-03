@@ -130,6 +130,17 @@ public sealed class ShareConfig
     /// <summary>Wo der Ordner im Explorer erscheint.</summary>
     public string LocalPath { get; set; } = "";
 
+    /// <summary>Hier entstanden, statt von einer Gegenstelle uebernommen.</summary>
+    /// <remarks>
+    /// Eine uebernommene Freigabe wartet beim Start auf den Index der
+    /// Gegenstelle: ohne ihn weiss sie nicht, was in ihr liegt, und ohne
+    /// diesen Index waere jeder Platzhalter geraten. Eine hier entstandene
+    /// weiss es selbst -- der Ordner steht bereits da. Auf einen Index zu
+    /// warten hiesse hier, auf eine Gegenstelle zu warten, die den Ordner
+    /// erst noch annehmen muss, und das kann Tage dauern.
+    /// </remarks>
+    public bool Own { get; set; }
+
     public ShareMode Mode { get; set; } = ShareMode.OnDemand;
 
     /// <summary>

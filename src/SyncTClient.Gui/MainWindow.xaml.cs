@@ -146,6 +146,7 @@ public partial class MainWindow : Window
         // Programm laeuft -- ohne laufenden Client haben die Eintraege
         // niemanden, der sie ausfuehrt, und zeigen das auch.
         CommandService.Handle = OnCommand;
+        CommandService.Danach = NachDemBefehl;
         CommandService.EnsureStarted(AppendLog);
         HorcheAufNetz();
     }
@@ -2134,6 +2135,82 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Was nach dem Absenden der Antwort geschieht.
+    /// </summary>
+    /// <remarks>
+    /// Hier steht alles, was ein Fenster nach vorn holt. Waehrend der Befehl
+    /// beantwortet wird, wartet der Datei-Manager auf die Antwort und
+    /// bearbeitet keine Nachrichten -- ihn in diesem Augenblick in den
+    /// Hintergrund zu schieben legt beide Programme still. Erst antworten,
+    /// dann handeln.
+    ///
+    /// Geprueft wird ein zweites Mal statt gemerkt: dieser Aufruf kommt aus
+    /// einem anderen Faden als der Befehl, und ein Zustand dazwischen waere
+    /// eine Verabredung, die bei zwei Befehlen zugleich nicht mehr gilt.
+    /// </remarks>
+    private void NachDemBefehl(string befehl, IReadOnlyList<string> pfade)
+    {
+        if (befehl == "SHOW")
+        {
+            Dispatcher.BeginInvoke(Restore);
+            return;
+        }
+
+        if (befehl != "ADD" || pfade.Count != 1 || !Directory.Exists(pfade[0])) return;
+
+        var pfad = pfade[0];
+        Dispatcher.BeginInvoke(() => { Restore(); _ = NeueFreigabe(pfad); });
+    }
+
+    /// <summary>
+    /// Macht aus einem Ordner, der hier schon liegt, eine eigene Freigabe.
+    /// </summary>
+    /// <remarks>
+    /// Der Gegenweg zum Uebernehmen. Dort wird ein Ordner angelegt, weil eine
+    /// Gegenstelle ihn anbietet; hier wird ein Ordner angeboten, weil er
+    /// dasteht. Auf den Index der Gegenstelle wird nicht gewartet -- sie muss
+    /// den Ordner erst annehmen, und bis dahin ist der Bestand hier der
+    /// ganze Bestand.
+    /// </remarks>
+    private async Task NeueFreigabe(string pfad)
+    {
+        var dialog = new NewShareWindow(
+            pfad, _config.Shares, _config.Peers,
+            id => _peers.FirstOrDefault(p =>
+                p.Config.DeviceId.Equals(id, StringComparison.OrdinalIgnoreCase))?.Host.ReportedName)
+        { Owner = this };
+
+        if (dialog.ShowDialog() != true) return;
+
+        var share = dialog.Result;
+        _config.Shares.Add(share);
+
+        // Wie beim Uebernehmen: die Markierung erklaert diesen Ordner zur
+        // Wurzel einer Freigabe, und das Laufwerk bekommt seine Grenzen.
+        if (!ShareHost.MarkierungAnlegen(share.LocalPath, out var markerFehler))
+            AppendLog($"[{share.FolderId}] Ordnermarkierung liess sich nicht anlegen: {markerFehler}");
+
+        _config.EnsureLimits(share.LocalPath);
+        Persist();
+
+        Status(App.S("M.ShareAdded", share.FolderId, share.LocalPath));
+
+        // Jede beteiligte und erreichbare Gegenstelle bekommt den Ordner
+        // sofort angekuendigt. Die uebrigen finden ihn beim naechsten
+        // Verbinden in ihrer Liste.
+        foreach (var peer in _peers.Where(p =>
+                     share.PeerDeviceIds.Contains(p.Config.DeviceId, StringComparer.OrdinalIgnoreCase)))
+        {
+            if (peer.Host.State != PeerState.Verbunden) continue;
+
+            try { await peer.Host.AcceptAsync(share, _cts.Token); }
+            catch (Exception ex) { Status($"[{share.FolderId}] {ex.Message}"); }
+        }
+
+        RebuildRows();
+    }
+
+    /// <summary>
     /// Fuehrt aus, was aus dem Kontextmenue kommt.
     /// </summary>
     /// <remarks>
@@ -2157,11 +2234,13 @@ public partial class MainWindow : Window
             // Vor der Suche nach der Freigabe: dieser Befehl nennt keine
             // Pfade, er kommt von einer zweiten Instanz, die sich gleich
             // wieder beendet.
-            if (befehl == "SHOW")
-            {
-                Restore();
-                return "";
-            }
+            // Beide holen ein Fenster nach vorn und beantworten sich
+            // deshalb nur. Getan wird es in NachDemBefehl, wenn die Antwort
+            // heraus ist.
+            if (befehl == "SHOW") return "";
+
+            if (befehl == "ADD")
+                return pfade.Count == 1 && Directory.Exists(pfade[0]) ? "" : App.S("C.OneFolder");
 
             var host = pfade.Select(ShareHost.Owning).OfType<ShareHost>().FirstOrDefault();
             if (host is null) return App.S("C.NoShare");
