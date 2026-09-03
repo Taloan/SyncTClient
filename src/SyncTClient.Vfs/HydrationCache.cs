@@ -287,10 +287,31 @@ public sealed class HydrationCache
             .Where(e => MayEvict?.Invoke(e.Key) ?? true)
             .Select(e => (e.Key, e.Value.Bytes, e.Value.LastAccess));
 
+    /// <summary>
+    /// Der Beweis, dass die Datei anderswo byteidentisch vorliegt.
+    /// </summary>
+    /// <remarks>
+    /// Wird vor jedem Freigeben von Speicherplatz gefragt und entscheidet
+    /// allein. Nicht gesetzt heisst nicht bewiesen: dann wird nichts
+    /// freigegeben. Der Rueckruf sitzt in der Freigabe, weil nur sie den
+    /// Index der Gegenstelle kennt.
+    /// </remarks>
+    public Func<string, bool>? Wiederbeschaffbar { get; set; }
+
     /// <summary>Gibt die Bytes einer einzelnen Datei frei.</summary>
     public bool Evict(string relativePath)
     {
         if (!_entries.ContainsKey(relativePath)) return false;
+
+        // Der Beweis vor der Tat. MayEvict hat vorher nur ausgesiebt, welche
+        // Dateien ueberhaupt in Frage kommen -- das ist eine Vorauswahl nach
+        // Ankuendigungen, kein Beweis ueber den Inhalt.
+        if (Wiederbeschaffbar?.Invoke(relativePath) != true)
+        {
+            _log?.Invoke($"  \"{relativePath}\" behaelt seinen Inhalt: die Gegenstelle " +
+                         "haelt nachweislich nicht dieselben Bytes.");
+            return false;
+        }
         // "Verdraengt" waere das falsche Wort. Nichts hat diese Datei
         // fortgedraengt; sie ist an ihrem Platz geblieben und hat nur ihren
         // Speicherplatz abgegeben, weil das Limit des Datentraegers erreicht

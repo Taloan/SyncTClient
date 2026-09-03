@@ -544,6 +544,30 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
+    /// Alle Ankuendigungen zu diesem Namen, je Gegenstelle eine.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TryGet"/> waehlt die aussagekraeftigste aus und genuegt
+    /// ueberall dort, wo eine Datei zu beschaffen ist. Wer zaehlen muss, auf
+    /// wie vielen Knoten eine Datei liegt, braucht sie alle -- und zwar mit
+    /// Blockliste, denn nur die beweist, welche Bytes dort liegen.
+    /// </remarks>
+    public IReadOnlyList<BepFileInfo> All(string name)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT info FROM files WHERE name = $name";
+        command.Parameters.AddWithValue("$name", name);
+
+        var gefunden = new List<BepFileInfo>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+            gefunden.Add(BepFileInfo.Parser.ParseFrom((byte[])reader["info"]));
+
+        return gefunden;
+    }
+
+    /// <summary>
     /// Alle Namen, die die Gegenstelle fuehrt -- die geloeschten
     /// eingeschlossen.
     /// </summary>
