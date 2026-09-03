@@ -22,16 +22,18 @@
       </TextBlock>
     </Grid>
 
-    <!-- Kein Abbrechen: der Ordner wird gerade eingelesen, und ein Abbruch
-         mitten im Index liesse einen halben Stand zurueck. Wegklicken darf
-         man das Fenster trotzdem: die Arbeit laeuft dann weiter, und die
-         Zeile in der Uebersicht zeigt denselben Stand. -->
+    <!-- Ein halber Stand bleibt dabei nicht zurueck: abgebrochen wird
+         vor dem Anlegen der Platzhalter, und der Aufrufer gibt den
+         begonnenen Ordner danach wieder ab. Das Kreuz und Esc tun
+         dasselbe wie der Knopf: ein Fenster, dessen Kreuz etwas
+         anderes bewirkt als sein einziger Knopf, taeuscht. -->
     <DockPanel Margin="0,14,0,0">
       <TextBlock DockPanel.Dock="Left" Text="{DynamicResource S.Work.Hint}"
                  Foreground="{DynamicResource Gedaempft}" FontSize="11"
                  VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="300" />
-      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Work.Hide}" Padding="12,4"
-              HorizontalAlignment="Right" Margin="0" IsCancel="True" />
+      <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="{DynamicResource S.Work.Cancel}"
+              Padding="12,4" HorizontalAlignment="Right" Margin="0"
+              IsCancel="True" Click="OnCancel" />
     </DockPanel>
   </StackPanel>
 </Window>

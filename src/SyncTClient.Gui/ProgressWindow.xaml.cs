@@ -14,10 +14,16 @@ namespace SyncTClient.Gui;
 ///
 /// Das Fenster gehoert dem Aufrufer: er zeigt es, haengt es mit
 /// <see cref="Verfolge"/> an den Ordner und schliesst es, wenn er fertig ist.
+///
+/// Abbrechen gehoert dazu. Der Index einer grossen Freigabe braucht Minuten,
+/// und ueber eine langsame Leitung oder von einer beschaeftigten Gegenstelle
+/// laenger; wer das sieht, soll es auf spaeter verschieben koennen, ohne das
+/// Programm zu beenden.
 /// </remarks>
 public partial class ProgressWindow : Window
 {
     private ShareHost? _host;
+    private readonly CancellationTokenSource _abbruch = new();
 
     /// <summary>
     /// Fragt den Stand ab, statt auf Meldungen zu warten.
@@ -40,11 +46,59 @@ public partial class ProgressWindow : Window
 
         _takt.Tick += (_, _) => Zeigen();
         _takt.Start();
-        Closed += (_, _) => _takt.Stop();
+        Closed += (_, _) => { _takt.Stop(); _abbruch.Dispose(); };
     }
 
     /// <summary>Ab jetzt steht der Stand dieses Ordners im Fenster.</summary>
     public void Verfolge(ShareHost host) => _host = host;
+
+    /// <summary>
+    /// Der Ordner, soweit er begonnen wurde.
+    /// </summary>
+    /// <remarks>
+    /// Der Aufrufer braucht ihn nach einem Abbruch: angelegt wurde er, bevor
+    /// der Index angefordert wurde, und ohne ihn bliebe er in der Ablage
+    /// stehen -- ohne Index, ohne Platzhalter, und beim naechsten Versuch
+    /// wuerde er wiedergefunden statt neu geholt.
+    /// </remarks>
+    public ShareHost? Ordner => _host;
+
+    /// <summary>Bricht mit, sobald der Anwender abbricht.</summary>
+    public CancellationToken Abbruch => _abbruch.Token;
+
+    /// <summary>Ob der Anwender abgebrochen hat.</summary>
+    public bool Abgebrochen { get; private set; }
+
+    private void OnCancel(object sender, RoutedEventArgs e) => Abbrechen();
+
+    /// <summary>
+    /// Auch das Kreuz und Esc brechen ab.
+    /// </summary>
+    /// <remarks>
+    /// Ein Fenster, dessen Kreuz etwas anderes bewirkt als sein einziger
+    /// Knopf, taeuscht. Geschlossen wird es vom Aufrufer, sobald er den
+    /// Abbruch bemerkt hat -- bis dahin steht der Grund darin.
+    /// </remarks>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (!Abgebrochen && !_abbruch.IsCancellationRequested) Abbrechen();
+    }
+
+    private void Abbrechen()
+    {
+        if (Abgebrochen) return;
+
+        Abgebrochen = true;
+        _takt.Stop();
+
+        PhaseText.Text = App.S("S.Work.Cancelled");
+        CountText.Text = "";
+        Bar.IsIndeterminate = true;
+        CancelButton.IsEnabled = false;
+
+        _abbruch.Cancel();
+    }
 
     private void Zeigen()
     {

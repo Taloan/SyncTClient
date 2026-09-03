@@ -1900,15 +1900,34 @@ public partial class MainWindow : Window
         var lauf = new ProgressWindow(row.Name) { Owner = this };
         lauf.Show();
 
+        // Der Abbruch des Anwenders und das Beenden des Programms enden
+        // beide hier. Ohne die Verknuepfung liefe das Einlesen nach dem
+        // Schliessen des Fensters weiter.
+        using var frist = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, lauf.Abbruch);
+
         ShareHost host;
         try
         {
-            host = await row.Peer.Host.PrepareAsync(draft, _cts.Token, lauf.Verfolge);
+            host = await row.Peer.Host.PrepareAsync(draft, frist.Token, lauf.Verfolge);
         }
         catch (Exception ex)
         {
             lauf.Close();
-            Status(App.S("M.ContentUnavailable", row.Name, ex.Message));
+
+            // Angelegt war der Ordner schon, bevor der Index angefordert
+            // wurde. Bleibt er stehen, findet der naechste Versuch ihn in
+            // der Ablage wieder -- ohne Index, ohne Platzhalter -- und holt
+            // ihn nicht neu.
+            if (lauf.Ordner is { } begonnen)
+            {
+                try { await row.Peer.Host.DiscardAsync(begonnen); }
+                catch (Exception weg) { AppendLog($"[{row.FolderId}] verworfen: {weg.Message}"); }
+            }
+
+            Status(lauf.Abgebrochen
+                ? App.S("M.NotConnected", row.Name)
+                : App.S("M.ContentUnavailable", row.Name, ex.Message));
+
             RebuildRows();
             return;
         }

@@ -449,8 +449,9 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Work.Title">Ordner wird eingelesen</s:String>
   <s:String x:Key="S.Work.Asking">Wird bei der Gegenstelle abgefragt …</s:String>
   <s:String x:Key="S.Work.Of">{0} von {1}</s:String>
-  <s:String x:Key="S.Work.Hide">Ausblenden</s:String>
-  <s:String x:Key="S.Work.Hint">Ausblenden hält nichts an. Der Stand steht weiter in der Übersicht.</s:String>
+  <s:String x:Key="S.Work.Cancel">Abbrechen</s:String>
+  <s:String x:Key="S.Work.Hint">Abbrechen beendet das Einlesen. Der Ordner wird nicht übernommen und lässt sich später erneut verbinden.</s:String>
+  <s:String x:Key="S.Work.Cancelled">Wird abgebrochen …</s:String>
   <s:String x:Key="S.Open.Title">Offene Dateien</s:String>
   <s:String x:Key="S.Open.For">Offen – {0}</s:String>
   <s:String x:Key="S.Open.Name">Datei</s:String>
