@@ -716,7 +716,7 @@ public sealed partial class ShareHost
         // "Ohne Inhalt" hiess das einmal, und das las sich wie "die Datei ist
         // da, aber leer" -- das Gegenteil dessen, was gemeint ist. Gemeint
         // ist: der Eintrag steht richtig da, Name, Groesse und Zeit stimmen,
-        // nur die Bytes liegen noch bei der Gegenstelle.
+        // der Inhalt ist aber nicht uebertragen.
         //
         // Laeuft die Hydration bereits, gehoert das dazu. Der Rueckstand wird
         // gemessen, waehrend uebertragen wird; ohne diesen Zusatz meldet die
