@@ -425,10 +425,16 @@ internal static class Sync
     /// Einmal gelesen und behalten. Der Explorer laedt diese DLL fuer die
     /// Dauer seines Lebens; sie bei jedem Rechtsklick neu zu lesen waere ein
     /// Registrierungszugriff je Klick.
+    ///
+    /// Eine leere Liste wird allerdings nicht behalten. Sie heisst meist, dass
+    /// der Client seit dem Start dieses Datei-Managers noch nicht gelaufen
+    /// ist. Behielten wir sie, laege bis zu dessen Neustart jeder Ordner
+    /// "ausserhalb" -- auch die Freigaben, und dort erschienen dann die
+    /// falschen Eintraege.
     /// </remarks>
     private static string[] Roots()
     {
-        if (_roots is not null) return _roots;
+        if (_roots is { Length: > 0 }) return _roots;
 
         try
         {
@@ -489,7 +495,32 @@ internal static class Sync
         }
     }
 
+    /// <summary>
+    /// Wie lange auf eine Antwort gewartet wird.
+    /// </summary>
+    /// <remarks>
+    /// Grosszuegig, denn "immer lokal setzen" arbeitet ueber die ganze
+    /// Auswahl, bevor es antwortet. Aber endlich: das Lesen selbst kennt
+    /// keine Frist, und ein Client, der aus welchem Grund auch immer nicht
+    /// antwortet, hielte den Datei-Manager sonst bis zum Abschiessen fest.
+    /// Genau das ist einmal passiert.
+    /// </remarks>
+    private static readonly TimeSpan Geduld = TimeSpan.FromSeconds(15);
+
     public static string Send(string befehl, IReadOnlyList<string> pfade)
+    {
+        // Der Austausch laeuft auf einem eigenen Faden, damit das Warten
+        // darauf eine Frist bekommen kann. Laeuft sie ab, bleibt der Faden
+        // zwar stehen -- er haengt an einer Pipe, die niemand mehr liest --,
+        // aber das Fenster, in dem geklickt wurde, ist wieder ansprechbar.
+        var austausch = Task.Run(() => Austausch(befehl, pfade));
+
+        return austausch.Wait(Geduld)
+            ? austausch.Result
+            : "SyncTClient antwortet nicht.";
+    }
+
+    private static string Austausch(string befehl, IReadOnlyList<string> pfade)
     {
         try
         {

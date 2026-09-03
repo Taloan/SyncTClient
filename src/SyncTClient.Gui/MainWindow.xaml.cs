@@ -2248,15 +2248,37 @@ public partial class MainWindow : Window
             switch (befehl)
             {
                 case "PIN":
-                {
-                    var (files, bytes) = host.SetLocal(pfade, keep: true);
-                    return App.S("C.Pinned", Format.Count(files), Format.Bytes(bytes));
-                }
-
                 case "FREE":
                 {
-                    var (files, bytes) = host.SetLocal(pfade, keep: false);
-                    return App.S("C.Freed", Format.Count(files), Format.Bytes(bytes));
+                    // Weder hier noch jetzt.
+                    //
+                    // Freigeben oeffnet die Datei mit Schreibzugriff, und
+                    // Windows laesst das warten, solange ein anderer sie in
+                    // der Hand hat. In der Hand hat sie in diesem Augenblick
+                    // der Datei-Manager -- er hat sie eben markiert und wartet
+                    // hier auf unsere Antwort. Beide standen dann still.
+                    //
+                    // Auf dem Oberflaechen-Thread kaeme dazu, dass das Fenster
+                    // nicht mehr zeichnet. Die Vorschau war aus demselben
+                    // Grund schon ausgenommen.
+                    var behalten = befehl == "PIN";
+                    var auswahl = pfade.ToList();
+
+                    _ = Task.Run(() =>
+                    {
+                        var (files, bytes) = host.SetLocal(auswahl, keep: behalten);
+                        var satz = App.S(behalten ? "C.Pinned" : "C.Freed",
+                            Format.Count(files), Format.Bytes(bytes));
+
+                        AppendLog($"[{host.FolderId}] {satz}");
+                        Dispatcher.BeginInvoke(() => Status(satz));
+                    });
+
+                    // Ohne Antwort und damit ohne Meldungsfenster: das
+                    // Ergebnis steht wenige Augenblicke spaeter in der
+                    // Statuszeile und im Protokoll. Auf es zu warten war
+                    // gerade das Problem.
+                    return "";
                 }
 
                 case "HIDE":
