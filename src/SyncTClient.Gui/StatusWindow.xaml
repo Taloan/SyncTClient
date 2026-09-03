@@ -57,7 +57,14 @@
           <ItemsControl x:Name="ShareList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <StackPanel Margin="0,0,0,10">
+                <!-- Die ganze Zeile ist die Schaltflaeche, nicht nur der Name:
+                     im kleinen Fenster trifft man einen Text von zehn Pixeln
+                     Hoehe nicht zuverlaessig. Der durchsichtige Hintergrund
+                     ist noetig, damit auch die Luecken zwischen den
+                     Beschriftungen den Klick annehmen. -->
+                <StackPanel Margin="0,0,0,10" Background="Transparent"
+                            Cursor="Hand" ToolTip="{Binding PathText}"
+                            MouseLeftButtonUp="OnShareClick">
                   <DockPanel>
                     <TextBlock Text="{Binding StatusText}" DockPanel.Dock="Right" FontSize="11"
                                Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center"

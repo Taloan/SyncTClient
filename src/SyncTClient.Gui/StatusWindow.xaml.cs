@@ -1,6 +1,7 @@
 ﻿using System.Collections.ObjectModel;
 using System.Windows.Data;
 using System.Windows;
+using System.Windows.Input;
 using SyncTClient.Mount;
 
 namespace SyncTClient.Gui;
@@ -23,6 +24,9 @@ public partial class StatusWindow : Window
     private readonly Action _openWindow;
     private readonly Action _settings;
     private readonly Action _togglePause;
+
+    /// <summary>Oeffnet den Ordner einer Freigabe.</summary>
+    private readonly Action<string?> _openFolder;
     private readonly Func<bool> _paused;
     private readonly Func<string> _state;
 
@@ -41,10 +45,12 @@ public partial class StatusWindow : Window
         Func<bool> paused,
         Action openWindow,
         Action settings,
-        Action togglePause)
+        Action togglePause,
+        Action<string?> openFolder)
     {
         InitializeComponent();
 
+        _openFolder = openFolder;
         _state = state;
         _paused = paused;
         _openWindow = openWindow;
@@ -114,6 +120,27 @@ public partial class StatusWindow : Window
         Top = bereich.Bottom - ActualHeight - 12;
 
         Activate();
+    }
+
+    /// <summary>
+    /// Ein Klick auf eine Freigabe oeffnet ihren Ordner.
+    /// </summary>
+    /// <remarks>
+    /// Das Fenster verschwindet dabei ohnehin -- es verbirgt sich, sobald es
+    /// den Fokus verliert, und den nimmt der Explorer. Verborgen wird trotzdem
+    /// ausdruecklich: sonst bliebe es einen Augenblick stehen und der Klick
+    /// saehe aus, als waere er ins Leere gegangen.
+    /// </remarks>
+    private void OnShareClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ShareRow zeile }) return;
+
+        // Eine Freigabe ohne Verbindung hat keinen Ordner. OpenFolder sagt
+        // das selbst, wenn der Pfad zwar eingetragen, aber nicht da ist.
+        if (string.IsNullOrEmpty(zeile.PathText)) return;
+
+        Hide();
+        _openFolder(zeile.PathText);
     }
 
     private void OnOpenWindow(object sender, RoutedEventArgs e)
