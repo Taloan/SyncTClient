@@ -1,5 +1,4 @@
 ﻿using System.Collections.ObjectModel;
-using System.Windows.Data;
 using System.Windows;
 using System.Windows.Input;
 using SyncTClient.Mount;
@@ -30,6 +29,23 @@ public partial class StatusWindow : Window
     private readonly Func<bool> _paused;
     private readonly Func<string> _state;
 
+    private readonly ObservableCollection<TransferInfo> _outgoing;
+    private readonly ObservableCollection<TransferInfo> _incoming;
+
+    /// <summary>
+    /// Was unter "zuletzt übertragen" steht.
+    /// </summary>
+    /// <remarks>
+    /// Eine eigene Liste und nicht die beiden Sammlungen selbst: die Übersicht
+    /// hält je Richtung die letzten fünfundzwanzig abgeschlossenen
+    /// Übertragungen, und beide zusammen füllten dieses schmale Fenster mit
+    /// fünfzig Zeilen. Gefragt ist hier, was gerade geschieht.
+    /// </remarks>
+    private readonly ObservableCollection<TransferInfo> _zuletzt = [];
+
+    /// <summary>So viele Übertragungen stehen darin.</summary>
+    private const int Hoechstens = 10;
+
     private readonly System.Windows.Threading.DispatcherTimer _takt =
         new() { Interval = TimeSpan.FromSeconds(1) };
 
@@ -58,13 +74,12 @@ public partial class StatusWindow : Window
         _togglePause = togglePause;
 
         ShareList.ItemsSource = shares;
+
         // Beide Richtungen in einer Liste. Das kleine Fenster hat keinen
         // Platz fuer zwei Spalten; der Pfeil vor dem Namen sagt die Richtung.
-        TransferList.ItemsSource = new CompositeCollection
-        {
-            new CollectionContainer { Collection = outgoing },
-            new CollectionContainer { Collection = incoming }
-        };
+        _outgoing = outgoing;
+        _incoming = incoming;
+        TransferList.ItemsSource = _zuletzt;
 
         Nachziehen();
 
@@ -76,8 +91,36 @@ public partial class StatusWindow : Window
         };
     }
 
+    /// <summary>
+    /// Stellt die Liste der Übertragungen zusammen.
+    /// </summary>
+    /// <remarks>
+    /// Laufende zuerst: sie sind der Grund, warum jemand auf das Symbol
+    /// klickt. Eine große Datei, die seit Minuten übertragen wird, fiele sonst
+    /// hinter zehn kleine, die inzwischen fertig wurden.
+    ///
+    /// Neu aufgebaut wird nur, wenn sich die Auswahl geändert hat. Die
+    /// Einträge selbst melden ihren Fortschritt; die Liste jede Sekunde zu
+    /// leeren und neu zu füllen ließe sie flackern.
+    /// </remarks>
+    private void UebertragungenNachziehen()
+    {
+        var neu = _outgoing.Concat(_incoming)
+            .OrderByDescending(t => t.State is TransferState.Laeuft or TransferState.Wartet)
+            .ThenByDescending(t => t.Started)
+            .Take(Hoechstens)
+            .ToList();
+
+        if (neu.SequenceEqual(_zuletzt)) return;
+
+        _zuletzt.Clear();
+        foreach (var eintrag in neu) _zuletzt.Add(eintrag);
+    }
+
     private void Nachziehen()
     {
+        UebertragungenNachziehen();
+
         StateText.Text = _state();
         PauseButton.Content = App.S(_paused() ? "S.Tray.Resume" : "S.Tray.Pause");
 
