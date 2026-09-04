@@ -554,8 +554,9 @@ public sealed class PeerHost : IAsyncDisposable
 
             if (!_nichtAngeboten.Add(share.FolderId)) continue;
 
-            _log($"[{Display}] bietet \"{share.FolderId}\" nicht mehr an. Platzhalter " +
-                 "dieser Freigabe lassen sich von dieser Gegenstelle nicht mehr fuellen.");
+            _log($"[{Display}] bietet \"{share.FolderId}\" nicht mehr an. Der Inhalt der " +
+                 "Platzhalter dieser Freigabe kann von dieser Gegenstelle nicht mehr " +
+                 "uebertragen werden.");
         }
     }
 
