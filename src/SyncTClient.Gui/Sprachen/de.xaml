@@ -377,6 +377,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Status.Quiet">Zurzeit wird nichts übertragen.</s:String>
   <s:String x:Key="C.NoShare">Kein Share für diesen Pfad.</s:String>
   <s:String x:Key="C.OneFolder">Dafür muss genau ein Ordner gewählt sein.</s:String>
+  <s:String x:Key="S.Open.Ignore">Datei ignorieren</s:String>
   <s:String x:Key="S.Main.FilterAll">Alle anzeigen</s:String>
   <s:String x:Key="S.Main.FilterConnected">Nur verbundene</s:String>
   <s:String x:Key="S.Main.FilterDisconnected">Nur nicht verbundene</s:String>

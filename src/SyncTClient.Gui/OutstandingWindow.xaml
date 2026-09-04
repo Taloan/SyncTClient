@@ -18,7 +18,16 @@
     <DataGrid x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True"
               CanUserAddRows="False" HeadersVisibility="Column"
               GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource RahmenFein}"
-              BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" RowHeight="24">
+              BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" RowHeight="24"
+              PreviewMouseRightButtonDown="OnRightClick">
+      <!-- Eine Datei, die dauernd offen ist, steht hier bei jedem Durchgang.
+           Von hier aus laesst sie sich vom Abgleich ausnehmen, ohne den Weg
+           ueber die Einstellungen. -->
+      <DataGrid.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="{DynamicResource S.Open.Ignore}" Click="OnIgnore" />
+        </ContextMenu>
+      </DataGrid.ContextMenu>
       <DataGrid.Columns>
         <DataGridTextColumn Header="{DynamicResource S.Open.Name}" Width="*" MinWidth="200"
                             Binding="{Binding Name}" />

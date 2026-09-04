@@ -15,6 +15,9 @@ public partial class SharePeersWindow : Window
 
     private readonly ShareRow _row;
 
+    /// <summary>Schreibt die Konfiguration fort. Nur durchgereicht.</summary>
+    private readonly Action _speichern;
+
     /// <summary>
     /// Zieht die Zeile nach, solange das Fenster offen ist.
     /// </summary>
@@ -25,11 +28,12 @@ public partial class SharePeersWindow : Window
     private readonly System.Windows.Threading.DispatcherTimer _takt =
         new() { Interval = TimeSpan.FromSeconds(1) };
 
-    public SharePeersWindow(ShareRow row)
+    public SharePeersWindow(ShareRow row, Action speichern)
     {
         InitializeComponent();
 
         _row = row;
+        _speichern = speichern;
 
         TitleText.Text = $"Knoten – {row.Name}";
         SubtitleText.Text = row.Accepted ? row.PathText : App.S("N.NotConnected");
@@ -67,7 +71,7 @@ public partial class SharePeersWindow : Window
     }
 
     private void OnShowOutstanding(object sender, RoutedEventArgs e)
-        => new OutstandingWindow(_row) { Owner = this }.ShowDialog();
+        => new OutstandingWindow(_row, _speichern) { Owner = this }.ShowDialog();
 
     /// <summary>
     /// Was gegenüber dieser Gegenstelle noch aussteht.

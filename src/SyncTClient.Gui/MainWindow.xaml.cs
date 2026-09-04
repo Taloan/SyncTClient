@@ -1862,7 +1862,7 @@ public partial class MainWindow : Window
         // zwangslaeufig die ausgewaehlte Zeile.
         if ((sender as Hyperlink)?.DataContext is not ShareRow row) return;
 
-        new SharePeersWindow(row) { Owner = this }.ShowDialog();
+        new SharePeersWindow(row, Persist) { Owner = this }.ShowDialog();
     }
 
     // ------------------------------------------------------------ Freigaben
