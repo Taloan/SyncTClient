@@ -400,7 +400,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.New.NoFolderId">Ohne Ordnerkennung geht es nicht.</s:String>
   <s:String x:Key="S.New.FolderIdTaken">Die Kennung „{0}“ ist schon vergeben.</s:String>
   <s:String x:Key="C.Pinned">{0} Dateien ({1}) bleiben lokal.</s:String>
-  <s:String x:Key="C.Freed">{0} Dateien ({1}) in Platzhalter umgewandelt.</s:String>
+  <s:String x:Key="C.Freed">{0} Dateien ({1}) sind jetzt Platzhalter und zählen zum Cache. Der Inhalt bleibt liegen, bis der Platz gebraucht wird.</s:String>
   <s:String x:Key="C.Hidden">{0} Zweige ausgeblendet.</s:String>
   <s:String x:Key="C.Blocked">Nicht möglich: {0} Dateien erreichen die Platzhalter-Schwelle nicht.</s:String>
   <s:String x:Key="S.Share.TreeHint">Angekreuzt: liegt hier, als Platzhalter oder mit Inhalt.&#10;Nicht angekreuzt: wird trotzdem übertragen und hier gelöscht, sobald die Platzhalter-Schwelle erreicht ist.</s:String>

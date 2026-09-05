@@ -131,8 +131,8 @@ public sealed class CacheLimits
 
                 return new VolumeUsage(
                     g.Key,
-                    g.Sum(c => c.UsedBytes),
-                    g.Sum(c => c.FileCount),
+                    g.Sum(c => c.LimitBytes),
+                    g.Sum(c => c.LimitFiles),
                     FreeBytesOn(g.Key),
                     kandidaten.Sum(e => e.Bytes),
                     kandidaten.Count,
@@ -144,7 +144,7 @@ public sealed class CacheLimits
     /// <summary>Was alle Datenträger zusammen belegen.</summary>
     public long UsedBytes
     {
-        get { lock (_caches) return _caches.Sum(c => c.UsedBytes); }
+        get { lock (_caches) return _caches.Sum(c => c.LimitBytes); }
     }
 
     /// <summary>Welche Grenze das Holen einer Datei verhindert.</summary>
@@ -263,7 +263,7 @@ public sealed class CacheLimits
             lock (_caches)
                 caches = [.. _caches.Where(c => RootOf(c.RootPath).Equals(root, StringComparison.OrdinalIgnoreCase))];
 
-            var belegt = caches.Sum(c => c.UsedBytes);
+            var belegt = caches.Sum(c => c.LimitBytes);
             if (belegt <= limit) return (0, 0);
 
             var kandidaten = caches

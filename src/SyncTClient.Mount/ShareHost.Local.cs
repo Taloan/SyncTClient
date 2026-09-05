@@ -536,6 +536,7 @@ public sealed partial class ShareHost
         // Was davon wirklich Bytes haelt. Der Cache fuehrt sonst nur, was er
         // selbst geholt hat, und wuesste von hineinkopierten Dateien nichts.
         var mitInhalt = new Dictionary<string, (long Bytes, DateTimeOffset LastAccess)>(StringComparer.Ordinal);
+        var freigegeben = new HashSet<string>(StringComparer.Ordinal);
 
         try
         {
@@ -565,7 +566,14 @@ public sealed partial class ShareHost
 
                 // Ein Platzhalter ist nicht vollstaendig hier. Angekuendigt
                 // wird nur, was wir ganz haben.
-                if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
+                if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
+                {
+                    // Wer hier den Speicherplatz freigegeben hat, hat das ueber
+                    // genau diese Datei gesagt. Ohne diesen Vermerk holt
+                    // "vollstaendig lokal" sie im naechsten Takt wieder.
+                    if (((uint)info.Attributes & Unpinned) != 0) freigegeben.Add(name);
+                    continue;
+                }
 
                 mitInhalt[name] = (info.Length, new DateTimeOffset(info.LastAccessTimeUtc));
 
@@ -591,6 +599,15 @@ public sealed partial class ShareHost
 
         LastScan = DateTime.Now;
         _mitInhalt = mitInhalt;
+        // Abgeglichen statt ersetzt: "Speicherplatz freigeben" traegt
+        // waehrend des Durchgangs ein, und ein Austausch der ganzen Sammlung
+        // verloere diesen Eintrag. Entfernt wird nur, was der Durchgang
+        // gesehen und nicht mehr als freigegeben vorgefunden hat.
+        foreach (var name in freigegeben) _freigegeben[name] = 0;
+
+        foreach (var name in _freigegeben.Keys)
+            if (!freigegeben.Contains(name) && vorhanden.ContainsKey(name))
+                _freigegeben.TryRemove(name, out _);
         _vorhanden = vorhanden;
 
         // Der Durchgang rechnet die Zahlen gleich selbst; was zwischen zwei
@@ -646,6 +663,17 @@ public sealed partial class ShareHost
     /// </remarks>
     /// <summary>Was beim letzten Durchgang wirklich Inhalt hielt.</summary>
     private Dictionary<string, (long Bytes, DateTimeOffset LastAccess)> _mitInhalt = [];
+
+    /// <summary>
+    /// Platzhalter, deren Inhalt der Anwender ausdruecklich freigegeben hat.
+    /// </summary>
+    /// <remarks>
+    /// Bei "vollstaendig lokal" gilt jeder Inhalt, der fehlt, als Rueckstand
+    /// und wird nachgeholt. Fuer diese hier nicht: die Betriebsart ist der
+    /// Modus fuer neue Dateien, "Speicherplatz freigeben" ist eine Aussage
+    /// ueber eine bestehende. Sonst kam sie binnen einer Minute zurueck.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, byte> _freigegeben = new(StringComparer.Ordinal);
 
     /// <summary>Was der letzte Durchgang im Ordner angetroffen hat.</summary>
     /// <remarks>
@@ -909,7 +937,8 @@ public sealed partial class ShareHost
                     // eine Zusage, die nicht eingehalten ist. Bei on-demand
                     // waere er der Normalfall.
                     var leer = _config.Mode == ShareMode.AlwaysLocal
-                               && !_mitInhalt.ContainsKey(name);
+                               && !_mitInhalt.ContainsKey(name)
+                               && !_freigegeben.ContainsKey(name);
 
                     if (!fehlt && hatInhalt && !leer) continue;
 

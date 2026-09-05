@@ -70,6 +70,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>FILE_ATTRIBUTE_OFFLINE: der Inhalt liegt woanders.</summary>
     private const uint Offline = 0x1000;
 
+    /// <summary>
+    /// FILE_ATTRIBUTE_UNPINNED: der Inhalt darf freigegeben werden.
+    /// </summary>
+    /// <remarks>
+    /// Setzt Windows, wenn CfSetPinState auf CF_PIN_STATE_UNPINNED steht --
+    /// also nach "Speicherplatz freigeben". Es ist die Aussage des Anwenders
+    /// ueber genau diese Datei und wiegt schwerer als die Betriebsart, die
+    /// fuer neue Dateien gilt.
+    /// </remarks>
+    private const uint Unpinned = 0x0010_0000;
+
     /// <summary>Groesster Block, den das Protokoll kennt: 16 MiB.</summary>
     private const int MaximumRequestSize = 16 << 20;
 
@@ -432,6 +443,54 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// Ob eine Datei nach der Ankuendigung der Gegenstelle wiederbeschaffbar
     /// ist. Nur dann darf ihr Speicherplatz hier freigegeben werden.
     /// </summary>
+    /// <summary>Ein Eintrag, der auf das Limit seines Datentraegers zaehlt.</summary>
+    /// <param name="Name">Der Pfad ab der Wurzel der Freigabe, mit "/" getrennt.</param>
+    /// <param name="Hydriert">Ob der Inhalt gerade lokal liegt.</param>
+    public sealed record CacheEintrag(string Name, long Size, bool IsDirectory, bool Hydriert);
+
+    /// <summary>
+    /// Was von dieser Freigabe auf das Limit ihres Datentraegers zaehlt.
+    /// </summary>
+    /// <remarks>
+    /// Bei "bei Bedarf" der ganze Bestand -- dort ist jede Datei ein
+    /// Platzhalter. Bei "vollstaendig lokal" nur, was freigegeben wurde.
+    /// Ob der Inhalt gerade liegt oder nicht, aendert an der Zugehoerigkeit
+    /// nichts; sie steht in <see cref="CacheEintrag.Hydriert"/> daneben.
+    /// </remarks>
+    public IReadOnlyList<CacheEintrag> CacheEintraege()
+    {
+        if (_index is null) return [];
+
+        var liste = new List<CacheEintrag>();
+
+        lock (_indexGate)
+            foreach (var (name, size, _, isDirectory, _) in _index.EnumerateLight())
+            {
+                if (name.Length == 0 || IsHousekeeping(name)) continue;
+                if (!isDirectory && !ZaehltZumCache(name)) continue;
+
+                liste.Add(new CacheEintrag(name, size, isDirectory, HatInhalt(name)));
+            }
+
+        return liste;
+    }
+
+    /// <summary>Liegt der Inhalt dieser Datei gerade hier?</summary>
+    public bool HatInhalt(string relativePath) => _mitInhalt.ContainsKey(relativePath);
+
+    /// <summary>
+    /// Zaehlt der Inhalt dieser Datei auf das Limit des Datentraegers?
+    /// </summary>
+    /// <remarks>
+    /// Bei "bei Bedarf" jeder: dort ist jeder lokal gefuellte Platzhalter
+    /// Cache. Bei "vollstaendig lokal" nur der freigegebene -- der Rest liegt
+    /// auf Zusage. Die Betriebsart ist der Modus fuer neue Dateien;
+    /// "Speicherplatz freigeben" ist die Aussage ueber eine bestehende, und
+    /// sie wiegt schwerer.
+    /// </remarks>
+    private bool ZaehltZumCache(string relativePath)
+        => _config.Mode != ShareMode.AlwaysLocal || _freigegeben.ContainsKey(relativePath);
+
     private bool MayEvict(string relativePath)
     {
         // Zuerst die Fassung, dann die Anzahl.
@@ -1573,9 +1632,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _log($"[{FolderId}] Sync-Root angemeldet in {uhr.ElapsedMilliseconds} ms.");
 
         var statePath = Path.Combine(_app.HomeDirectory, $"cache-{FolderId}.json");
-        // "Vollstaendig lokal" nimmt am Limit nicht teil. Dort darf kein
-        // Speicherplatz freigegeben werden, sonst gilt die Zusage nicht.
-        var limits = _config.Mode == ShareMode.AlwaysLocal ? null : _app.Cache;
+        // Auch "vollstaendig lokal" meldet sich am Limit an -- sonst
+        // erschiene sein Datentraeger nirgends, und eine dort freigegebene
+        // Datei zaehlte auf kein Limit. Angerechnet wird davon nur, was der
+        // Anwender freigegeben hat; das entscheidet ZaehltZumCache.
+        var limits = _app.Cache;
         if (limits is not null) limits.Log ??= _log;
 
         _cache = new HydrationCache(_config.LocalPath, limits, statePath, _log)
@@ -1588,7 +1649,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // Wiederbeschaffbar beweist dann Block fuer Block, dass die
             // geforderte Anzahl Gegenstellen dieselben Bytes haelt -- erst
             // danach wird Speicherplatz freigegeben.
-            MayEvict = MayEvict,
+            // Verdraengt werden darf nur, was auch angerechnet wird. Bei
+            // "vollstaendig lokal" ist das genau die freigegebene Datei --
+            // "fuer die es moeglich ist". MayEvict allein genuegt hier nicht:
+            // dieselbe Frage stellt PruneExcluded fuer eine Loeschung, und
+            // dort gilt die Zusage nicht.
+            MayEvict = name => ZaehltZumCache(name) && MayEvict(name),
+            ZaehltZumCache = ZaehltZumCache,
             Wiederbeschaffbar = ByteIdentischDort
         };
 
@@ -3018,6 +3085,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 {
                     _mount?.SetPinned(pfad, true);
 
+                    // Angeheftet ist nicht mehr freigegeben. Der naechste
+                    // Durchgang liest das ohnehin am Attribut ab; bis dahin
+                    // zaehlte die Datei sonst weiter auf das Limit.
+                    _freigegeben.TryRemove(name, out _);
+
                     // Anheften allein holt nichts. Ein einziges gelesenes Byte
                     // loest die Hydration der ganzen Datei aus -- derselbe Weg,
                     // den auch "vollstaendig lokal" nimmt.
@@ -3029,8 +3101,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 }
                 else
                 {
+                    // Freigeben verwirft den Inhalt nicht sofort. Ab jetzt
+                    // zaehlt die Datei auf das Limit des Datentraegers, so als
+                    // waere sie eben erst gefuellt worden -- deshalb die
+                    // jetzige Zugriffszeit. Verdraengt wird nach First in,
+                    // first out: zuerst weicht, was am laengsten niemand
+                    // angefasst hat, und das ist nicht diese hier.
                     _mount?.SetPinned(pfad, false);
-                    if (!MayEvict(name) || _cache?.Evict(name) != true) continue;
+                    _freigegeben[name] = 0;
+                    _cache?.NoteAccess(name);
                 }
 
                 anzahl++;
@@ -3044,6 +3123,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         if (!keep) _cache?.Persist();
         CacheChanged?.Invoke();
+
+        // Freigeben rechnet auf einen Schlag an, was bisher nicht zaehlte.
+        // Damit kann das Limit des Datentraegers ueberschritten sein, ohne
+        // dass eine einzige Datei geholt wurde -- also wird hier geprueft,
+        // genau wie nach jedem Zuwachs. Verdraengt werden dann die aeltesten
+        // Eintraege des Datentraegers, ueber alle Freigaben hinweg.
+        if (!keep) _ = Task.Run(EnforceLimitsAsync, CancellationToken.None);
 
         return (anzahl, bytes);
     }
