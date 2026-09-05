@@ -2342,6 +2342,13 @@ public partial class MainWindow : Window
         if (befehl == "THUMB")
             return pfade.Count == 1 && ShareHost.ProduceThumbnail(pfade[0]) ? "1" : "";
 
+        // Welcher Eintrag angeklickt wurde, und worauf. Ohne diese Zeile liess
+        // sich nicht unterscheiden, ob ein Befehl nicht wirkte oder ob ein
+        // anderer angekommen war als gemeint.
+        AppendLog($"Kontextmenue: {befehl} fuer " +
+                  string.Join(", ", pfade.Take(3).Select(p => $"\"{System.IO.Path.GetFileName(p)}\"")) +
+                  (pfade.Count > 3 ? $" und {pfade.Count - 3} weitere" : ""));
+
         return Dispatcher.Invoke(() =>
         {
             // Vor der Suche nach der Freigabe: dieser Befehl nennt keine
