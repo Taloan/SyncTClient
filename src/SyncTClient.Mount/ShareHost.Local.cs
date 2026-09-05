@@ -536,7 +536,6 @@ public sealed partial class ShareHost
         // Was davon wirklich Bytes haelt. Der Cache fuehrt sonst nur, was er
         // selbst geholt hat, und wuesste von hineinkopierten Dateien nichts.
         var mitInhalt = new Dictionary<string, (long Bytes, DateTimeOffset LastAccess)>(StringComparer.Ordinal);
-        var freigegeben = new HashSet<string>(StringComparer.Ordinal);
 
         try
         {
@@ -563,19 +562,6 @@ public sealed partial class ShareHost
                 vorhanden[name] = (
                     info.Length,
                     new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds());
-
-                // Wer hier den Speicherplatz freigegeben hat, hat das ueber
-                // genau diese Datei gesagt -- unabhaengig davon, ob ihr Inhalt
-                // noch liegt.
-                //
-                // Diese Pruefung stand einmal innerhalb der naechsten und
-                // damit nur fuer Platzhalter ohne Inhalt. Freigeben verwirft
-                // den Inhalt aber nicht mehr sofort: die Datei behaelt ihn,
-                // bis der Platz gebraucht wird. Sie wurde deshalb nie als
-                // freigegeben erkannt, und der Abgleich weiter unten nahm den
-                // Vermerk, den "Speicherplatz freigeben" eben gesetzt hatte,
-                // gleich wieder heraus.
-                if (((uint)info.Attributes & Unpinned) != 0) freigegeben.Add(name);
 
                 // Ein Platzhalter ist nicht vollstaendig hier. Angekuendigt
                 // wird nur, was wir ganz haben.
@@ -605,15 +591,15 @@ public sealed partial class ShareHost
 
         LastScan = DateTime.Now;
         _mitInhalt = mitInhalt;
-        // Abgeglichen statt ersetzt: "Speicherplatz freigeben" traegt
-        // waehrend des Durchgangs ein, und ein Austausch der ganzen Sammlung
-        // verloere diesen Eintrag. Entfernt wird nur, was der Durchgang
-        // gesehen und nicht mehr als freigegeben vorgefunden hat.
-        foreach (var name in freigegeben) _freigegeben[name] = 0;
+        // Aus der Liste der freigegebenen Dateien faellt, was es nicht mehr
+        // gibt. Mehr kann der Durchgang dazu nicht sagen: das Attribut
+        // UNPINNED traegt jeder Platzhalter, es ist die Bedingung dafuer, dass
+        // Windows ueberhaupt ein Ueberlagerungssymbol zeigt -- daran ist nicht
+        // abzulesen, ob jemand den Platz freigegeben hat.
+        var verschwunden = _freigegeben.Keys.Where(n => !vorhanden.ContainsKey(n)).ToList();
 
-        foreach (var name in _freigegeben.Keys)
-            if (!freigegeben.Contains(name) && vorhanden.ContainsKey(name))
-                _freigegeben.TryRemove(name, out _);
+        foreach (var name in verschwunden) _freigegeben.TryRemove(name, out _);
+        if (verschwunden.Count > 0) FreigabenSchreiben();
         _vorhanden = vorhanden;
 
         // Der Durchgang rechnet die Zahlen gleich selbst; was zwischen zwei
@@ -680,6 +666,49 @@ public sealed partial class ShareHost
     /// ueber eine bestehende. Sonst kam sie binnen einer Minute zurueck.
     /// </remarks>
     private readonly ConcurrentDictionary<string, byte> _freigegeben = new(StringComparer.Ordinal);
+
+    /// <summary>Wo die Liste der freigegebenen Dateien liegt.</summary>
+    private string FreigabeDatei => Path.Combine(_app.HomeDirectory, $"freigegeben-{FolderId}.txt");
+
+    /// <summary>
+    /// Liest, welche Dateien freigegeben sind.
+    /// </summary>
+    /// <remarks>
+    /// Eine eigene Liste, weil das Dateisystem die Frage nicht beantwortet.
+    /// FILE_ATTRIBUTE_UNPINNED traegt jeder Platzhalter -- ohne den
+    /// Anheft-Zustand zeigt Windows an ihm gar kein Ueberlagerungssymbol. Wer
+    /// daran ablesen wollte, was der Anwender freigegeben hat, bekaeme jeden
+    /// neu angelegten Platzhalter dazu.
+    /// </remarks>
+    private void FreigabenLesen()
+    {
+        try
+        {
+            if (!File.Exists(FreigabeDatei)) return;
+
+            foreach (var zeile in File.ReadAllLines(FreigabeDatei))
+                if (zeile.Length > 0) _freigegeben[zeile] = 0;
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Liste der freigegebenen Dateien: {Herkunft(ex)}");
+        }
+    }
+
+    private void FreigabenSchreiben()
+    {
+        try
+        {
+            var namen = _freigegeben.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+            if (namen.Count == 0) File.Delete(FreigabeDatei);
+            else File.WriteAllLines(FreigabeDatei, namen);
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Liste der freigegebenen Dateien: {Herkunft(ex)}");
+        }
+    }
 
     /// <summary>Was der letzte Durchgang im Ordner angetroffen hat.</summary>
     /// <remarks>
