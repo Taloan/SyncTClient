@@ -13,6 +13,8 @@
       <TextBlock x:Name="TitleText" FontSize="15" FontWeight="SemiBold" />
       <TextBlock x:Name="SubtitleText" Foreground="{DynamicResource Gedaempft}"
                  TextWrapping="Wrap" Margin="0,2,0,0" />
+      <TextBlock Text="{DynamicResource S.Vol.Explain}" Foreground="{DynamicResource Gedaempft}"
+                 FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0" />
     </StackPanel>
 
     <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">

@@ -157,7 +157,9 @@ public sealed class CacheNode(string name, string path, CacheNode? parent) : INo
     /// </remarks>
     public static CacheNode Bauen(ShareHost host, string titel, IEnumerable<ShareHost.CacheEintrag> eintraege)
     {
-        var wurzel = new CacheNode(titel, "", null) { Host = host, IsDirectory = true, IsExpanded = true };
+        // Zugeklappt. Bei siebentausend Dateien in einem Zweig ist ein
+        // aufgeklappter Baum keine Uebersicht mehr.
+        var wurzel = new CacheNode(titel, "", null) { Host = host, IsDirectory = true };
         var knoten = new Dictionary<string, CacheNode>(StringComparer.OrdinalIgnoreCase) { [""] = wurzel };
 
         CacheNode Verzeichnis(string pfad)

@@ -5,10 +5,11 @@
   <s:String x:Key="S.Cancel">Cancel</s:String>
   <s:String x:Key="S.Close">Close</s:String>
   <s:String x:Key="S.Apply">Apply</s:String>
-  <s:String x:Key="S.Vol.Title">Volume</s:String>
-  <s:String x:Key="S.Vol.For">Always available on {0} (unticked = free up space)</s:String>
+  <s:String x:Key="S.Vol.Title">Placeholder management</s:String>
+  <s:String x:Key="S.Vol.For">Placeholder management {0}</s:String>
+  <s:String x:Key="S.Vol.Explain">Only shares and folders holding at least one placeholder are listed. Ticking them sets the matching entries to “always available”.</s:String>
   <s:String x:Key="S.Vol.BoxHint">Ticked: always keep on this device — does not count toward the limit.&#10;Not ticked: placeholder — counts toward the cache and is evicted once the space is needed.&#10;&#10;The box shows the mode. Where the content currently is appears next to it.</s:String>
-  <s:String x:Key="S.Vol.Empty">No file on this volume has a mode recorded, and none counts toward the cache.</s:String>
+  <s:String x:Key="S.Vol.Empty">No file on this volume is kept as a placeholder.</s:String>
   <s:String x:Key="S.Vol.Loading">Collecting the inventory …</s:String>
   <s:String x:Key="M.VolumeWorking">Changing {0} branches ...</s:String>
   <s:String x:Key="M.VolumeDone">{0} files ({1}) changed.</s:String>
