@@ -1,5 +1,7 @@
 [English](README.md) · **Deutsch**
 
+<img src="docs/logo.png" alt="SyncTClient" width="110" align="right">
+
 # SyncTClient
 
 Ein Syncthing-Client für Windows, der Dateien als **Platzhalter** darstellt und
