@@ -49,6 +49,12 @@ MinVersion=10.0.19041
 OutputDir={#Ziel}
 OutputBaseFilename=SyncTClient-{#Fassung}-setup
 SetupIconFile=..\src\SyncTClient.Gui\SyncTClient.ico
+
+; Das Programmsymbol im Assistenten: gross auf der ersten und letzten Seite,
+; klein oben rechts auf allen dazwischen. Inno nimmt BMP, deshalb liegen sie
+; als solche daneben; die Fassung mit @2x waehlt es bei hoher Punktdichte.
+WizardImageFile=WizardImage.bmp,WizardImage@2x.bmp
+WizardSmallImageFile=WizardSmallImage.bmp,WizardSmallImage@2x.bmp
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

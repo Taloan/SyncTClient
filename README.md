@@ -1,5 +1,7 @@
 **English** · [Deutsch](README.de.md)
 
+<img src="docs/logo.png" alt="SyncTClient" width="110" align="right">
+
 # SyncTClient
 
 A Syncthing client for Windows that presents files as **placeholders** and
