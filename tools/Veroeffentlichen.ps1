@@ -22,8 +22,13 @@
     wird mit -Repo uebergeben.
 
 .PARAMETER Fassung
-    Die Fassung, etwa 1.2.0. Ohne Angabe wird die letzte Stelle der Fassung
-    aus Directory.Build.props um eins erhoeht.
+    Nur zur Absicherung. Die Fassung kommt aus der uebersetzten Anwendung in
+    BIN und laesst sich hier nicht umschreiben, sonst hiesse der Installer
+    anders als sein Inhalt. Weicht die Angabe davon ab, bricht der Lauf ab.
+
+    Die Zahl fuer die naechste Fassung steht in Directory.Build.props. Sie
+    wird nach jeder Freigabe um eins erhoeht, damit der naechste Bau in
+    Visual Studio sie schon traegt.
 
 .PARAMETER Hinweise
     Was in der Freigabe steht. Ohne Angabe entstehen sie aus den Commits seit
@@ -48,7 +53,7 @@
 
 .EXAMPLE
     .\tools\Veroeffentlichen.ps1
-    .\tools\Veroeffentlichen.ps1 -Fassung 1.0.0 -Hinweise "Erste oeffentliche Fassung."
+    .\tools\Veroeffentlichen.ps1 -Hinweise "Erste oeffentliche Fassung."
     .\tools\Veroeffentlichen.ps1 -NurPaket
 #>
 
@@ -139,6 +144,24 @@ Write-Host "    $Iscc"
 
 Schritt 'Fassung bestimmen'
 
+# Massgeblich ist, was in der Anwendung steckt, nicht was in der Fassungsdatei
+# steht.
+#
+# Frueher war es umgekehrt: das Werkzeug zaehlte die Zahl in
+# Directory.Build.props hoch und baute den Installer damit. Uebersetzt wird die
+# Anwendung aber vorher in Visual Studio, also mit der Zahl von davor. Der
+# Installer hiess 0.9.2 und trug eine 0.9.1 in sich.
+#
+# Fuer die Pruefung auf eine neue Fassung ist das toedlich: ein installiertes
+# 0.9.2 meldet sich als 0.9.1, haelt 0.9.2 fuer neuer, laedt es, installiert es
+# und meldet weiter 0.9.1. Eine Schleife ohne Ende.
+$rohFassung = (Get-Item (Join-Path $BinVerz 'SyncTClient.exe')).VersionInfo.ProductVersion
+$ausBin = ($rohFassung -split '\+')[0].Trim()
+
+if ($ausBin -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+    Abbruch "Die Anwendung in $BinVerz nennt keine brauchbare Fassung: `"$rohFassung`"."
+}
+
 # Ausdruecklich UTF-8, in beide Richtungen.
 #
 # Get-Content liest in Windows PowerShell ohne Angabe in der Kodierung
@@ -153,14 +176,29 @@ if ($props -notmatch '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>') {
 
 $bisher = $Matches[1]
 
-if (-not $Fassung) {
-    # Die letzte Stelle um eins weiter. Wer etwas anderes will, gibt es an.
-    $teile = $bisher.Split('.')
-    $Fassung = '{0}.{1}.{2}' -f $teile[0], $teile[1], ([int]$teile[2] + 1)
+if ($Fassung -and $Fassung -ne $ausBin) {
+    Abbruch @"
+Verlangt ist $Fassung, die Anwendung in BIN traegt $ausBin.
+
+Die Zahl kommt aus der uebersetzten Anwendung und laesst sich hier nicht
+umschreiben -- sonst hiesse der Installer anders als sein Inhalt.
+"@
 }
 
-if ($Fassung -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Abbruch "Ungueltige Fassung: $Fassung" }
-Write-Host "    $bisher -> $Fassung"
+if ($bisher -ne $ausBin) {
+    Abbruch @"
+Directory.Build.props steht auf $bisher, die Anwendung in BIN traegt $ausBin.
+
+Die Fassung wurde also geaendert, seit zuletzt uebersetzt wurde. Was jetzt
+in BIN liegt, ist nicht die Fassung, die veroeffentlicht werden soll.
+
+In Visual Studio erneut nach BIN veroeffentlichen (Profil FolderProfile),
+dann hier noch einmal.
+"@
+}
+
+$Fassung = $ausBin
+Write-Host "    $Fassung  (aus BIN, gebaut aus $(($rohFassung -split '\+')[1] -replace '^(.{7}).*','$1'))"
 
 $etikett = "v$Fassung"
 # Ein Lauf, der weiter hinten abgebrochen ist -- beim Schieben nach GitHub
@@ -258,8 +296,8 @@ if ($schonFestgeschrieben) {
     Write-Host "    Fassung, Commit und Etikett liegen schon vor."
 }
 else {
-    $neueProps = $props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Version>$Fassung</Version>"
-    [System.IO.File]::WriteAllText($PropsDatei, $neueProps, $ohneVorzeichen)
+    # Die Fassungsdatei steht bereits auf $Fassung -- genau daraus wurde die
+    # Anwendung uebersetzt. Festzuschreiben ist nur der Changelog-Abschnitt.
 
     # Der neue Abschnitt ganz oben, unter der Marke. Ohne Umweg ueber einen
     # regulaeren Ausdruck: in Commit-Betreffen steht "$" und "$1" durchaus,
@@ -277,7 +315,7 @@ else {
     $changelog = $changelog.Replace($marke, $marke + $zeilenende + $zeilenende + $abschnitt)
     [System.IO.File]::WriteAllText($ChangeDatei, $changelog, $ohneVorzeichen)
 
-    git add $PropsDatei $ChangeDatei
+    git add $ChangeDatei
     git commit -m "Fassung $Fassung" | Out-Null
     git tag -a $etikett -m "SyncTClient $Fassung"
 }
@@ -372,5 +410,29 @@ gh @argumente
 if ($LASTEXITCODE -ne 0) { Abbruch "gh brach ab (Code $LASTEXITCODE)." }
 
 Remove-Item -LiteralPath $textDatei -EA SilentlyContinue
+
+# ---------------------------------------------------------------- Naechste Fassung
+
+Schritt 'Naechste Fassung vorbereiten'
+
+# Damit der naechste Bau in Visual Studio schon die naechste Zahl traegt.
+#
+# Die Fassung muss vor dem Uebersetzen feststehen, sonst stimmt der Installer
+# nicht mit seinem Inhalt ueberein. Daran zu denken ist eine Sache, die man
+# genau einmal vergisst -- also wird sie hier gesetzt, gleich nachdem die
+# vorige heraus ist.
+$teile = $Fassung.Split('.')
+$naechste = '{0}.{1}.{2}' -f $teile[0], $teile[1], ([int]$teile[2] + 1)
+
+$neueProps = $props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Version>$naechste</Version>"
+[System.IO.File]::WriteAllText($PropsDatei, $neueProps, $ohneVorzeichen)
+
+git add $PropsDatei
+git commit -m "Naechste Fassung $naechste" | Out-Null
+git push
+git push github $zweig
+
+Write-Host "    Directory.Build.props steht jetzt auf $naechste."
+Write-Host "    Der naechste Bau in Visual Studio traegt diese Zahl."
 
 Schritt "Fertig: SyncTClient $Fassung"
