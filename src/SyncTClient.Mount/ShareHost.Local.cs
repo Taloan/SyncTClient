@@ -564,16 +564,22 @@ public sealed partial class ShareHost
                     info.Length,
                     new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds());
 
+                // Wer hier den Speicherplatz freigegeben hat, hat das ueber
+                // genau diese Datei gesagt -- unabhaengig davon, ob ihr Inhalt
+                // noch liegt.
+                //
+                // Diese Pruefung stand einmal innerhalb der naechsten und
+                // damit nur fuer Platzhalter ohne Inhalt. Freigeben verwirft
+                // den Inhalt aber nicht mehr sofort: die Datei behaelt ihn,
+                // bis der Platz gebraucht wird. Sie wurde deshalb nie als
+                // freigegeben erkannt, und der Abgleich weiter unten nahm den
+                // Vermerk, den "Speicherplatz freigeben" eben gesetzt hatte,
+                // gleich wieder heraus.
+                if (((uint)info.Attributes & Unpinned) != 0) freigegeben.Add(name);
+
                 // Ein Platzhalter ist nicht vollstaendig hier. Angekuendigt
                 // wird nur, was wir ganz haben.
-                if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
-                {
-                    // Wer hier den Speicherplatz freigegeben hat, hat das ueber
-                    // genau diese Datei gesagt. Ohne diesen Vermerk holt
-                    // "vollstaendig lokal" sie im naechsten Takt wieder.
-                    if (((uint)info.Attributes & Unpinned) != 0) freigegeben.Add(name);
-                    continue;
-                }
+                if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
 
                 mitInhalt[name] = (info.Length, new DateTimeOffset(info.LastAccessTimeUtc));
 
