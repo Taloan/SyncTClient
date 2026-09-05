@@ -28,5 +28,13 @@ synct-sicherungen/
 *.fetched
 bild-p*.jpg
 synct.json
-src/SyncTClient.ThumbProvider/bin/
-src/SyncTClient.ThumbProvider/obj/
+src/SyncTClient.ExplorerProvider/bin/
+src/SyncTClient.ExplorerProvider/obj/
+
+# Die fertigen Installer. Sie gehoeren als Anhang an die Freigabe und nicht
+# in den Quelltext. BIN faellt schon unter das "bin/" ganz oben.
+/dist/
+
+# Der Name des GitHub-Verzeichnisses. Er gehoert diesem Rechner und nicht
+# dem Quelltext -- wer die Mappe klont, veroeffentlicht woandershin.
+/tools/veroeffentlichung.json

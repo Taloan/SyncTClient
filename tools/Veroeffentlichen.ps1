@@ -1,0 +1,234 @@
+<#
+.SYNOPSIS
+    Macht aus dem Veroeffentlichungsverzeichnis einen Installer und legt ihn
+    als Freigabe auf GitHub ab.
+
+.DESCRIPTION
+    Der Ablauf von Hand war: in Visual Studio veroeffentlichen, das Verzeichnis
+    zusammenpacken, einen Installer bauen, ihn hochladen, verlinken und die
+    Versionsnummer nachziehen. Dieses Werkzeug macht alles ausser dem ersten
+    Schritt.
+
+    Vorausgesetzt wird:
+      * Visual Studio hat nach BIN veroeffentlicht (Profil FolderProfile)
+      * Inno Setup liegt auf dem Rechner
+      * gh ist eingerichtet:  winget install GitHub.cli  und  gh auth login
+
+    Der Quelltext bleibt bei "origin". Auf GitHub liegt nur das Verzeichnis
+    fuer die Freigaben; sein Name steht in tools\veroeffentlichung.json oder
+    wird mit -Repo uebergeben.
+
+.PARAMETER Fassung
+    Die Fassung, etwa 1.2.0. Ohne Angabe wird die letzte Stelle der Fassung
+    aus Directory.Build.props um eins erhoeht.
+
+.PARAMETER Hinweise
+    Was in der Freigabe steht. Ohne Angabe entstehen sie aus den Commits seit
+    dem letzten Etikett.
+
+.PARAMETER Repo
+    Das Verzeichnis auf GitHub, etwa "dirkmertens/SyncTClient-Releases".
+
+.PARAMETER Entwurf
+    Die Freigabe wird als Entwurf angelegt und nicht veroeffentlicht.
+
+.PARAMETER NurPaket
+    Nur den Installer bauen, nichts hochladen. Fuer den Blick darauf, bevor
+    etwas nach draussen geht.
+
+.EXAMPLE
+    .\tools\Veroeffentlichen.ps1
+    .\tools\Veroeffentlichen.ps1 -Fassung 1.0.0 -Hinweise "Erste oeffentliche Fassung."
+    .\tools\Veroeffentlichen.ps1 -NurPaket
+#>
+
+[CmdletBinding()]
+param(
+    [string] $Fassung,
+    [string] $Hinweise,
+    [string] $Repo,
+    [switch] $Entwurf,
+    [switch] $NurPaket
+)
+
+$ErrorActionPreference = 'Stop'
+
+$Wurzel      = Split-Path -Parent $PSScriptRoot
+$BinVerz     = Join-Path $Wurzel 'BIN'
+$DistVerz    = Join-Path $Wurzel 'dist'
+$Skript      = Join-Path $Wurzel 'setup\SyncTClient.iss'
+$PropsDatei  = Join-Path $Wurzel 'Directory.Build.props'
+$Einstellung = Join-Path $PSScriptRoot 'veroeffentlichung.json'
+
+function Schritt($text) { Write-Host "==> $text" -ForegroundColor Cyan }
+function Abbruch($text) { Write-Host "!!  $text" -ForegroundColor Red; exit 1 }
+
+# ---------------------------------------------------------------- Vorbedingungen
+
+# Das Veroeffentlichungsverzeichnis. Ohne die drei Dateien ist es keines:
+# die Anwendung, der Dienst und die Shell-Erweiterung.
+Schritt 'Veroeffentlichungsverzeichnis pruefen'
+
+foreach ($noetig in 'SyncTClient.exe', 'synctmount.dll', 'synctexplorer.dll') {
+    $pfad = Join-Path $BinVerz $noetig
+    if (-not (Test-Path -LiteralPath $pfad)) {
+        Abbruch "$noetig fehlt in $BinVerz. In Visual Studio veroeffentlichen (Profil FolderProfile), dann erneut."
+    }
+}
+
+# Ist das Verzeichnis aelter als der Quelltext, ist es der Stand von gestern.
+# Das faellt sonst erst auf, wenn jemand die Freigabe herunterlaedt.
+$juengsterQuelltext = Get-ChildItem (Join-Path $Wurzel 'src') -Recurse -File -Include *.cs, *.xaml -EA SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+$anwendung = Get-Item (Join-Path $BinVerz 'SyncTClient.exe')
+
+if ($juengsterQuelltext -and $juengsterQuelltext.LastWriteTime -gt $anwendung.LastWriteTime) {
+    Write-Host ("!!  BIN ist aelter als der Quelltext: {0:dd.MM. HH:mm} gegen {1:dd.MM. HH:mm} ({2})." -f `
+        $anwendung.LastWriteTime, $juengsterQuelltext.LastWriteTime, $juengsterQuelltext.Name) -ForegroundColor Yellow
+
+    if ((Read-Host 'Trotzdem weiter? (j/N)') -ne 'j') { exit 1 }
+}
+
+# Inno Setup. Die Fassung 6 liegt unter Programme, die 7 beim Benutzer.
+Schritt 'Inno Setup suchen'
+
+$Iscc = @(
+    "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+
+if (-not $Iscc) { Abbruch 'ISCC.exe nicht gefunden. Inno Setup installieren: winget install JRSoftware.InnoSetup' }
+Write-Host "    $Iscc"
+
+# ---------------------------------------------------------------- Fassung
+
+Schritt 'Fassung bestimmen'
+
+$props = Get-Content -LiteralPath $PropsDatei -Raw
+if ($props -notmatch '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>') {
+    Abbruch "In $PropsDatei steht keine Fassung."
+}
+
+$bisher = $Matches[1]
+
+if (-not $Fassung) {
+    # Die letzte Stelle um eins weiter. Wer etwas anderes will, gibt es an.
+    $teile = $bisher.Split('.')
+    $Fassung = '{0}.{1}.{2}' -f $teile[0], $teile[1], ([int]$teile[2] + 1)
+}
+
+if ($Fassung -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Abbruch "Ungueltige Fassung: $Fassung" }
+Write-Host "    $bisher -> $Fassung"
+
+$etikett = "v$Fassung"
+if ((git tag --list $etikett)) { Abbruch "Das Etikett $etikett gibt es schon." }
+
+# ---------------------------------------------------------------- Paket
+
+Schritt 'Installer bauen'
+
+New-Item -ItemType Directory -Force -Path $DistVerz | Out-Null
+
+& $Iscc "/DFassung=$Fassung" "/DQuelle=$BinVerz" "/DZiel=$DistVerz" $Skript | Out-Null
+if ($LASTEXITCODE -ne 0) { Abbruch "Inno Setup brach ab (Code $LASTEXITCODE)." }
+
+$Paket = Join-Path $DistVerz "SyncTClient-$Fassung-setup.exe"
+if (-not (Test-Path -LiteralPath $Paket)) { Abbruch "Der Installer wurde nicht erzeugt: $Paket" }
+
+$pruefsumme = (Get-FileHash -LiteralPath $Paket -Algorithm SHA256).Hash.ToLower()
+$groesse = '{0:N1} MB' -f ((Get-Item $Paket).Length / 1MB)
+
+Write-Host "    $Paket  ($groesse)"
+Write-Host "    SHA256 $pruefsumme"
+
+if ($NurPaket) { Schritt 'Nur das Paket verlangt -- nichts hochgeladen.'; exit 0 }
+
+# ---------------------------------------------------------------- GitHub
+
+Schritt 'GitHub pruefen'
+
+if (-not (Get-Command gh -EA SilentlyContinue)) {
+    Abbruch 'gh nicht gefunden. Einrichten: winget install GitHub.cli   danach   gh auth login'
+}
+
+if (-not $Repo) {
+    if (Test-Path -LiteralPath $Einstellung) {
+        $Repo = (Get-Content -LiteralPath $Einstellung -Raw | ConvertFrom-Json).Repo
+    }
+}
+
+if (-not $Repo) {
+    Abbruch @"
+Kein GitHub-Verzeichnis angegeben. Einmalig festlegen:
+
+    '{ "Repo": "benutzer/SyncTClient-Releases" }' | Set-Content -Encoding utf8 "$Einstellung"
+
+oder je Aufruf mit -Repo uebergeben.
+"@
+}
+
+Write-Host "    $Repo"
+
+# ---------------------------------------------------------------- Fassung festschreiben
+
+Schritt 'Fassung festschreiben und etikettieren'
+
+$props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Version>$Fassung</Version>" |
+    Set-Content -LiteralPath $PropsDatei -Encoding utf8 -NoNewline
+
+git add $PropsDatei
+git commit -m "Fassung $Fassung" | Out-Null
+git tag -a $etikett -m "SyncTClient $Fassung"
+
+# Auf die eigene Gegenstelle. Der Quelltext bleibt dort; GitHub traegt nur
+# die Freigaben.
+git push
+git push origin $etikett
+
+# ---------------------------------------------------------------- Freigabe
+
+Schritt 'Freigabe anlegen'
+
+if (-not $Hinweise) {
+    $letztes = git describe --tags --abbrev=0 "$etikett^" 2>$null
+
+    $zeilen = if ($letztes) { git log --pretty=format:'- %s' "$letztes..$etikett" }
+              else          { git log --pretty=format:'- %s' -20 }
+
+    $Hinweise = ($zeilen -join "`n")
+}
+
+$text = @"
+$Hinweise
+
+---
+
+**Installer:** ``SyncTClient-$Fassung-setup.exe`` ($groesse)
+**SHA256:** ``$pruefsumme``
+
+Die Installation braucht keine Administratorrechte. Die Einbindung in den
+Explorer -- Vorschaubilder und Kontextmenü -- trägt das Programm beim ersten
+Start selbst ein.
+"@
+
+$textDatei = Join-Path $env:TEMP "synct-freigabe-$Fassung.md"
+$text | Set-Content -LiteralPath $textDatei -Encoding utf8
+
+$argumente = @(
+    'release', 'create', $etikett, $Paket,
+    '--repo', $Repo,
+    '--title', "SyncTClient $Fassung",
+    '--notes-file', $textDatei
+)
+
+if ($Entwurf) { $argumente += '--draft' }
+
+gh @argumente
+if ($LASTEXITCODE -ne 0) { Abbruch "gh brach ab (Code $LASTEXITCODE)." }
+
+Remove-Item -LiteralPath $textDatei -EA SilentlyContinue
+
+Schritt "Fertig: SyncTClient $Fassung"
