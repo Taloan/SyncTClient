@@ -136,7 +136,22 @@
     vollstaendig aus und ist es nicht.
   -->
   <Target Name="VorschauDllMitnehmen" AfterTargets="Publish">
-    <Exec Command="$(VorschauBefehl)" />
+    <!--
+      Der haeufigste Grund fuer einen Fehlschlag hier ist kein Fehler im
+      Quelltext: die Erweiterung laeuft im Prozess des Dateimanagers, und
+      solange der laeuft, laesst sich synctexplorer.dll nicht ueberschreiben.
+
+      Ohne ContinueOnError bricht der Exec-Aufruf mit dem Rueckgabewert ab,
+      und Visual Studio meldet "Die Ursache des Fehlers konnte nicht
+      ermittelt werden", waehrend die Ursache zehn Zeilen weiter oben
+      steht und den sperrenden Prozess beim Namen nennt.
+    -->
+    <Exec Command="$(VorschauBefehl)" ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="VorschauCode" />
+    </Exec>
+
+    <Error Condition="'$(VorschauCode)' != '0'"
+           Text="synctexplorer.dll liess sich nicht erzeugen (Rueckgabewert $(VorschauCode)). Meist haelt ein Dateimanager die Datei: die Erweiterung laeuft in seinem Prozess. Directory Opus beziehungsweise den Explorer beenden, ausserdem ein laufendes SyncTClient, und erneut veroeffentlichen. Welcher Prozess es ist, steht in der Zeile mit MSB3027 weiter oben." />
 
     <PropertyGroup>
       <VorschauDll Condition="Exists('$(VorschauDllRelease)')">$(VorschauDllRelease)</VorschauDll>
