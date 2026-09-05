@@ -70,6 +70,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>FILE_ATTRIBUTE_OFFLINE: der Inhalt liegt woanders.</summary>
     private const uint Offline = 0x1000;
 
+    /// <summary>
+    /// FILE_ATTRIBUTE_PINNED: der Inhalt soll auf diesem Geraet bleiben.
+    /// </summary>
+    /// <remarks>
+    /// Das Gegenstueck UNPINNED taugt nicht als Merkmal -- es traegt jeder
+    /// Platzhalter, sonst zeigt Windows an ihm kein Ueberlagerungssymbol.
+    /// Dieses hier setzt nur, wer anheftet: wir oder Windows auf Geheiss des
+    /// Anwenders.
+    /// </remarks>
+    private const uint Angeheftet = 0x0008_0000;
+
     /// <summary>Groesster Block, den das Protokoll kennt: 16 MiB.</summary>
     private const int MaximumRequestSize = 16 << 20;
 
