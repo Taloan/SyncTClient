@@ -2647,6 +2647,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // also nichts schliessen.
             if (eigen.Type == FileInfoType.Directory) continue;
 
+            // Wie beim Start: was abgewaehlt oder ausgenommen ist, fehlt
+            // nicht, sondern gehoert nicht hierher.
+            if (Absichtlich(eigen.Name, isDirectory: false)) continue;
+
             if (vorhanden.ContainsKey(eigen.Name)) continue;
 
             // Schon unterwegs.
@@ -2698,6 +2702,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// "vollstaendig lokal" beim ersten Start jede noch nicht geholte Datei
     /// als geloescht.
     /// </remarks>
+    /// <summary>
+    /// Fehlt diese Datei, weil sie hier nicht liegen soll?
+    /// </summary>
+    /// <remarks>
+    /// Der Auswahlbaum nimmt Zweige von diesem Geraet aus, ein Muster nimmt
+    /// Namen ganz vom Abgleich aus. Beides entfernt die Dateien hier --
+    /// PruneExcluded und PurgeIgnored tun genau das. Wer sie danach als
+    /// fehlend zaehlt, meldet eine Loeschung, die niemand vorgenommen hat.
+    /// </remarks>
+    private bool Absichtlich(string name, bool isDirectory)
+        => !_config.Includes(name, isDirectory) || _config.IsIgnored(name);
+
     private void OfflineGeloeschte()
     {
         if (_index is null) return;
@@ -2732,6 +2748,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         foreach (var eigen in _index.LocalFrom(0))
         {
             if (eigen.Deleted || IsHousekeeping(eigen.Name)) continue;
+
+            // Abgewaehlt oder durch ein Muster ausgenommen: diese Dateien sind
+            // absichtlich fort. Sie mitzuzaehlen brachte die Zahl ueber die
+            // Schranke, und dann wurde in dieser Freigabe gar keine Loeschung
+            // mehr erkannt -- auch keine echte.
+            if (Absichtlich(eigen.Name, eigen.Type == FileInfoType.Directory)) continue;
 
             var path = LocalPathOf(eigen.Name);
             var da = eigen.Type == FileInfoType.Directory
