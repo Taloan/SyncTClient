@@ -798,6 +798,30 @@ public sealed class PersistentFolderIndex : IDisposable
         transaktion.Commit();
     }
 
+    /// <summary>
+    /// Nimmt jeden Vermerk unterhalb dieses Ordners heraus.
+    /// </summary>
+    /// <remarks>
+    /// Wer einen Ordner setzt, meint den Zweig. Blieben die Vermerke darunter
+    /// stehen, wiegen sie schwerer -- gesucht wird von unten nach oben -- und
+    /// der Ordner haette keine Wirkung.
+    ///
+    /// Verglichen wird ueber substr statt ueber LIKE: ein Name darf Prozent-
+    /// und Unterstrichzeichen enthalten, und die waeren dort Platzhalter.
+    /// </remarks>
+    public void ClearModesBelow(string ordner)
+    {
+        var praefix = ordner + "/";
+
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText =
+            "DELETE FROM modus WHERE substr(name, 1, $laenge) = $praefix COLLATE NOCASE";
+        command.Parameters.AddWithValue("$laenge", praefix.Length);
+        command.Parameters.AddWithValue("$praefix", praefix);
+        command.ExecuteNonQuery();
+    }
+
     /// <summary>Nimmt den Vermerk zurueck; danach gilt wieder die Betriebsart.</summary>
     public void ClearMode(string name)
     {
