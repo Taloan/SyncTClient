@@ -116,6 +116,7 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
     private const uint MfPopup = 0x0010;
     private const uint MfSeparator = 0x0800;
     private const uint MfGrayed = 0x0001;
+    private const uint MfChecked = 0x0008;
     private const uint MfByPosition = 0x0400;
 
     /// <summary>Die Auswahl, so wie der Datei-Manager sie übergeben hat.</summary>
@@ -209,8 +210,15 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
         var untermenue = CreatePopupMenu();
         if (untermenue == 0) return 0;
 
-        AppendMenuW(untermenue, MfString | grau, idFirst + 0, "Immer auf diesem Gerät behalten");
-        AppendMenuW(untermenue, MfString | grau, idFirst + 1, "Speicherplatz freigeben");
+        // Welcher Zustand gerade gilt, steht als Haken vor dem Eintrag.
+        // Ohne ihn liess sich nicht sehen, ob "freigeben" ueberhaupt noch
+        // etwas aendert -- und ein Griff daneben fiel nicht auf.
+        var haltung = Sync.Haltung(_paths);
+
+        AppendMenuW(untermenue, MfString | grau | (haltung == Sync.Zustand.Lokal ? MfChecked : 0),
+            idFirst + 0, "Immer auf diesem Gerät behalten");
+        AppendMenuW(untermenue, MfString | grau | (haltung == Sync.Zustand.Cache ? MfChecked : 0),
+            idFirst + 1, "Speicherplatz freigeben");
         AppendMenuW(untermenue, MfSeparator, 0, null);
 
         // Nur fuer Ordner, und nur wenn ausschliesslich Ordner gewaehlt sind.
@@ -461,6 +469,93 @@ internal static class Sync
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    /// <summary>Wie eine Auswahl gerade gehalten wird.</summary>
+    internal enum Zustand
+    {
+        /// <summary>Weder das eine noch das andere, oder gemischt.</summary>
+        Offen,
+
+        /// <summary>Angeheftet: der Inhalt bleibt hier.</summary>
+        Lokal,
+
+        /// <summary>Freigegeben: zaehlt zum Cache und darf verdraengt werden.</summary>
+        Cache
+    }
+
+    /// <summary>FILE_ATTRIBUTE_PINNED.</summary>
+    private const uint Angeheftet = 0x0008_0000;
+
+    /// <summary>FILE_ATTRIBUTE_UNPINNED.</summary>
+    private const uint Freigegeben = 0x0010_0000;
+
+    /// <summary>
+    /// Wie die Auswahl gerade gehalten wird.
+    /// </summary>
+    /// <remarks>
+    /// Gelesen wird das Attribut, das Windows selbst fuehrt -- ohne Rueckfrage
+    /// beim Client. Ein Verzeichnis traegt es nicht: dort entscheiden die
+    /// Dateien darin, und zwar einstimmig. Gefragt wird nur eine begrenzte
+    /// Zahl von ihnen; ein Kontextmenue, das erst nach dem Durchgang durch
+    /// zwanzigtausend Dateien erscheint, ist keines.
+    /// </remarks>
+    public static Zustand Haltung(IReadOnlyList<string> pfade)
+    {
+        const int Hoechstens = 64;
+
+        var lokal = 0;
+        var cache = 0;
+        var gesehen = 0;
+
+        try
+        {
+            foreach (var pfad in pfade)
+            {
+                foreach (var datei in Dateien(pfad, Hoechstens - gesehen))
+                {
+                    var werte = (uint)File.GetAttributes(datei);
+
+                    if ((werte & Angeheftet) != 0) lokal++;
+                    else if ((werte & Freigegeben) != 0) cache++;
+
+                    if (++gesehen >= Hoechstens) break;
+                }
+
+                if (gesehen >= Hoechstens) break;
+            }
+        }
+        catch (Exception)
+        {
+            return Zustand.Offen;
+        }
+
+        if (gesehen == 0) return Zustand.Offen;
+        if (lokal == gesehen) return Zustand.Lokal;
+        if (cache == gesehen) return Zustand.Cache;
+
+        return Zustand.Offen;
+    }
+
+    private static IEnumerable<string> Dateien(string pfad, int hoechstens)
+    {
+        if (hoechstens <= 0) yield break;
+
+        if (File.Exists(pfad))
+        {
+            yield return pfad;
+            yield break;
+        }
+
+        if (!Directory.Exists(pfad)) yield break;
+
+        var zahl = 0;
+
+        foreach (var datei in Directory.EnumerateFiles(pfad, "*", SearchOption.AllDirectories))
+        {
+            yield return datei;
+            if (++zahl >= hoechstens) yield break;
         }
     }
 

@@ -446,7 +446,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>Ein Eintrag, der auf das Limit seines Datentraegers zaehlt.</summary>
     /// <param name="Name">Der Pfad ab der Wurzel der Freigabe, mit "/" getrennt.</param>
     /// <param name="Hydriert">Ob der Inhalt gerade lokal liegt.</param>
-    public sealed record CacheEintrag(string Name, long Size, bool IsDirectory, bool Hydriert);
+    public sealed record CacheEintrag(string Name, long Size, bool Hydriert);
 
     /// <summary>
     /// Was von dieser Freigabe auf das Limit ihres Datentraegers zaehlt.
@@ -466,10 +466,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         lock (_indexGate)
             foreach (var (name, size, _, isDirectory, _) in _index.EnumerateLight())
             {
-                if (name.Length == 0 || IsHousekeeping(name)) continue;
-                if (!isDirectory && !ZaehltZumCache(name)) continue;
+                // Nur Dateien. Ein Verzeichnis haelt keinen Inhalt und zaehlt
+                // auf kein Limit; der Baum entsteht ohnehin aus den Pfaden.
+                // Mitgezaehlt liess es eine Freigabe ohne einen einzigen
+                // freigegebenen Inhalt als leeren Zweig im Baum stehen.
+                if (isDirectory || name.Length == 0 || IsHousekeeping(name)) continue;
+                if (!ZaehltZumCache(name)) continue;
 
-                liste.Add(new CacheEintrag(name, size, isDirectory, HatInhalt(name)));
+                liste.Add(new CacheEintrag(name, size, HatInhalt(name)));
             }
 
         return liste;

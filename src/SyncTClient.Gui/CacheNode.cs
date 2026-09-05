@@ -174,9 +174,7 @@ public sealed class CacheNode(string name, string path, CacheNode? parent) : INo
             return neu;
         }
 
-        foreach (var eintrag in eintraege
-                     .Where(e => !e.IsDirectory)
-                     .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var eintrag in eintraege.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
         {
             var schnitt = eintrag.Name.LastIndexOf('/');
             var eltern = Verzeichnis(schnitt < 0 ? "" : eintrag.Name[..schnitt]);
