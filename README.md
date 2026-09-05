@@ -1,6 +1,6 @@
 **English** · [Deutsch](README.de.md)
 
-<img src="docs/logo.png" alt="SyncTClient" width="110" align="right">
+<img src="docs/logo.png" alt="SyncTClient" width="110" height="110" align="right">
 
 # SyncTClient
 
@@ -35,7 +35,7 @@ read at the same time.
 > Full text: [Terms of Use](setup/EULA.en.txt) · the installer shows the German
 > version, which must be accepted before installing.
 
-![The SyncTClient main window](docs/interface.png)
+<img src="docs/interface.png" alt="The SyncTClient main window" width="1266" height="813">
 
 *Shares with status, progress, backlog and throughput. The unfolded share
 shows what the peers carry, what is held locally, and what has gone over the
@@ -93,7 +93,7 @@ work around, but something to build on.
 
 #### When a file may become a placeholder
 
-![The placeholder threshold setting](docs/placeholder-threshold.png)
+<img src="docs/placeholder-threshold.png" alt="The placeholder threshold setting" width="647" height="128">
 
 Discarding a file's content is the one operation here that can lose data, so it
 is the one hedged the most. Content is never dropped just because a cache is
@@ -183,7 +183,7 @@ known one. The placeholder stays a placeholder throughout.
   the request goes out unauthenticated, and it carries nothing about the
   machine. A notice appears above the toolbar with a link to the download page
 
-![Subtree selection](docs/directory-select.png)
+<img src="docs/directory-select.png" alt="Subtree selection" width="746" height="633">
 
 *Subtree selection: which branches live on this device. Every node carries its
 file count and size, so the choice is made against numbers rather than guesses.*
@@ -199,7 +199,7 @@ again on request.
 
 ### SmartScreen will warn you
 
-![The Microsoft Defender SmartScreen warning](docs/smartscreen.png)
+<img src="docs/smartscreen.png" alt="The Microsoft Defender SmartScreen warning" width="531" height="497">
 
 When you start the installer, Microsoft Defender SmartScreen says "Windows
 protected your PC" and reports the publisher as unknown. There are two reasons
