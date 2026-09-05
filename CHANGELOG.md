@@ -8,6 +8,30 @@ and are therefore in German.*
 
 <!-- Neue Fassungen fügt tools/Veroeffentlichen.ps1 unter dieser Zeile ein. -->
 
+## 0.9.2 -- 2026-09-05
+
+- "Die Ursache des Fehlers konnte nicht ermittelt werden"
+- Nachsehen auch bei jedem Programmstart
+- Ein Blick nach einer neueren Fassung, und sonst nichts
+- Die Grenzen des Datentraegers stehen jetzt bei den Platzhaltern
+- Die Platzhalter-Schwelle, ausfuehrlich
+- Die Wahl des Installationsortes, und ein Doppelklick zum Veroeffentlichen
+- Was SmartScreen meldet, und warum
+- Die Einstellungen sagen jetzt, welche Fassung hier laeuft
+- Zwei Bildschirmfotos in den README
+- Das Programmsymbol im Installer und in den README
+- Ein Changelog, das sich selbst fortschreibt
+- Haftungsausschluss, unuebersehbar und zu bestaetigen
+- Angaben ueber fremde Geraete und die eigene Gegenstelle
+- Englisch als Vorgabe, Deutsch daneben
+- Die README beschrieb einen Client, den es so nicht mehr gibt
+- Zwei erwartete Fehlschlaege brachen das Werkzeug ab
+- Das Werkzeug zerlegte die Umlaute in der Fassungsdatei
+- Fassung 0.9.1
+- Lizenz und README in den Quelltext
+- Der Quelltext geht mit nach GitHub
+
+
 ## 0.9.1 — 2026-09-05
 
 Erste veröffentlichte Fassung.
