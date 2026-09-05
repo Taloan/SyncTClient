@@ -4,6 +4,13 @@
 
   <s:String x:Key="S.Cancel">Cancel</s:String>
   <s:String x:Key="S.Close">Close</s:String>
+  <s:String x:Key="S.Apply">Apply</s:String>
+  <s:String x:Key="S.Vol.Title">Volume</s:String>
+  <s:String x:Key="S.Vol.For">Placeholders on {0}</s:String>
+  <s:String x:Key="S.Vol.BoxHint">Ticked: the content is here and stays.&#10;Not ticked: placeholder — the content counts toward the cache and is evicted once the space is needed.</s:String>
+  <s:String x:Key="S.Vol.Empty">No placeholder is kept on this volume.</s:String>
+  <s:String x:Key="M.VolumeWorking">Changing {0} branches ...</s:String>
+  <s:String x:Key="M.VolumeDone">{0} files ({1}) changed.</s:String>
   <s:String x:Key="S.Save">Save</s:String>
   <s:String x:Key="S.Add">Add</s:String>
   <s:String x:Key="S.Edit">Edit</s:String>
