@@ -113,8 +113,27 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
+    <!-- ===================== Kopf ===================== -->
+    <StackPanel Grid.Row="0">
+
+    <!-- Der Hinweis auf eine neuere Fassung. Er steht ueber der Leiste, weil
+         er selten kommt und dann gesehen werden soll; weggeklickt gilt er
+         fuer diese Fassung als erledigt. Geladen wird hier nichts: der
+         Verweis fuehrt auf die Seite, auf der der Download liegt. -->
+    <Border x:Name="UpdateBar" Visibility="Collapsed" Margin="10,8,10,0" Padding="10,6"
+            Background="{DynamicResource Feld}" BorderBrush="{DynamicResource Ein}" BorderThickness="1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{DynamicResource S.Update.Later}"
+                Padding="10,2" Margin="8,0,0,0" Click="OnUpdateLater" />
+        <Button DockPanel.Dock="Right" Content="{DynamicResource S.Update.Open}"
+                Padding="10,2" Click="OnUpdateOpen" />
+        <TextBlock x:Name="UpdateText" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Foreground="{DynamicResource Text}" />
+      </DockPanel>
+    </Border>
+
     <!-- ===================== Werkzeugleiste ===================== -->
-    <DockPanel Grid.Row="0" Margin="10,8,10,8">
+    <DockPanel Margin="10,8,10,8">
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Device}" Click="OnShowDevice" Margin="0" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Peers}" Click="OnManagePeers" />
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Main.Settings}" Click="OnShowProgramSettings" />
@@ -133,6 +152,7 @@
       <TextBlock VerticalAlignment="Center" Foreground="{DynamicResource Gedaempft}"
                  Text="{DynamicResource S.Main.MenuHint}" />
     </DockPanel>
+    </StackPanel>
 
     <!-- ===================== Freigaben ===================== -->
     <DataGrid x:Name="ShareGrid" Grid.Row="1" Margin="10,0,10,0"

@@ -99,6 +99,9 @@ public partial class MainWindow : Window
     /// <summary>Stellt die Ordnermarkierung wieder her. Meist abgeblendet.</summary>
     private MenuItem _menuMarker = new();
 
+    /// <summary>Die neuere Fassung, falls eine vorliegt.</summary>
+    private NeuereFassung? _neuereFassung;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -325,6 +328,9 @@ public partial class MainWindow : Window
         }
 
         AppendLog($"Sync-Wurzeln geprueft in {uhr.ElapsedMilliseconds} ms.");
+
+        // Nebenher, und ohne dass irgendetwas darauf wartet.
+        _ = NachFassungSehenAsync();
 
         // Die Oberflaeche ist zugleich der Sync-Dienst. Wer sie oeffnet, will
         // in aller Regel, dass der Abgleich laeuft.
@@ -2722,6 +2728,84 @@ public partial class MainWindow : Window
     {
         try { _config.Save(_configPath); }
         catch (Exception ex) { Status(App.S("M.SaveFailed", ex.Message)); }
+    }
+
+    // ------------------------------------------------------------ Fassung
+
+    /// <summary>Die Fassung, die gerade laeuft.</summary>
+    private static Version EigeneFassung()
+    {
+        var roh = System.Reflection.Assembly.GetEntryAssembly()?
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+
+        return UpdateCheck.Lesen(roh)
+            ?? UpdateCheck.Normal(System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0));
+    }
+
+    /// <summary>
+    /// Sieht nach, ob eine neuere Fassung vorliegt, und weist darauf hin.
+    /// </summary>
+    /// <remarks>
+    /// Nur nachsehen. Geladen und ausgefuehrt wird nichts -- warum, steht bei
+    /// <see cref="UpdateCheck"/>.
+    ///
+    /// Ein Fehlschlag bleibt stumm: kein Netz, GitHub nicht erreichbar. Wer
+    /// deswegen eine Meldung bekaeme, haette eine Meldung ueber etwas, das er
+    /// nicht wollte.
+    /// </remarks>
+    private async Task NachFassungSehenAsync()
+    {
+        if (!UpdateCheck.Faellig(_config.UpdateCheck, _config.LastUpdateCheck)) return;
+
+        var neuer = await UpdateCheck.AbfragenAsync(EigeneFassung());
+
+        // Auch ein erfolgloser Blick zaehlt. Sonst fragt ein Rechner ohne Netz
+        // bei jedem Start erneut.
+        _config.LastUpdateCheck = DateTimeOffset.Now;
+        Persist();
+
+        if (neuer is null) return;
+        if (UpdateCheck.Lesen(_config.DismissedVersion) is { } weg && weg >= neuer.Version) return;
+
+        _neuereFassung = neuer;
+        UpdateText.Text = App.S("M.UpdateAvailable", neuer.Version.ToString(), EigeneFassung().ToString());
+        UpdateBar.Visibility = Visibility.Visible;
+
+        AppendLog(App.S("M.UpdateAvailable", neuer.Version.ToString(), EigeneFassung().ToString()));
+    }
+
+    /// <summary>Oeffnet die Seite, auf der der Download liegt.</summary>
+    private void OnUpdateOpen(object sender, RoutedEventArgs e)
+    {
+        var ziel = _neuereFassung?.Seite ?? UpdateCheck.Seite;
+
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(ziel) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            Status(App.S("M.OpenFailed", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Nimmt den Hinweis weg -- fuer diese Fassung.
+    /// </summary>
+    /// <remarks>
+    /// Vermerkt wird die Nummer, nicht ein Datum. Erscheint spaeter eine noch
+    /// neuere, wird wieder hingewiesen: weggeklickt wurde die eine, nicht das
+    /// Thema.
+    /// </remarks>
+    private void OnUpdateLater(object sender, RoutedEventArgs e)
+    {
+        if (_neuereFassung is { } neuer) _config.DismissedVersion = neuer.Version.ToString();
+
+        UpdateBar.Visibility = Visibility.Collapsed;
+        Persist();
     }
 
     private void Status(string message) => StatusBar.Text = message;
