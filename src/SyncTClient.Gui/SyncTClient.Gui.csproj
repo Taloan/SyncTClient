@@ -54,6 +54,11 @@
          Infobereich braucht 16 oder 32 Punkte, je nach Bildschirm. -->
     <Resource Include="SyncTClient.ico" />
 
+    <!-- Das Programmsymbol im Kopf der Einstellungen. Nicht stc2.png:
+         das hat 1254 Pixel Kante und wuerde die Anwendung um 1,1 MB
+         schwerer machen, um 48 davon anzuzeigen. -->
+    <Resource Include="Logo.png" />
+
     <!-- Je Zustand ein gezeichnetes Symbol. Erzeugt von tools/make-icon.ps1
          aus den stc2-*.png-Vorlagen. -->
     <Resource Include="Status-Ok.ico" />

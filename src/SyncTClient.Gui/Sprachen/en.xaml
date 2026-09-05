@@ -124,6 +124,9 @@
   <s:String x:Key="S.Accept.Hint">Branches you leave unchecked are not created. They use no disk space and are not listed in the index.</s:String>
 
   <s:String x:Key="S.Settings.Title">Settings</s:String>
+  <s:String x:Key="S.Settings.VersionBuild">Version {0} · built {1}</s:String>
+  <s:String x:Key="S.Settings.Version">Version {0}</s:String>
+  <s:String x:Key="S.Settings.HomeTip">Open the source code and releases in the browser</s:String>
   <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
   <s:String x:Key="S.Settings.CacheDir">Cache directory</s:String>
   <s:String x:Key="S.Settings.CacheDirHint">This directory holds the shares themselves. Windows fills the placeholders in place; when the space is freed again, the placeholder remains. Not everything in here is cache: pinned files and shares in “keep fully local” mode are kept. New shares are created here, ones already connected stay where they are.</s:String>

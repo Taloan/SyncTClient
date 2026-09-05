@@ -116,6 +116,9 @@
   <s:String x:Key="S.Accept.TreeQuestion">Was soll übernommen werden?</s:String>
   <s:String x:Key="S.Accept.Hint">Nicht ausgewählte Zweige werden nicht angelegt. Sie belegen keinen Speicherplatz und stehen nicht im Index.</s:String>
   <s:String x:Key="S.Settings.Title">Einstellungen</s:String>
+  <s:String x:Key="S.Settings.VersionBuild">Fassung {0} · erstellt am {1}</s:String>
+  <s:String x:Key="S.Settings.Version">Fassung {0}</s:String>
+  <s:String x:Key="S.Settings.HomeTip">Quelltext und Freigaben im Browser öffnen</s:String>
   <s:String x:Key="S.Settings.CacheGroup">CACHE</s:String>
   <s:String x:Key="S.Settings.CacheDir">Cache-Verzeichnis</s:String>
   <s:String x:Key="S.Settings.CacheDirHint">In diesem Verzeichnis liegen die Shares selbst. Windows füllt die Platzhalter an Ort und Stelle; wird der Speicherplatz wieder freigegeben, bleibt der Platzhalter zurück. Nicht alles darin ist Cache: angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalten. Neue Shares werden hier angelegt, bereits verbundene bleiben, wo sie sind.</s:String>
