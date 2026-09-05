@@ -38,3 +38,8 @@ src/SyncTClient.ExplorerProvider/obj/
 # Der Name des GitHub-Verzeichnisses. Er gehoert diesem Rechner und nicht
 # dem Quelltext -- wer die Mappe klont, veroeffentlicht woandershin.
 /tools/veroeffentlichung.json
+
+# Startprofile von Visual Studio. Sie tragen die Adresse und die Geraete-ID
+# der Gegenstelle, mit der hier entwickelt wird -- Angaben ueber ein fremdes
+# Geraet, die in keine Veroeffentlichung gehoeren.
+**/Properties/launchSettings.json
