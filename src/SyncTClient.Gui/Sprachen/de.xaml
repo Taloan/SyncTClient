@@ -9,6 +9,7 @@
   <s:String x:Key="S.Vol.For">Platzhalter auf {0}</s:String>
   <s:String x:Key="S.Vol.BoxHint">Angekreuzt: der Inhalt liegt hier und bleibt.&#10;Nicht angekreuzt: Platzhalter — der Inhalt zählt zum Cache und wird verdrängt, sobald der Platz gebraucht wird.</s:String>
   <s:String x:Key="S.Vol.Empty">Auf diesem Datenträger wird kein Platzhalter geführt.</s:String>
+  <s:String x:Key="S.Vol.Loading">Der Bestand wird zusammengestellt …</s:String>
   <s:String x:Key="M.VolumeWorking">{0} Zweige werden umgestellt ...</s:String>
   <s:String x:Key="M.VolumeDone">{0} Dateien ({1}) umgestellt.</s:String>
   <s:String x:Key="S.Save">Speichern</s:String>
