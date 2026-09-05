@@ -792,9 +792,26 @@ public sealed partial class ShareHost
     {
         _modus[name] = lokal;
 
+        // Und alles darunter faellt weg. Wer einen Ordner setzt, meint den
+        // Zweig; ein Vermerk an einer Datei darin wiegt schwerer und haette
+        // die Entscheidung sonst ueberstimmt.
+        //
+        // Genau das ist passiert: der Abgleich hatte zwei angeheftete Dateien
+        // als "immer lokal" uebernommen, danach wurde ihr Ordner freigegeben
+        // -- und es aenderte sich nichts.
+        var praefix = name + "/";
+
+        foreach (var unten in _modus.Keys)
+            if (unten.StartsWith(praefix, StringComparison.OrdinalIgnoreCase))
+                _modus.TryRemove(unten, out _);
+
         try
         {
-            lock (_indexGate) _index?.SetMode(name, lokal);
+            lock (_indexGate)
+            {
+                _index?.SetMode(name, lokal);
+                _index?.ClearModesBelow(name);
+            }
         }
         catch (Exception ex)
         {
