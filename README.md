@@ -91,6 +91,49 @@ work around, but something to build on.
 - The hourly scan reconciles the pin attributes in the filesystem with the
   database — whatever was changed in the file manager applies here afterwards
 
+#### When a file may become a placeholder
+
+![The placeholder threshold setting](docs/placeholder-threshold.png)
+
+Discarding a file's content is the one operation here that can lose data, so it
+is the one hedged the most. Content is never dropped just because a cache is
+full. It is dropped only once the file has been *proven* recoverable.
+
+The threshold sets the number: how many other nodes must carry the file **in
+full** before its bytes may go here. The default of 1 is the normal case against
+a single server. Set 2 if you do not want your files depending on one other
+device. Below 1 is not allowed — the last copy in the network must not be able
+to disappear.
+
+Counting is strict. A peer that merely *knows* the file does not count: its
+index entry has to carry a block list and a size greater than zero. Syncthing
+announces without a block list whenever it does not hold the content, so an
+honest count falls out of the protocol itself.
+
+And the threshold is a necessary condition, not a sufficient one. Every one of
+these has to hold before a single byte goes:
+
+| Condition | Why |
+|---|---|
+| enough peers carry it in full | the threshold itself |
+| they carry **this** version | compared by version vector, not by timestamp. A timestamp says which change happened later, not whether one side knew about the other. Get this wrong and the placeholder fetches the older version on next access — silently, because what stays behind is a valid file, just the wrong one |
+| the announcement matches this content | the name proves nothing on its own. A peer may well hold a different file under the same name, and a local change nobody has seen yet would be deleted for it |
+| the blocks match | computed, not assumed |
+| the announcement is old enough | BEP never tells a sender that the receiver has finished. Worse: the peer echoes our own announcement, block list included, long before it fetches a byte. Treating that as proof of possession deletes the file before it arrives anywhere, so the client waits instead |
+| the file is not pinned and not *always local* | an explicit instruction outranks a cache limit |
+| the file is neither open nor locally modified | Windows refuses it anyway; checking makes the pending change visible instead of letting it fail silently |
+
+This applies to every path that discards content: the context menu, the volume
+tree, the automatic eviction when a volume runs into its limit, and the button
+that empties the cache. *Free up space* is a request, not an authority. What
+gets evicted first when a limit is reached is whatever went longest untouched.
+
+One exception, for empty files: a file of zero bytes never reaches the threshold,
+because the count demands blocks and it has none. It is released when it is
+empty here **and** empty on the peer — and its own size decides that, not the
+announced one, because a peer reports size zero for a large file it merely knows
+about as well.
+
 ### Transfer
 
 - BEP in C#: framing, Hello, device ID, index, block-wise fetch, LZ4
