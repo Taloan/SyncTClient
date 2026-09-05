@@ -346,7 +346,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="M.ShellRemoved">Entries removed. Explorer picks this up after a restart.</s:String>
   <s:String x:Key="M.ShellOutdated">The registered file differs from the shipped one. Registering brings them back together.</s:String>
   <s:String x:Key="M.ShellRestartAsk">Explorer reads these entries at startup. For the change to take effect, it has to be restarted.&#10;&#10;Open Explorer windows will close. The desktop returns on its own.&#10;&#10;Restart now? No means: later, yourself.</s:String>
-  <s:String x:Key="M.ShellMissing">The thumbnail DLL “synctthumbs.dll” is not next to the program. Without it there are neither thumbnails nor a context menu. It belongs in the same folder as SyncTClient.exe; the settings show what is registered.</s:String>
+  <s:String x:Key="M.ShellMissing">The thumbnail DLL “synctexplorer.dll” is not next to the program. Without it there are neither thumbnails nor a context menu. It belongs in the same folder as SyncTClient.exe; the settings show what is registered.</s:String>
   <s:String x:Key="M.ShellStale">The registered thumbnail DLL differs from the shipped one. The settings can put this right.</s:String>
   <s:String x:Key="G.ThresholdInvalid">The placeholder threshold must be at least 1.</s:String>
   <s:String x:Key="M.VolumeLine">Drive {0}   {1} in {2} files   |   {3} free</s:String>

@@ -743,7 +743,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void EinbindungPruefen()
     {
-        var zustand = ThumbnailProviderRegistration.Nachsehen();
+        var zustand = ExplorerRegistration.Nachsehen();
 
         if (zustand.Mitgeliefert.Pfad is null) AppendLog(App.S("M.ShellMissing"));
         else if (zustand.Veraltet && zustand.ClassRegistered) AppendLog(App.S("M.ShellStale"));

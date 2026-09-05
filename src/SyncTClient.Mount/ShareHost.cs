@@ -2118,7 +2118,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             lock (Laufende)
             {
                 if (!Laufende.Contains(this)) Laufende.Add(this);
-                ThumbnailProviderRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath));
+                ExplorerRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath));
             }
         }
         catch (Exception ex)
@@ -2137,7 +2137,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         try
         {
-            ThumbnailProviderRegistration.RegisterStore(_thumbnails.Directory);
+            ExplorerRegistration.RegisterStore(_thumbnails.Directory);
 
             // Die DLL ist die Zugabe, nicht die Bedingung. Bedient wird die
             // Shell von der Klasse, die der laufende Client anmeldet -- frueher
@@ -2145,13 +2145,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // auch der Eintrag am Sync-Root und der Erzeuger selbst weg. In
             // einer veroeffentlichten Version waeren so gar keine Vorschauen
             // entstanden.
-            if (ThumbnailProviderRegistration.FindLibrary() is { } library)
+            if (ExplorerRegistration.FindLibrary() is { } library)
             {
-                ThumbnailProviderRegistration.RegisterClass(library);
-                ThumbnailProviderRegistration.RegisterMenu(library);
+                ExplorerRegistration.RegisterClass(library);
+                ExplorerRegistration.RegisterMenu(library);
             }
 
-            if (!ThumbnailProviderRegistration.AttachToSyncRoot(_syncRootId))
+            if (!ExplorerRegistration.AttachToSyncRoot(_syncRootId))
                 _log($"[{FolderId}] Vorschau-Erweiterung liess sich nicht am Sync-Root eintragen.");
 
             // Zusaetzlich zur Eintragung in der Registrierung. Solange der
@@ -3928,10 +3928,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 // Sonst bliebe der Ordner in der Liste stehen, und die
                 // Erweiterung boete Eintraege zu einer Freigabe an, die es
                 // nicht mehr gibt.
-                try { ThumbnailProviderRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath)); }
+                try { ExplorerRegistration.PublishShares(Laufende.Select(s => s._config.LocalPath)); }
                 catch (Exception ex) { _log($"[{FolderId}] Liste der Freigaben: {ex.Message}"); }
             }
-            ThumbnailProviderRegistration.DetachFromSyncRoot(_syncRootId);
+            ExplorerRegistration.DetachFromSyncRoot(_syncRootId);
 
             // Die Wurzel bleibt angemeldet, solange auch nur ein Platzhalter
             // steht. Eine angemeldete Wurzel ohne laufenden Anbieter ist

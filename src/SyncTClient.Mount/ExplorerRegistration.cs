@@ -16,7 +16,7 @@ namespace SyncTClient.Mount;
 /// Schlüssel, den die Sync-Root-Registrierung dem Benutzer ueberlassen hat.
 /// Adminrechte werden nicht benoetigt.
 /// </remarks>
-public static class ThumbnailProviderRegistration
+public static class ExplorerRegistration
 {
     /// <summary>Muss mit Exports.ClassId in der Erweiterung uebereinstimmen.</summary>
     public const string ClassId = "{7E4B2A61-3C9D-4F58-9A17-6D2E5B84C013}";
@@ -40,7 +40,7 @@ public static class ThumbnailProviderRegistration
     /// <summary>Sucht die native DLL an den Stellen, an denen sie liegen kann.</summary>
     public static string? FindLibrary()
     {
-        var beside = Path.Combine(AppContext.BaseDirectory, "synctthumbs.dll");
+        var beside = Path.Combine(AppContext.BaseDirectory, "synctexplorer.dll");
         if (File.Exists(beside)) return beside;
 
         // Im Entwicklungsbaum liegt sie im Publish-Ordner ihres eigenen
@@ -59,7 +59,7 @@ public static class ThumbnailProviderRegistration
             foreach (var variant in variants)
             {
                 var candidate = Path.Combine(
-                    [directory.FullName, "src", "SyncTClient.ThumbProvider", .. variant, "synctthumbs.dll"]);
+                    [directory.FullName, "src", "SyncTClient.ExplorerProvider", .. variant, "synctexplorer.dll"]);
 
                 // Beide Varianten koennen nebeneinander liegen. Die aeltere
                 // waere eine schwer zu findende Fehlerquelle.
@@ -172,8 +172,8 @@ public static class ThumbnailProviderRegistration
         for (var i = 0; i < 8 && verzeichnis is not null; i++, verzeichnis = verzeichnis.Parent)
         {
             var kandidat = Path.Combine(
-                verzeichnis.FullName, "src", "SyncTClient.ThumbProvider",
-                "SyncTClient.ThumbProvider.csproj");
+                verzeichnis.FullName, "src", "SyncTClient.ExplorerProvider",
+                "SyncTClient.ExplorerProvider.csproj");
 
             if (File.Exists(kandidat)) return kandidat;
         }

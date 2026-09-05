@@ -13,8 +13,8 @@
     <PublishAot>true</PublishAot>
     <NativeLib>Shared</NativeLib>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <AssemblyName>synctthumbs</AssemblyName>
-    <RootNamespace>SyncTClient.ThumbProvider</RootNamespace>
+    <AssemblyName>synctexplorer</AssemblyName>
+    <RootNamespace>SyncTClient.ExplorerProvider</RootNamespace>
     <Platforms>x64</Platforms>
     <EnableComHosting>false</EnableComHosting>
   </PropertyGroup>

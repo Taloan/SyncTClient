@@ -4,7 +4,7 @@ using System.Runtime.InteropServices.Marshalling;
 using System.Text;
 using Microsoft.Win32;
 
-namespace SyncTClient.ThumbProvider;
+namespace SyncTClient.ExplorerProvider;
 
 // Auch diese Klasse laedt der Explorer in seinen eigenen Prozess. Sie haelt
 // sich deshalb an dieselbe Regel wie der Vorschau-Erzeuger: nichts rechnen,
