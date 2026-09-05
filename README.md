@@ -190,6 +190,7 @@ dotnet run --project src/SyncTClient.Probe -- --addr 192.168.1.42:22000 --target
 ## Status
 
 Version 0.9.1. The client is in daily use against Syncthing v2.
+Every change is listed in the [changelog](CHANGELOG.md) (German).
 
 One thing is still open: consolidating the two paths by which content arrives
 for "always local". Pinning makes Windows request the content, while the
