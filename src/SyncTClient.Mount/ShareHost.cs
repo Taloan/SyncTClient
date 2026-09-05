@@ -3159,7 +3159,20 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                     // first out: zuerst weicht, was am laengsten niemand
                     // angefasst hat, und das ist nicht diese hier.
                     _mount?.SetPinned(pfad, false);
-                    _cache?.NoteAccess(name);
+
+                    // Ausser sie ist allein schon groesser als das Limit des
+                    // Datentraegers. Dann kann sie dort nie bleiben: sie
+                    // aufzunehmen hiesse, jede andere Datei des
+                    // Datentraegers dafuer weichen zu lassen, und danach
+                    // wuerde sie selbst verdraengt. Der Inhalt geht deshalb
+                    // sofort ab -- mit demselben Beweis wie sonst auch, dass
+                    // die Gegenstelle dieselben Bytes haelt.
+                    var grenze = _cache?.MaxBytes ?? 0;
+
+                    if (grenze > 0 && new FileInfo(pfad).Length > grenze)
+                        _cache?.Evict(name, "groesser als das Limit des Datentraegers");
+                    else
+                        _cache?.NoteAccess(name);
                 }
 
                 anzahl++;
@@ -3170,6 +3183,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 _log($"[{FolderId}] \"{name}\": {ex.Message}");
             }
         }
+
+        // Was zum Limit zaehlt, ist eben ein anderes geworden. Ohne diesen
+        // Anstoss antwortet der Cache noch aus seiner letzten Zaehlung.
+        _cache?.Nachzaehlen();
 
         if (!keep) _cache?.Persist();
         CacheChanged?.Invoke();
@@ -3504,9 +3521,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public string Stats()
         => _cache is null
             ? $"[{FolderId}] noch nicht bereit"
+            // Zwei Zahlen, weil es zwei sind: was hier liegt, und was davon
+            // auf das Limit des Datentraegers zaehlt. Nur die erste zu nennen
+            // und sie gegen das Limit zu stellen las sich, als sei das Limit
+            // um das Fuenffache ueberschritten.
             : $"[{FolderId}] {_cache.FileCount} Dateien lokal, " +
               $"{_cache.UsedBytes / (1024.0 * 1024.0):0.0} MB" +
-              (_cache.MaxBytes > 0 ? $" von {_cache.MaxBytes / (1024.0 * 1024.0):0.0} MB" : "");
+              (_cache.MaxBytes > 0
+                  ? $"; davon {_cache.LimitBytes / (1024.0 * 1024.0):0.0} MB auf das Limit von " +
+                    $"{_cache.MaxBytes / (1024.0 * 1024.0):0.0} MB"
+                  : "");
 
     // ------------------------------------------------------------ IContentSource
 
