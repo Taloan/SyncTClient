@@ -544,6 +544,11 @@ public sealed partial class ShareHost
         // die Datei, und das gehoert nicht in eine Aufzaehlung.
         var zuRichten = new List<(string Pfad, bool Lokal)>();
 
+        // Und was aus dem Dateisystem zu uebernehmen ist. Gesammelt, nicht
+        // einzeln geschrieben: beim ersten Durchgang nach dieser Fassung sind
+        // das alle Dateien, die jemals angeheftet wurden.
+        var zuUebernehmen = new List<(string Name, bool Lokal)>();
+
         try
         {
             // Verzeichnisse gehoeren ebenso zur Freigabe. Sie tragen keinen
@@ -585,7 +590,7 @@ public sealed partial class ShareHost
 
                 if (vermerk is null)
                 {
-                    if (angeheftet) ModusMerken(name, lokal: true);
+                    if (angeheftet) zuUebernehmen.Add((name, true));
                 }
                 else if (vermerk.Value != angeheftet)
                 {
@@ -616,6 +621,23 @@ public sealed partial class ShareHost
             // und damit auch das Ausliefern von Dateien zu beenden.
             _log($"[{FolderId}] der Durchgang ueber \"{root}\" brach ab: {Herkunft(ex)}");
             return;
+        }
+
+        if (zuUebernehmen.Count > 0)
+        {
+            foreach (var (name, lokal) in zuUebernehmen) _modus[name] = lokal;
+
+            try
+            {
+                lock (_indexGate) _index?.SetModes(zuUebernehmen);
+            }
+            catch (Exception ex)
+            {
+                _log($"[{FolderId}] Modi schreiben: {Herkunft(ex)}");
+            }
+
+            _log($"[{FolderId}] {zuUebernehmen.Count} angeheftete Dateien als " +
+                 "\"immer lokal\" uebernommen.");
         }
 
         // Erst jetzt, ausserhalb der Aufzaehlung.

@@ -762,6 +762,42 @@ public sealed class PersistentFolderIndex : IDisposable
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Vermerkt viele Modi auf einmal.
+    /// </summary>
+    /// <remarks>
+    /// In einer Transaktion. Der Abgleich beim ersten Durchgang uebernimmt
+    /// jede angeheftete Datei, die noch keinen Vermerk hat -- in einer
+    /// Freigabe waren das siebentausend. Einzeln geschrieben ist das
+    /// siebentausend Mal Sperre, Schreibvorgang und Journal.
+    /// </remarks>
+    public void SetModes(IReadOnlyCollection<(string Name, bool Lokal)> eintraege)
+    {
+        if (eintraege.Count == 0) return;
+
+        using var gate = _gate.EnterScope();
+        using var transaktion = _db.BeginTransaction();
+        using var command = _db.CreateCommand();
+
+        command.Transaction = transaktion;
+        command.CommandText = """
+            INSERT INTO modus (name, lokal) VALUES ($name, $lokal)
+            ON CONFLICT(name) DO UPDATE SET lokal = excluded.lokal
+            """;
+
+        var name = command.Parameters.Add("$name", Microsoft.Data.Sqlite.SqliteType.Text);
+        var lokal = command.Parameters.Add("$lokal", Microsoft.Data.Sqlite.SqliteType.Integer);
+
+        foreach (var eintrag in eintraege)
+        {
+            name.Value = eintrag.Name;
+            lokal.Value = eintrag.Lokal ? 1 : 0;
+            command.ExecuteNonQuery();
+        }
+
+        transaktion.Commit();
+    }
+
     /// <summary>Nimmt den Vermerk zurueck; danach gilt wieder die Betriebsart.</summary>
     public void ClearMode(string name)
     {
