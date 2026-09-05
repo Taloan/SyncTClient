@@ -53,3 +53,18 @@ Dasselbe gilt für jeden weiteren Namen aus einer Schnittstelle: `CfExecute`,
 `CF_CALLBACK_TYPE_FETCH_DATA`, Statuswerte wie `0x80070020`. Im Protokoll steht,
 was geschehen ist, nicht wie die Funktion heißt, die es gemeldet hat. Ein
 Fehlercode darf dabeistehen, wenn er beim Nachsehen hilft — aber nie allein.
+
+## Fertig heißt fertig
+
+Eine Aufgabe wird zu Ende gebaut. Keine Rückfrage „soll ich weitermachen?"
+mitten in einer Sache, die erkennbar noch nicht fertig ist, und keine
+Aufforderung, zwischendurch etwas auszuprobieren.
+
+Gefragt wird nur, wenn zwei Wege zu verschiedenen Programmen führen und die
+Entscheidung nicht aus der Aufgabe hervorgeht. Alles andere wird entschieden,
+gebaut, übersetzt und am Ende in einem Stück berichtet — mit den getroffenen
+Annahmen, falls welche nötig waren.
+
+Der Grund: wer die Aufgabe gestellt hat, geht vom Rechner weg und erwartet ein
+Ergebnis. Eine Rückfrage nach halbem Weg kostet die ganze Zeit dazwischen, und
+gelesen wird sie erst Stunden später.
