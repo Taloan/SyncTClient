@@ -169,14 +169,23 @@ public sealed class CacheLimits
     /// kostet Übertragung ohne Ergebnis. Stattdessen wird vorher abgesagt und
     /// der Grund genannt.
     /// </remarks>
-    public Limit CanHold(long bytes, string targetPath)
+    /// <param name="zaehltZumCache">
+    /// Ob der Inhalt dieser Datei auf das Verbrauchs Limit angerechnet wird.
+    /// Eine Datei, die "immer lokal" ist, tut das nicht -- fuer sie gilt nur,
+    /// ob auf dem Datentraeger genug frei bleibt.
+    /// </param>
+    public Limit CanHold(long bytes, string targetPath, bool zaehltZumCache = true)
     {
         var root = RootOf(targetPath);
         var grenzen = _limits(root);
 
-        // Eine Datei, die allein schon größer ist als das Limit, kann nie
-        // bleiben. Daran ändert auch Freigeben nichts.
-        if (grenzen.MaxBytes > 0 && bytes > grenzen.MaxBytes) return Limit.Usage;
+        // Eine Datei, die allein schon größer ist als das Limit, kann im Cache
+        // nie bleiben. Daran ändert auch Freigeben nichts.
+        //
+        // Fuer eine Datei, die gar nicht auf das Limit zaehlt, ist die Frage
+        // gegenstandslos. Sie deswegen abzulehnen hiess, die Zusage "immer
+        // lokal" an einer Zahl scheitern zu lassen, die sie nicht betrifft.
+        if (zaehltZumCache && grenzen.MaxBytes > 0 && bytes > grenzen.MaxBytes) return Limit.Usage;
         if (grenzen.MinimumFreeBytes <= 0) return Limit.None;
 
         var free = FreeBytesOn(targetPath);
