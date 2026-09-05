@@ -709,7 +709,11 @@
             <ItemsControl x:Name="CacheList">
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <Grid Margin="0,0,10,4" ToolTip="{Binding Tip}">
+                  <!-- Die ganze Zeile ist die Schaltflaeche. Der durchsichtige
+                       Hintergrund ist noetig, damit auch die Luecken zwischen
+                       Beschriftung und Balken den Klick annehmen. -->
+                  <Grid Margin="0,0,10,4" ToolTip="{Binding Tip}" Background="Transparent"
+                        Cursor="Hand" MouseLeftButtonUp="OnVolumeClick">
                     <Grid.ColumnDefinitions>
                       <ColumnDefinition Width="Auto" />
                       <ColumnDefinition Width="*" MinWidth="40" />

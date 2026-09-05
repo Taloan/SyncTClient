@@ -3974,7 +3974,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _log($"[{FolderId}] Bindung geloest.");
     }
 
-    private string LocalPathOf(string relativePath)
+    /// <summary>Wo diese Datei liegt. Der Baum des Datentraegers fragt danach.</summary>
+    public string LocalPathOf(string relativePath)
         => Path.Combine(_config.LocalPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
 
     /// <summary>Wie oft der Index verdichtet wird.</summary>

@@ -1040,6 +1040,64 @@ public partial class MainWindow : Window
         CacheText.Visibility = volumes.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// Oeffnet den Baum eines Datentraegers.
+    /// </summary>
+    /// <remarks>
+    /// Die Zeile nennt nur die Summe. Welche Dateien das sind und welche davon
+    /// ihren Inhalt gerade hier halten, steht im Baum -- und dort laesst sich
+    /// je Verzeichnis oder je Datei entscheiden, was lokal liegen soll.
+    /// </remarks>
+    private async void OnVolumeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not CacheRow zeile) return;
+
+        // Alle Freigaben, die auf diesem Datentraeger liegen. Das Limit gilt
+        // je Datentraeger, also gehoeren sie in einen Baum.
+        var wurzel = Path.GetPathRoot(zeile.Drive + Path.DirectorySeparatorChar) ?? zeile.Drive;
+
+        var shares = _rows
+            .Where(r => r.Share is not null)
+            .Where(r => string.Equals(
+                Path.GetPathRoot(r.Share!.Config.LocalPath), wurzel, StringComparison.OrdinalIgnoreCase))
+            .Select(r => (Host: r.Share!, r.Name))
+            .ToList();
+
+        var fenster = new VolumeWindow(zeile.Drive, zeile.Text, shares) { Owner = this };
+        if (fenster.ShowDialog() != true || fenster.Auftraege.Count == 0) return;
+
+        Status(App.S("M.VolumeWorking", Format.Count(fenster.Auftraege.Count)));
+
+        // Im Hintergrund: das Anfordern der Inhalte geht ueber die Leitung,
+        // und der Baum kann ganze Zweige auf einmal betreffen.
+        await Task.Run(() =>
+        {
+            var dateien = 0;
+            long bytes = 0;
+
+            foreach (var gruppe in fenster.Auftraege.GroupBy(a => (a.Host, a.Lokal)))
+            {
+                var pfade = gruppe.Select(a => gruppe.Key.Host.LocalPathOf(a.Path)).ToList();
+
+                try
+                {
+                    var (n, b) = gruppe.Key.Host.SetLocal(pfade, gruppe.Key.Lokal);
+                    dateien += n;
+                    bytes += b;
+                }
+                catch (Exception ex)
+                {
+                    AppendLog($"[{gruppe.Key.Host.FolderId}] {ex.Message}");
+                }
+            }
+
+            Dispatcher.BeginInvoke(() =>
+                Status(App.S("M.VolumeDone", Format.Count(dateien), Format.Bytes(bytes))));
+        });
+
+        RefreshRows();
+    }
+
     private void UpdateThumbnails()
     {
         if (DateTime.UtcNow - _thumbsRead < TimeSpan.FromSeconds(5)) return;
