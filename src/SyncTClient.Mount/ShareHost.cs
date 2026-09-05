@@ -496,11 +496,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// Was von dieser Freigabe auf das Limit ihres Datentraegers zaehlt.
     /// </summary>
     /// <remarks>
-    /// Aufgezaehlt wird, was auf das Limit zaehlt -- bei "bei Bedarf" der
-    /// ganze Bestand, bei "vollstaendig lokal" das Freigegebene -- und dazu
-    /// alles, wofuer ein Modus vermerkt ist. Auch das Angeheftete: es zaehlt
-    /// zwar auf kein Limit, aber es ist eine Entscheidung, und wer sie
-    /// zuruecknehmen will, muss sie sehen.
+    /// Aufgezaehlt werden die Platzhalter: bei "bei Bedarf" der ganze
+    /// Bestand ausser dem Angehefteten, bei "vollstaendig lokal" das
+    /// Freigegebene. Das ist dieselbe Menge, die auf das Limit des
+    /// Datentraegers zaehlt.
+    ///
+    /// Angeheftetes gehoert nicht dazu. Die Uebersicht beantwortet die Frage
+    /// "was ist auf diesem Datentraeger Platzhalter"; wer dort auch das
+    /// Gegenteil auffuehrt, beantwortet sie nicht mehr.
     /// </remarks>
     public IReadOnlyList<CacheEintrag> CacheEintraege()
     {
@@ -517,12 +520,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 // freigegebenen Inhalt als leeren Zweig im Baum stehen.
                 if (isDirectory || name.Length == 0 || IsHousekeeping(name)) continue;
 
-                var modus = ModusVon(name);
-                if (modus is null && !ZaehltZumCache(name)) continue;
+                if (!ZaehltZumCache(name)) continue;
 
                 liste.Add(new CacheEintrag(
                     name, size, HatInhalt(name),
-                    modus ?? _config.Mode == ShareMode.AlwaysLocal));
+                    ModusVon(name) ?? _config.Mode == ShareMode.AlwaysLocal));
             }
 
         return liste;
