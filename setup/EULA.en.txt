@@ -1,0 +1,78 @@
+﻿SyncTClient — Terms of Use
+
+Please read this in full. By installing and using this software you agree to
+the terms below. If you do not agree, cancel the installation now.
+
+
+================================================================================
+
+    NO LIABILITY WHATSOEVER.  NO WARRANTY WHATSOEVER.
+    USE IS ENTIRELY AT YOUR OWN RISK.
+    FULL RESPONSIBILITY RESTS WITH THE USER ALONE.
+
+================================================================================
+
+
+1. NO WARRANTY
+
+This software is provided "AS IS", without warranty of any kind, express or
+implied. This expressly excludes any warranty of merchantability, fitness for a
+particular purpose, correctness, availability, data safety, and
+non-infringement of third-party rights.
+
+There is no assurance that the software works without faults, that it runs
+uninterrupted, that data is transferred completely or correctly, or that
+existing data remains unchanged.
+
+
+2. COMPLETE EXCLUSION OF LIABILITY
+
+Under no circumstances and on no legal basis shall the author be liable for any
+damages of any kind arising out of or connected with the installation, use,
+malfunction or unusability of this software.
+
+This applies without limitation to:
+
+  - loss, deletion, overwriting, corruption or alteration of data of any kind,
+    on this computer and on every other device exchanging data with it;
+  - leakage of data, unintended disclosure of data to peers, and any
+    consequence thereof;
+  - changes to operating system settings, to the registry, to the file manager
+    integration and to registered sync roots, including anything left behind
+    after an uninstall;
+  - failure or malfunction of hardware, operating system or other software;
+  - lost profit, business interruption, loss of working time, cost of network
+    traffic, cost of recovering data, and any other direct, indirect,
+    incidental, special or consequential damage.
+
+This applies even if the possibility of such damages was pointed out. Any and
+all claims for damages against the author are hereby expressly rejected.
+
+
+3. RESPONSIBILITY OF THE USER
+
+Use of this software is entirely at your own responsibility and your own risk.
+The user alone decides whether and for what purpose to use it, and the user
+alone bears the consequences.
+
+The user is solely responsible for complete and verified backups of their data
+before installing or using the software. This software transfers, replaces,
+evicts and deletes files. Never use it without an independent backup, and never
+as the only place where data lives whose loss you could not accept.
+
+
+4. SEVERABILITY
+
+Where an exclusion or limitation of liability is invalid under mandatory law,
+it shall apply to the greatest extent permitted by law. The invalidity of one
+provision does not affect the remaining provisions.
+
+
+5. LICENSE
+
+The software is licensed under the Apache License, Version 2.0. The full
+license text ships with the software as the file LICENSE and is available at
+http://www.apache.org/licenses/LICENSE-2.0
+
+Sections 7 and 8 of that license contain the same disclaimer of warranty and
+limitation of liability. Points 1 to 4 above explain it and do not replace it.
