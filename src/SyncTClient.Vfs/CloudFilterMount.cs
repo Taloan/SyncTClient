@@ -841,6 +841,43 @@ public sealed class CloudFilterMount : IDisposable
         long OptionalOffset,
         long OptionalLength);
 
+    /// <summary>
+    /// Sieht nach, ob die Datei ihren Inhalt nun wirklich haelt.
+    /// </summary>
+    /// <remarks>
+    /// Mit Abstand, denn die Attribute stehen erst, wenn der Rueckruf zurueck
+    /// ist. Gemeldet wird nur der Fall, der nicht sein soll -- eine Zeile je
+    /// gelungener Uebertragung sagt nichts, was nicht schon dasteht.
+    /// </remarks>
+    private void Nachsehen(string relativePath)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+
+                var voll = Path.Combine(_rootPath,
+                    relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+                var attribute = (uint)new FileInfo(voll).Attributes;
+
+                if ((attribute & (FileAttributeRecallOnDataAccess
+                                  | FileAttributeOffline
+                                  | FileAttributeRecallOnOpen)) == 0)
+                    return;
+
+                _log?.Invoke($"  {relativePath} ist weiterhin Platzhalter, obwohl der Inhalt " +
+                             $"uebergeben wurde (Attribute 0x{attribute:X}).");
+            }
+            catch (Exception)
+            {
+                // Die Datei kann inzwischen fort sein. Das ist keine Meldung
+                // wert -- gesucht wurde nach dem Gegenteil.
+            }
+        });
+    }
+
     private async Task ServeAsync(HydrationRequest request)
     {
         // Windows verlangt einen sektorausgerichteten Anfang. Die Laenge darf
@@ -926,20 +963,19 @@ public sealed class CloudFilterMount : IDisposable
             // Protokoll nur, dass ein Rueckruf begonnen hat, und man kann
             // nicht unterscheiden, ob er haengt oder laengst fertig ist.
             //
-            // Dazu der Zustand der Datei danach. CfExecute meldet Erfolg,
-            // aber ob die Bytes wirklich in der Datei stehen, sagt nur das
-            // Dateisystem. Solange dort weiter "bei Bedarf abrufen" steht,
-            // war die Uebergabe wirkungslos -- und genau das erklaert, warum
-            // dieselbe Datei eine Minute spaeter noch einmal aus dem Netz
-            // geholt wird.
-            var voll = Path.Combine(_rootPath,
-                request.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            _log?.Invoke($"  {request.RelativePath}: {geliefert} B an Windows uebergeben.");
 
-            var attribute = (uint)new FileInfo(voll).Attributes;
-            var offline = (attribute & (FileAttributeRecallOnDataAccess | 0x00001000 | 0x00400000)) != 0;
-
-            _log?.Invoke($"  {request.RelativePath}: {geliefert} B an Windows uebergeben, " +
-                         $"Attribute 0x{attribute:X}{(offline ? " -- weiterhin Platzhalter" : "")}.");
+            // Ob die Bytes wirklich in der Datei stehen, sagt nur das
+            // Dateisystem. Bleibt dort "bei Bedarf abrufen" stehen, war die
+            // Uebergabe wirkungslos -- und genau das erklaert, warum dieselbe
+            // Datei eine Minute spaeter noch einmal angefordert wird.
+            //
+            // Nachgesehen wird aber nicht hier. Windows raeumt die Attribute
+            // erst ab, wenn der Rueckruf zurueck ist; unmittelbar danach
+            // gelesen meldeten sie "weiterhin Platzhalter", obwohl die Datei
+            // vollstaendig war. Die Zeile stand dann im Protokoll und war
+            // schlicht falsch.
+            Nachsehen(request.RelativePath);
         }
         catch (Exception ex)
         {

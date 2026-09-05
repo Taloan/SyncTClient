@@ -1706,6 +1706,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Vor dem ersten Durchgang: er nimmt heraus, was es nicht mehr gibt,
         // und braucht dazu die Vermerke der letzten Sitzung.
         ModiLesen();
+        NebendateienAufraeumen();
 
         _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
         _thumbnails.Prepare();
@@ -1838,7 +1839,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         using var hold = HoldHydration(name);
 
-        var temp = path + TempSuffix;
+        var temp = TempPfad();
 
         try
         {
@@ -1959,7 +1960,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // Waehrend wir schreiben, ist jede Meldung darueber unsere eigene.
         using var hold = HoldHydration(name);
 
-        var temp = path + TempSuffix;
+        var temp = TempPfad();
 
         // Welcher Schritt gerade laeuft. Die Meldung der Cloud-Files-Schicht
         // nennt die Datei, aber nicht den Aufruf; fuenf Schritte fassen
@@ -2460,6 +2461,55 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>Woran eine wirklich eingehaengte Freigabe zu erkennen ist.</summary>
     private string MarkerPath => Path.Combine(_config.LocalPath, MarkerFolder);
+
+    /// <summary>
+    /// Wohin der Inhalt geschrieben wird, bevor er an seine Stelle kommt.
+    /// </summary>
+    /// <remarks>
+    /// In die Ordnermarkierung und nicht neben die Zieldatei. Bei einer
+    /// grossen Datei steht die Nebendatei minutenlang mitten in der Freigabe,
+    /// und dort sieht sie jedes andere Programm, das denselben Ordner
+    /// beobachtet -- ein Abgleichdienst, eine Sicherung, ein Indexdienst. Die
+    /// Markierung ist ohnehin von allem ausgenommen.
+    ///
+    /// Der Name ist eine Kennung und nicht der Dateiname: die Markierung ist
+    /// flach, und zwei gleichnamige Dateien aus verschiedenen Zweigen
+    /// truegen darin denselben Namen.
+    ///
+    /// Derselbe Datentraeger, also bleibt das Verschieben an die Zielstelle
+    /// ein Umhaengen und kein Kopieren.
+    /// </remarks>
+    private string TempPfad()
+    {
+        Directory.CreateDirectory(MarkerPath);
+        return Path.Combine(MarkerPath, Guid.NewGuid().ToString("N") + TempSuffix);
+    }
+
+    /// <summary>
+    /// Raeumt liegengebliebene Nebendateien fort.
+    /// </summary>
+    /// <remarks>
+    /// Wird eine Uebertragung abgebrochen -- ein Absturz, ein Stromausfall --,
+    /// bleibt die Nebendatei stehen. Sie gehoert zu keiner Datei mehr; ihr
+    /// Ziel steht nur im Aufruf, der sie angelegt hat.
+    /// </remarks>
+    private void NebendateienAufraeumen()
+    {
+        try
+        {
+            if (!Directory.Exists(MarkerPath)) return;
+
+            var reste = Directory.EnumerateFiles(MarkerPath, "*" + TempSuffix).ToList();
+            foreach (var rest in reste) File.Delete(rest);
+
+            if (reste.Count > 0)
+                _log($"[{FolderId}] {reste.Count} liegengebliebene Nebendateien geloescht.");
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Nebendateien: {Herkunft(ex)}");
+        }
+    }
 
     /// <summary>
     /// Legt die Ordnermarkierung an, falls sie fehlt.
