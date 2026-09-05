@@ -706,6 +706,20 @@ public sealed partial class ShareHost
         _cache?.ReconcileWith(mitInhalt);
         CacheChanged?.Invoke();
 
+        // Und danach das Limit pruefen.
+        //
+        // Der Durchgang ist die Stelle, an der die Buchfuehrung erfaehrt, was
+        // tatsaechlich auf der Platte liegt -- gleich auf welchem Weg es
+        // dorthin kam. Geprueft wurde das Limit aber nur nach einer
+        // Anforderung und nach dem Freigeben. Kam Inhalt auf einem dritten
+        // Weg herein, stand er in den Buechern und blieb ueber dem Limit
+        // liegen, bis zufaellig etwas anderes eine Pruefung ausloeste.
+        //
+        // Der Aufruf ist billig, wenn nichts zu tun ist: EnforceAsync steigt
+        // aus, sobald das Limit eingehalten wird.
+        _cache?.Nachzaehlen();
+        _ = Task.Run(EnforceLimitsAsync, CancellationToken.None);
+
         MeasureOutstanding(vorhanden);
 
         if (found == 0) return;
