@@ -537,6 +537,13 @@ public sealed partial class ShareHost
         // selbst geholt hat, und wuesste von hineinkopierten Dateien nichts.
         var mitInhalt = new Dictionary<string, (long Bytes, DateTimeOffset LastAccess)>(StringComparer.Ordinal);
 
+        // Was am Platzhalter steht und was wir vermerkt haben, geht
+        // auseinander, sobald jemand das Menue von Windows selbst benutzt --
+        // "Immer auf diesem Geraet behalten" steht dort ebenfalls. Gesammelt
+        // wird waehrend des Durchgangs, gerichtet danach: das Setzen oeffnet
+        // die Datei, und das gehoert nicht in eine Aufzaehlung.
+        var zuRichten = new List<(string Pfad, bool Lokal)>();
+
         try
         {
             // Verzeichnisse gehoeren ebenso zur Freigabe. Sie tragen keinen
@@ -563,6 +570,28 @@ public sealed partial class ShareHost
                     info.Length,
                     new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds());
 
+                // Der Abgleich mit dem Anheft-Zustand.
+                //
+                // Ohne Vermerk gilt, was Windows sagt: wer ueber dessen
+                // eigenes Menue anheftet, hat damit einen Modus gewaehlt, und
+                // der gehoert in die Datenbank.
+                //
+                // Mit Vermerk gilt die Datenbank. Ein Platzhalter, der neu
+                // entstanden ist, traegt den Zustand seines Ordners noch
+                // nicht -- angelegt wird er ohne, und erst hier bekommt er
+                // ihn.
+                var angeheftet = ((uint)info.Attributes & Angeheftet) != 0;
+                var vermerk = ModusVon(name);
+
+                if (vermerk is null)
+                {
+                    if (angeheftet) ModusMerken(name, lokal: true);
+                }
+                else if (vermerk.Value != angeheftet)
+                {
+                    zuRichten.Add((info.FullName, vermerk.Value));
+                }
+
                 // Ein Platzhalter ist nicht vollstaendig hier. Angekuendigt
                 // wird nur, was wir ganz haben.
                 if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
@@ -587,6 +616,27 @@ public sealed partial class ShareHost
             // und damit auch das Ausliefern von Dateien zu beenden.
             _log($"[{FolderId}] der Durchgang ueber \"{root}\" brach ab: {Herkunft(ex)}");
             return;
+        }
+
+        // Erst jetzt, ausserhalb der Aufzaehlung.
+        if (zuRichten.Count > 0 && _mount is not null)
+        {
+            // Und nicht alle auf einmal. Ein Ordner mit sechsundsechzigtausend
+            // Dateien auf "immer lokal" waere sonst ein Durchgang, der nur
+            // noch Attribute schreibt. Der Rest kommt im naechsten -- und
+            // bleibt die Zahl ueber die Durchgaenge hinweg gleich, gelingt das
+            // Setzen nicht, und das ist im Protokoll zu sehen.
+            const int JeDurchgang = 2000;
+
+            var stapel = zuRichten.Take(JeDurchgang).ToList();
+            foreach (var (pfad, lokal) in stapel) _mount.SetPinned(pfad, lokal);
+
+            var lokale = stapel.Count(e => e.Lokal);
+            _log($"[{FolderId}] Anheft-Zustand nachgezogen: {lokale} auf \"immer lokal\", " +
+                 $"{stapel.Count - lokale} auf Platzhalter" +
+                 (zuRichten.Count > stapel.Count
+                     ? $", {zuRichten.Count - stapel.Count} folgen im naechsten Durchgang."
+                     : "."));
         }
 
         LastScan = DateTime.Now;
