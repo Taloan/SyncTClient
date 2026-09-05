@@ -62,6 +62,12 @@ public partial class ProgramSettingsWindow : Window
         AutostartBox.IsChecked = Autostart.Enabled;
         StartMinimizedBox.IsChecked = config.StartMinimized;
         CloseToTrayBox.IsChecked = config.CloseToTray;
+        UpdateBox.SelectedIndex = config.UpdateCheck switch
+        {
+            UpdateInterval.Weekly => 1,
+            UpdateInterval.Monthly => 2,
+            _ => 0
+        };
 
         // In der Datei darf der Pfad relativ stehen. Angezeigt wird er
         // ausgeschrieben, sonst bleibt unklar, worauf er sich bezieht.
@@ -384,6 +390,12 @@ public partial class ProgramSettingsWindow : Window
 
         _config.StartMinimized = StartMinimizedBox.IsChecked == true;
         _config.CloseToTray = CloseToTrayBox.IsChecked == true;
+        _config.UpdateCheck = UpdateBox.SelectedIndex switch
+        {
+            1 => UpdateInterval.Weekly,
+            2 => UpdateInterval.Monthly,
+            _ => UpdateInterval.Never
+        };
         _config.MinimumCopies = schwelle;
         _config.GenerateThumbnails = ThumbsBox.IsChecked == true;
         _config.Parallelism = parallelism;

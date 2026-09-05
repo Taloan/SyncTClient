@@ -81,6 +81,18 @@
     <CheckBox x:Name="AutostartBox" Margin="0,4,0,0" Content="{DynamicResource S.Device.Autostart}" />
     <CheckBox x:Name="StartMinimizedBox" Margin="0,6,0,0" Content="{DynamicResource S.Device.StartMinimized}" />
     <CheckBox x:Name="CloseToTrayBox" Margin="0,6,0,0" Content="{DynamicResource S.Device.CloseToTray}" />
+
+    <!-- Nachsehen heisst nachsehen: eine Abfrage, welche Freigabe auf GitHub
+         die neueste ist. Geladen wird nichts, gemeldet wird nichts. -->
+    <StackPanel Width="200" HorizontalAlignment="Left" Margin="0,12,0,0">
+      <Label Content="{DynamicResource S.Settings.UpdateCheck}" />
+      <ComboBox x:Name="UpdateBox">
+        <ComboBoxItem Content="{DynamicResource S.Settings.UpdateNever}" />
+        <ComboBoxItem Content="{DynamicResource S.Settings.UpdateWeekly}" />
+        <ComboBoxItem Content="{DynamicResource S.Settings.UpdateMonthly}" />
+      </ComboBox>
+    </StackPanel>
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.UpdateHint}" />
     <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Device.StartHint}" />
 
     <TextBlock Text="{DynamicResource S.Settings.StorageGroup}" Style="{StaticResource Gruppe}" />

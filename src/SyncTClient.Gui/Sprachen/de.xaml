@@ -81,6 +81,14 @@
   <s:String x:Key="S.Device.Autostart">Mit Windows starten</s:String>
   <s:String x:Key="S.Device.StartMinimized">Minimiert starten</s:String>
   <s:String x:Key="S.Device.CloseToTray">Beim Schließen in den Symbolbereich</s:String>
+  <s:String x:Key="S.Settings.UpdateCheck">Nach neuer Fassung sehen</s:String>
+  <s:String x:Key="S.Settings.UpdateNever">Nie</s:String>
+  <s:String x:Key="S.Settings.UpdateWeekly">Einmal pro Woche</s:String>
+  <s:String x:Key="S.Settings.UpdateMonthly">Einmal pro Monat</s:String>
+  <s:String x:Key="S.Settings.UpdateHint">Abgefragt wird nur, welche Freigabe auf GitHub die neueste ist. Heruntergeladen wird nichts, und die Abfrage geht ohne Anmeldung hinaus — sie trägt nichts über diesen Rechner mit sich. Liegt eine neuere vor, erscheint ein Hinweis über der Werkzeugleiste mit einem Verweis auf die Seite, auf der der Download liegt.</s:String>
+  <s:String x:Key="S.Update.Open">Downloadseite öffnen</s:String>
+  <s:String x:Key="S.Update.Later">Später</s:String>
+  <s:String x:Key="M.UpdateAvailable">Fassung {0} ist verfügbar. Hier läuft {1}.</s:String>
   <s:String x:Key="S.Device.StartHint">Diese drei Einstellungen gelten sofort. Ist „Beim Schließen in den Symbolbereich“ aktiviert, blendet das X nur das Fenster aus. Beendet wird das Programm über das Kontextmenü des Symbols, ein Doppelklick zeigt das Fenster wieder an. Zusammen mit „Minimiert starten“ öffnet sich beim Start kein Fenster. Der Autostart wird in der Registry gespeichert, nicht in der Konfigurationsdatei.</s:String>
   <s:String x:Key="S.Tray.Open">Öffnen</s:String>
   <s:String x:Key="S.Tray.Quit">Beenden</s:String>

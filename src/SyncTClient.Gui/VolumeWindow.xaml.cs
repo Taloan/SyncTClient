@@ -51,12 +51,20 @@ public partial class VolumeWindow : Window
         var grenzen = config.LimitsFor(laufwerk);
         MaxGbBox.Text = (grenzen.MaxBytes / Gigabyte).ToString();
         MinFreeGbBox.Text = (grenzen.MinimumFreeBytes / Gigabyte).ToString();
-        ZahlenZeigen();
+
+        // Nicht hier ausrechnen. Was sich verdraengen laesst, geht ueber den
+        // Bestand jeder Freigabe dieses Datentraegers und fragt fuer jede
+        // Datei den Index -- Sekunden, und das Fenster waere noch gar nicht
+        // zu sehen. Solange steht dort derselbe Satz wie ueber dem Baum.
+        EvictText.Text = App.S("S.Vol.Loading");
 
         // Erst zeigen, dann sammeln. Der Aufbau geht über den Index jeder
         // Freigabe dieses Datenträgers -- bei hunderttausend Einträgen
         // Sekunden, und auf dem Oberflächen-Thread stünde solange alles.
-        Loaded += async (_, _) => await SammelnAsync(shares);
+        // Zwei Wege, die beide ueber den Index gehen. Sie laufen nebeneinander:
+        // die Zahlen sind meist eher da als der Baum, und dann steht schon
+        // etwas, waehrend der Baum noch entsteht.
+        Loaded += async (_, _) => await Task.WhenAll(SammelnAsync(shares), ZahlenZeigenAsync());
     }
 
     private async Task SammelnAsync(IReadOnlyList<(ShareHost Host, string Name)> shares)
@@ -136,9 +144,14 @@ public partial class VolumeWindow : Window
     /// Die Zeile über dem Knopf: was sich auf diesem Datenträger freigeben
     /// lässt.
     /// </summary>
-    private void ZahlenZeigen()
+    /// <remarks>
+    /// Im Hintergrund: das Ermitteln geht ueber den Bestand jeder Freigabe
+    /// dieses Datentraegers. Auf dem Faden, der das Fenster zeichnet, staende
+    /// solange alles -- und genau das war es einmal.
+    /// </remarks>
+    private async Task ZahlenZeigenAsync()
     {
-        var zahlen = _belegung(_wurzel);
+        var zahlen = await Task.Run(() => _belegung(_wurzel));
 
         var dateien = zahlen?.EvictableFiles ?? 0;
         var bytes = zahlen?.EvictableBytes ?? 0;
@@ -170,7 +183,7 @@ public partial class VolumeWindow : Window
         }
         finally
         {
-            ZahlenZeigen();
+            await ZahlenZeigenAsync();
         }
     }
 

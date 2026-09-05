@@ -15,6 +15,27 @@ public enum ShareMode
 }
 
 /// <summary>
+/// Wie oft nachgesehen wird, ob eine neuere Fassung vorliegt.
+/// </summary>
+/// <remarks>
+/// Nachgesehen heisst: eine Abfrage an die GitHub-Schnittstelle, welche
+/// Freigabe dort die neueste ist. Geladen wird nichts, und gemeldet wird
+/// nichts -- die Abfrage geht ohne Anmeldung hinaus und traegt nichts ueber
+/// diesen Rechner mit sich.
+/// </remarks>
+public enum UpdateInterval
+{
+    /// <summary>Gar nicht.</summary>
+    Never,
+
+    /// <summary>Einmal in der Woche.</summary>
+    Weekly,
+
+    /// <summary>Einmal im Monat.</summary>
+    Monthly
+}
+
+/// <summary>
 /// Was geschieht, wenn beide Seiten dieselbe Datei geaendert haben.
 /// </summary>
 public enum ConflictResolution
@@ -561,6 +582,27 @@ public sealed class AppConfig
     /// dann ueber das Kontextmenue des Symbols im Infobereich.
     /// </remarks>
     public bool CloseToTray { get; set; }
+
+    /// <summary>Wie oft nachgesehen wird, ob eine neuere Fassung vorliegt.</summary>
+    public UpdateInterval UpdateCheck { get; set; } = UpdateInterval.Weekly;
+
+    /// <summary>Wann zuletzt nachgesehen wurde.</summary>
+    /// <remarks>
+    /// Steht in der Konfiguration, damit ein Programm, das mehrmals am Tag
+    /// gestartet wird, nicht bei jedem Start fragt.
+    /// </remarks>
+    public DateTimeOffset LastUpdateCheck { get; set; }
+
+    /// <summary>
+    /// Eine Fassung, auf die schon hingewiesen wurde und die der Anwender
+    /// weggeklickt hat.
+    /// </summary>
+    /// <remarks>
+    /// Ohne das erschiene derselbe Hinweis bei jedem Start wieder. Erscheint
+    /// eine noch neuere, wird wieder hingewiesen -- weggeklickt wurde die
+    /// eine, nicht das Thema.
+    /// </remarks>
+    public string DismissedVersion { get; set; } = "";
 
     /// <summary>Parallele Block-Requests je Hydration.</summary>
     public int Parallelism { get; set; } = 8;

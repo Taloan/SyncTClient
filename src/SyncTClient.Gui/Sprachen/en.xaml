@@ -83,6 +83,14 @@
   <s:String x:Key="S.Device.Autostart">Start with Windows</s:String>
   <s:String x:Key="S.Device.StartMinimized">Start minimized</s:String>
   <s:String x:Key="S.Device.CloseToTray">Close to the notification area</s:String>
+  <s:String x:Key="S.Settings.UpdateCheck">Check for a new version</s:String>
+  <s:String x:Key="S.Settings.UpdateNever">Never</s:String>
+  <s:String x:Key="S.Settings.UpdateWeekly">Once a week</s:String>
+  <s:String x:Key="S.Settings.UpdateMonthly">Once a month</s:String>
+  <s:String x:Key="S.Settings.UpdateHint">All this asks is which release on GitHub is the newest. Nothing is downloaded, and the request goes out unauthenticated — it carries nothing about this computer. If a newer one exists, a notice appears above the toolbar with a link to the page the download lives on.</s:String>
+  <s:String x:Key="S.Update.Open">Open download page</s:String>
+  <s:String x:Key="S.Update.Later">Later</s:String>
+  <s:String x:Key="M.UpdateAvailable">Version {0} is available. This is {1}.</s:String>
   <s:String x:Key="S.Device.StartHint">All three settings apply immediately. With “Close to the notification area” enabled, the X only hides the window. To quit the program, use the icon’s context menu; a double-click shows the window again. Together with “Start minimized”, no window opens at startup. The autostart entry is stored in the registry, not in the configuration file.</s:String>
   <s:String x:Key="S.Tray.Open">Open</s:String>
   <s:String x:Key="S.Tray.Quit">Quit</s:String>

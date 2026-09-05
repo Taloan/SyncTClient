@@ -178,6 +178,10 @@ known one. The placeholder stays a placeholder throughout.
 - Log window, tray icon with a status badge
 - German and English, light and dark theme
 - Daily backup of the configuration including the device certificate
+- An optional check for a newer version — never, weekly or monthly. It asks
+  GitHub which release is the newest and nothing else: nothing is downloaded,
+  the request goes out unauthenticated, and it carries nothing about the
+  machine. A notice appears above the toolbar with a link to the download page
 
 ![Subtree selection](docs/directory-select.png)
 
