@@ -1,4 +1,4 @@
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -42,6 +42,11 @@ public static class UpdateCheck
     /// </summary>
     public static bool Faellig(UpdateInterval abstand, DateTimeOffset zuletzt)
     {
+        // Bei jedem Start heisst bei jedem Start. Die Pruefung laeuft einmal,
+        // wenn das Fenster steht, also genau einmal je Start -- der Zeitpunkt
+        // der letzten Abfrage spielt dann keine Rolle.
+        if (abstand == UpdateInterval.AtStart) return true;
+
         var tage = abstand switch
         {
             UpdateInterval.Weekly => 7,

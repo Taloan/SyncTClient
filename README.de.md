@@ -186,8 +186,8 @@ ein neues Bild, 2 ms für ein bekanntes. Der Platzhalter bleibt dabei stehen.
 - Protokollfenster, Symbol im Infobereich mit Zustandsplakette
 - Deutsch und Englisch, helles und dunkles Thema
 - Tagessicherung der Konfiguration samt Gerätezertifikat
-- Auf Wunsch ein Blick nach einer neueren Fassung — nie, wöchentlich oder
-  monatlich. Abgefragt wird nur, welche Freigabe auf GitHub die neueste ist:
+- Auf Wunsch ein Blick nach einer neueren Fassung — nie, bei jedem Start, wöchentlich
+  oder monatlich. Abgefragt wird nur, welche Freigabe auf GitHub die neueste ist:
   heruntergeladen wird nichts, die Abfrage geht ohne Anmeldung hinaus und
   trägt nichts über den Rechner mit sich. Ein Hinweis über der Werkzeugleiste
   verweist auf die Downloadseite

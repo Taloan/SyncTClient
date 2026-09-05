@@ -85,6 +85,7 @@
   <s:String x:Key="S.Device.CloseToTray">Close to the notification area</s:String>
   <s:String x:Key="S.Settings.UpdateCheck">Check for a new version</s:String>
   <s:String x:Key="S.Settings.UpdateNever">Never</s:String>
+  <s:String x:Key="S.Settings.UpdateAtStart">At every program start</s:String>
   <s:String x:Key="S.Settings.UpdateWeekly">Once a week</s:String>
   <s:String x:Key="S.Settings.UpdateMonthly">Once a month</s:String>
   <s:String x:Key="S.Settings.UpdateHint">All this asks is which release on GitHub is the newest. Nothing is downloaded, and the request goes out unauthenticated — it carries nothing about this computer. If a newer one exists, a notice appears above the toolbar with a link to the page the download lives on.</s:String>

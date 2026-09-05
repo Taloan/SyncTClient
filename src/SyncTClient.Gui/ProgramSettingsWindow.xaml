@@ -88,6 +88,7 @@
       <Label Content="{DynamicResource S.Settings.UpdateCheck}" />
       <ComboBox x:Name="UpdateBox">
         <ComboBoxItem Content="{DynamicResource S.Settings.UpdateNever}" />
+        <ComboBoxItem Content="{DynamicResource S.Settings.UpdateAtStart}" />
         <ComboBoxItem Content="{DynamicResource S.Settings.UpdateWeekly}" />
         <ComboBoxItem Content="{DynamicResource S.Settings.UpdateMonthly}" />
       </ComboBox>

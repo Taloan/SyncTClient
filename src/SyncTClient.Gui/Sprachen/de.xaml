@@ -83,6 +83,7 @@
   <s:String x:Key="S.Device.CloseToTray">Beim Schließen in den Symbolbereich</s:String>
   <s:String x:Key="S.Settings.UpdateCheck">Nach neuer Fassung sehen</s:String>
   <s:String x:Key="S.Settings.UpdateNever">Nie</s:String>
+  <s:String x:Key="S.Settings.UpdateAtStart">Bei jedem Programmstart</s:String>
   <s:String x:Key="S.Settings.UpdateWeekly">Einmal pro Woche</s:String>
   <s:String x:Key="S.Settings.UpdateMonthly">Einmal pro Monat</s:String>
   <s:String x:Key="S.Settings.UpdateHint">Abgefragt wird nur, welche Freigabe auf GitHub die neueste ist. Heruntergeladen wird nichts, und die Abfrage geht ohne Anmeldung hinaus — sie trägt nichts über diesen Rechner mit sich. Liegt eine neuere vor, erscheint ein Hinweis über der Werkzeugleiste mit einem Verweis auf die Seite, auf der der Download liegt.</s:String>

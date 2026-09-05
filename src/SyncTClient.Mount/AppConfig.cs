@@ -28,6 +28,9 @@ public enum UpdateInterval
     /// <summary>Gar nicht.</summary>
     Never,
 
+    /// <summary>Bei jedem Start des Programms.</summary>
+    AtStart,
+
     /// <summary>Einmal in der Woche.</summary>
     Weekly,
 
