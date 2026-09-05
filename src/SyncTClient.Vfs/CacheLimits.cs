@@ -123,9 +123,29 @@ public sealed class CacheLimits
             .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
-                var kandidaten = mitKandidaten
-                    ? g.SelectMany(c => c.EvictionCandidates()).ToList()
-                    : [];
+                // Die Kandidaten zu ermitteln geht ueber den Bestand jeder
+                // Freigabe und fragt fuer jede Datei den Index. Das kann
+                // scheitern -- eine Datenbank, die gerade geschrieben wird,
+                // ein Laufwerk, das eben verschwunden ist.
+                //
+                // Frueher riss das die ganze Aufzaehlung mit, und der
+                // Aufrufer sah keinen einzigen Datentraeger mehr. In den
+                // Einstellungen verschwand damit der Abschnitt mit den
+                // Grenzen, obwohl die mit den Kandidaten nichts zu tun
+                // haben. Ohne Kandidaten ist die Liste eben leer.
+                List<(string Path, long Bytes, DateTimeOffset LastAccess)> kandidaten = [];
+
+                if (mitKandidaten)
+                {
+                    foreach (var cache in g)
+                    {
+                        try { kandidaten.AddRange(cache.EvictionCandidates()); }
+                        catch (Exception ex)
+                        {
+                            Log?.Invoke($"{g.Key} Verdraengungskandidaten nicht ermittelbar: {ex.Message}");
+                        }
+                    }
+                }
 
                 var grenzen = _limits(g.Key);
 
