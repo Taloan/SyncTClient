@@ -17,13 +17,25 @@
 
     <DockPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
       <Button DockPanel.Dock="Right" Content="{DynamicResource S.Cancel}" IsCancel="True" Margin="0" />
-      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Apply}" Click="OnApply" IsDefault="True" />
+      <Button x:Name="ApplyButton" DockPanel.Dock="Right" Content="{DynamicResource S.Apply}"
+              Click="OnApply" IsDefault="True" IsEnabled="False" />
       <TextBlock x:Name="Hint" Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap"
                  VerticalAlignment="Center" Margin="0,0,12,0" />
     </DockPanel>
 
     <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1">
-      <TreeView x:Name="Tree" BorderThickness="0">
+      <Grid>
+        <!-- Solange gesammelt wird, steht hier ein Satz statt einer leeren
+             Flaeche. Der Aufbau geht ueber den Index jeder Freigabe dieses
+             Datentraegers; bei hunderttausend Eintraegen dauert das. -->
+        <StackPanel x:Name="LoadingPanel" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <TextBlock Text="{DynamicResource S.Vol.Loading}" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource Gedaempft}" />
+          <ProgressBar IsIndeterminate="True" Height="6" Width="220" Margin="0,10,0,0"
+                       Background="{DynamicResource Feld}" Foreground="{DynamicResource Ein}" />
+        </StackPanel>
+
+        <TreeView x:Name="Tree" BorderThickness="0" Visibility="Collapsed">
         <TreeView.ItemContainerStyle>
           <Style TargetType="TreeViewItem">
             <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
@@ -44,7 +56,8 @@
             </StackPanel>
           </HierarchicalDataTemplate>
         </TreeView.ItemTemplate>
-      </TreeView>
+        </TreeView>
+      </Grid>
     </Border>
   </DockPanel>
 </Window>

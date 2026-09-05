@@ -31,15 +31,37 @@ public partial class VolumeWindow : Window
         TitleText.Text = App.S("S.Vol.For", laufwerk);
         SubtitleText.Text = belegung;
 
-        foreach (var (host, name) in shares)
+        // Erst zeigen, dann sammeln. Der Aufbau geht über den Index jeder
+        // Freigabe dieses Datenträgers -- bei hunderttausend Einträgen
+        // Sekunden, und auf dem Oberflächen-Thread stünde solange alles.
+        Loaded += async (_, _) => await SammelnAsync(shares);
+    }
+
+    private async Task SammelnAsync(IReadOnlyList<(ShareHost Host, string Name)> shares)
+    {
+        var wurzeln = await Task.Run(() =>
         {
-            var eintraege = host.CacheEintraege();
-            if (eintraege.Count == 0) continue;
+            var liste = new List<CacheNode>();
 
-            _wurzeln.Add(CacheNode.Bauen(host, name, eintraege));
-        }
+            foreach (var (host, name) in shares)
+            {
+                var eintraege = host.CacheEintraege();
+                if (eintraege.Count == 0) continue;
 
+                liste.Add(CacheNode.Bauen(host, name, eintraege));
+            }
+
+            return liste;
+        });
+
+        // Die Knoten sind auf dem anderen Faden entstanden; gebunden werden
+        // sie erst hier. Vorher hängt keine Anzeige daran, das ist erlaubt.
+        _wurzeln.AddRange(wurzeln);
         Tree.ItemsSource = _wurzeln;
+
+        LoadingPanel.Visibility = Visibility.Collapsed;
+        Tree.Visibility = Visibility.Visible;
+        ApplyButton.IsEnabled = true;
 
         // Eine leere Liste unter einer Überschrift sieht aus wie ein Fehler.
         if (_wurzeln.Count == 0) Hint.Text = App.S("S.Vol.Empty");
