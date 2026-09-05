@@ -64,8 +64,9 @@ public partial class ProgramSettingsWindow : Window
         CloseToTrayBox.IsChecked = config.CloseToTray;
         UpdateBox.SelectedIndex = config.UpdateCheck switch
         {
-            UpdateInterval.Weekly => 1,
-            UpdateInterval.Monthly => 2,
+            UpdateInterval.AtStart => 1,
+            UpdateInterval.Weekly => 2,
+            UpdateInterval.Monthly => 3,
             _ => 0
         };
 
@@ -392,8 +393,9 @@ public partial class ProgramSettingsWindow : Window
         _config.CloseToTray = CloseToTrayBox.IsChecked == true;
         _config.UpdateCheck = UpdateBox.SelectedIndex switch
         {
-            1 => UpdateInterval.Weekly,
-            2 => UpdateInterval.Monthly,
+            1 => UpdateInterval.AtStart,
+            2 => UpdateInterval.Weekly,
+            3 => UpdateInterval.Monthly,
             _ => UpdateInterval.Never
         };
         _config.MinimumCopies = schwelle;
