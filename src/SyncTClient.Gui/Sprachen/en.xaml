@@ -327,6 +327,10 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Settings.ShellHint">Thumbnails and the context menu rely on registry entries. They are created automatically at startup and apply to the signed-in user only; no administrator rights are needed.</s:String>
   <s:String x:Key="S.Settings.ShellRegister">Register now</s:String>
   <s:String x:Key="S.Settings.ShellUnregister">Remove entries</s:String>
+  <s:String x:Key="S.Settings.ShellRebuild">Rebuild extension</s:String>
+  <s:String x:Key="S.Settings.ShellRebuildHint">The extension is a separate project and is not built along with the application. After a change to thumbnails or the context menu the registry would otherwise still point at the old file.&#10;The file manager has to be closed while this runs — it holds the file as long as it is running.</s:String>
+  <s:String x:Key="M.ShellRebuilding">Building the extension …</s:String>
+  <s:String x:Key="M.ShellRebuildFailed">The extension could not be built: {0}</s:String>
   <s:String x:Key="S.Settings.ShellShipped">Shipped</s:String>
   <s:String x:Key="S.Settings.ShellRegistered">Registered</s:String>
   <s:String x:Key="S.Settings.ShellFile">File</s:String>
