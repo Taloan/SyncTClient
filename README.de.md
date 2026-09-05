@@ -1,6 +1,6 @@
 [English](README.md) · **Deutsch**
 
-<img src="docs/logo.png" alt="SyncTClient" width="110" align="right">
+<img src="docs/logo.png" alt="SyncTClient" width="110" height="110" align="right">
 
 # SyncTClient
 
@@ -38,7 +38,7 @@ jedes andere Programm gleichzeitig lesen.
 > Vollständiger Text: [Nutzungsbedingungen](setup/EULA.de.txt) — der Installer
 > zeigt sie als Seite, die vor der Installation bestätigt werden muss.
 
-![Das Hauptfenster von SyncTClient](docs/interface.png)
+<img src="docs/interface.png" alt="Das Hauptfenster von SyncTClient" width="1266" height="813">
 
 *Freigaben mit Zustand, Fortschritt, Rückstand und Durchsatz. Die aufgeklappte
 Freigabe zeigt, was die Gegenstellen führen, was hier lokal liegt und was
@@ -97,7 +97,7 @@ Das gilt es nicht zu umgehen, sondern zu nutzen.
 
 #### Wann eine Datei ein Platzhalter werden darf
 
-![Die Einstellung der Platzhalter-Schwelle](docs/placeholder-threshold.png)
+<img src="docs/placeholder-threshold.png" alt="Die Einstellung der Platzhalter-Schwelle" width="647" height="128">
 
 Den Inhalt einer Datei zu verwerfen ist der eine Vorgang hier, bei dem Daten
 verloren gehen können — deshalb ist er der am stärksten abgesicherte. Inhalt
@@ -192,7 +192,7 @@ ein neues Bild, 2 ms für ein bekanntes. Der Platzhalter bleibt dabei stehen.
   trägt nichts über den Rechner mit sich. Ein Hinweis über der Werkzeugleiste
   verweist auf die Downloadseite
 
-![Teilbaum-Auswahl](docs/directory-select.png)
+<img src="docs/directory-select.png" alt="Teilbaum-Auswahl" width="746" height="633">
 
 *Teilbaum-Auswahl: welche Zweige auf diesem Gerät liegen sollen. Jeder Knoten
 nennt Anzahl und Größe, damit die Wahl an Zahlen hängt und nicht am Gefühl.*
@@ -208,7 +208,7 @@ nimmt sie auf Wunsch wieder zurück.
 
 ### SmartScreen meldet sich
 
-![Die Warnung von Microsoft Defender SmartScreen](docs/smartscreen.png)
+<img src="docs/smartscreen.png" alt="Die Warnung von Microsoft Defender SmartScreen" width="531" height="497">
 
 Beim Start des Installers meldet sich Microsoft Defender SmartScreen mit „Der
 Computer wurde durch Windows geschützt" und nennt als Herausgeber „Unbekannter
