@@ -95,6 +95,50 @@ Das gilt es nicht zu umgehen, sondern zu nutzen.
 - Der stündliche Durchgang gleicht die Anheft-Merkmale im Dateisystem mit der
   Datenbank ab — was im Dateimanager umgestellt wurde, gilt danach auch hier
 
+#### Wann eine Datei ein Platzhalter werden darf
+
+![Die Einstellung der Platzhalter-Schwelle](docs/placeholder-threshold.png)
+
+Den Inhalt einer Datei zu verwerfen ist der eine Vorgang hier, bei dem Daten
+verloren gehen können — deshalb ist er der am stärksten abgesicherte. Inhalt
+wird nie verworfen, weil ein Cache voll ist. Er wird verworfen, wenn die Datei
+*nachweislich* wiederbeschaffbar ist.
+
+Die Schwelle nennt die Zahl: wie viele andere Knoten die Datei **vollständig**
+führen müssen, bevor ihre Bytes hier weichen dürfen. Die Vorgabe 1 ist der
+Normalfall gegen einen einzelnen Server. Wer seine Dateien nicht von einem
+einzigen anderen Gerät abhängig machen will, setzt 2. Kleiner als 1 ist nicht
+zulässig — die letzte Kopie im Netz darf nicht verschwinden können.
+
+Gezählt wird streng. Eine Gegenstelle, die die Datei nur *kennt*, zählt nicht:
+ihr Indexeintrag muss eine Blockliste tragen und eine Größe über null. Syncthing
+kündigt ohne Blockliste an, sobald es den Inhalt nicht hält — die ehrliche
+Zählung fällt also aus dem Protokoll selbst heraus.
+
+Und die Schwelle ist eine notwendige Bedingung, keine hinreichende. Alles davon
+muss zutreffen, bevor ein einziges Byte weicht:
+
+| Bedingung | Warum |
+|---|---|
+| genug Gegenstellen führen sie vollständig | die Schwelle selbst |
+| sie führen **diese** Fassung | verglichen wird der Versionsvektor, nicht der Zeitstempel. Ein Zeitstempel sagt, welche Änderung später geschah, nicht ob eine Seite die andere kannte. Ohne diese Prüfung fordert der Platzhalter beim nächsten Zugriff die ältere Fassung an — unbemerkt, denn was zurückbleibt, ist eine gültige Datei, nur mit dem falschen Inhalt |
+| die Ankündigung passt zu diesem Inhalt | der Name allein beweist nichts. Drüben kann sehr wohl eine andere Datei desselben Namens liegen, und dafür würde eine lokale Änderung gelöscht, die noch niemand gesehen hat |
+| die Blöcke stimmen | gerechnet, nicht angenommen |
+| die Ankündigung ist alt genug | BEP sagt dem Sender nie, dass der Empfänger fertig ist. Schlimmer: die Gegenstelle spiegelt unsere eigene Ankündigung samt Blockliste zurück, lange bevor sie ein Byte geholt hat. Wer das für einen Besitznachweis hält, löscht die Datei, bevor sie irgendwo ankommt — also wird gewartet |
+| die Datei ist nicht angeheftet und nicht *immer lokal* | eine ausdrückliche Ansage wiegt schwerer als ein Limit |
+| die Datei ist weder offen noch lokal geändert | Windows lehnt es ohnehin ab; die Prüfung macht die Änderung sichtbar, statt sie stumm scheitern zu lassen |
+
+Das gilt auf jedem Weg, der Inhalt verwirft: im Kontextmenü, im Baum des
+Datenträgers, bei der selbsttätigen Verdrängung am Limit und beim Knopf, der den
+Cache leert. *Speicherplatz freigeben* ist eine Bitte, keine Vollmacht. Weichen
+muss am Limit zuerst, was am längsten niemand angefasst hat.
+
+Eine Ausnahme gilt leeren Dateien: eine Datei mit null Bytes erreicht die
+Schwelle nie, weil die Zählung Blöcke verlangt und sie keine hat. Freigegeben
+wird sie, wenn sie hier leer ist **und** bei der Gegenstelle — und darüber
+entscheidet die eigene Größe, nicht die angekündigte, denn die Gegenstelle meldet
+null auch für eine große Datei, die sie bloß kennt.
+
 ### Übertragung
 
 - BEP in C#: Rahmung, Hello, Geräte-ID, Index, blockweiser Abruf, LZ4
