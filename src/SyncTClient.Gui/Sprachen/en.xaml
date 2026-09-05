@@ -281,7 +281,7 @@ Discard anyway?</s:String>
   <s:String x:Key="M.LimitTitle">The file will not be downloaded</s:String>
   <s:String x:Key="M.LimitUsage">“{0}” is {1} and does not fit into the usage limit of {2}.
 
-Raise the usage limit in the settings, or set the share to “keep fully local”. The limit then does not apply to it.</s:String>
+Raise the usage limit in the settings, or set the file or its folder to “always keep on this device” from the context menu. What is kept that way does not count toward the limit.</s:String>
   <s:String x:Key="M.LimitFree">“{0}” needs {1}. That much cannot be freed without dropping below the limit of {2} free disk space.
 
 Lower the limit in the settings, or make room on the drive.</s:String>

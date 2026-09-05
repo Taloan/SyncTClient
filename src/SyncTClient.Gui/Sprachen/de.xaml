@@ -273,7 +273,7 @@ Trotzdem verwerfen?</s:String>
   <s:String x:Key="M.LimitTitle">Die Datei wird nicht heruntergeladen</s:String>
   <s:String x:Key="M.LimitUsage">„{0}“ ist {1} groß und passt damit nicht unter das Verbrauchs Limit von {2}.
 
-Erhöhe das Verbrauchs Limit in den Einstellungen oder stelle den Share auf „vollständig lokal“. Dann gilt sie für ihn nicht.</s:String>
+Erhöhe das Verbrauchs Limit in den Einstellungen, oder setze die Datei oder ihren Ordner über das Kontextmenü auf „Immer auf diesem Gerät behalten“. Was dort steht, zählt nicht auf das Limit.</s:String>
   <s:String x:Key="M.LimitFree">„{0}“ benötigt {1}. So viel lässt sich nicht freimachen, ohne die Grenze von {2} freiem Plattenplatz zu unterschreiten.
 
 Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:String>
