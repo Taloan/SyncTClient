@@ -38,7 +38,13 @@
                        Text="{DynamicResource S.Share.LabelHint}" />
 
             <Label Content="{DynamicResource S.Share.LocalPath}" />
-            <TextBox x:Name="LocalPathBox" />
+            <!-- Nur zu lesen. Ein Textfeld und kein TextBlock, damit sich der
+                 Pfad weiterhin markieren und kopieren laesst. -->
+            <TextBox x:Name="LocalPathBox" IsReadOnly="True" IsTabStop="False"
+                     Foreground="{DynamicResource Gedaempft}" />
+            <TextBlock Foreground="{DynamicResource Gedaempft}" TextWrapping="Wrap"
+                       FontSize="11" Margin="0,0,0,8"
+                       Text="{DynamicResource S.Share.LocalPathFixed}" />
 
             <Label Content="{DynamicResource S.Share.ModeNew}" />
             <ComboBox x:Name="ModeBox" SelectionChanged="OnModeChanged">

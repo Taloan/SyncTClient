@@ -386,6 +386,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="C.NoShare">No share for this path.</s:String>
   <s:String x:Key="C.OneFolder">Select exactly one folder for this.</s:String>
   <s:String x:Key="S.Open.Ignore">Ignore file</s:String>
+  <s:String x:Key="S.Share.LocalPathFixed">Fixed since the share was connected. The index, the sync root and every placeholder depend on it; a different path would move nothing and point at an empty directory.</s:String>
   <s:String x:Key="S.Main.FilterAll">Show all</s:String>
   <s:String x:Key="S.Main.FilterConnected">Connected only</s:String>
   <s:String x:Key="S.Main.FilterDisconnected">Not connected only</s:String>
