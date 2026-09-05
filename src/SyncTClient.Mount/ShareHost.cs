@@ -2992,6 +2992,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         //
         var pending = Enumerate()
             .Where(e => !e.IsDirectory)
+
+            // Ausser was als Platzhalter vermerkt ist. Die Betriebsart gilt
+            // fuer neue Dateien; der Vermerk an der Datei oder an einem
+            // Ordner darueber wiegt schwerer.
+            //
+            // Diese Stelle fragte nicht danach. Ein freigegebener Ordner
+            // wurde beim naechsten Anmelden vollstaendig neu geholt -- 1160
+            // MB ueber die Leitung, und danach stand er wieder auf "lokal",
+            // obwohl der Vermerk unveraendert "Platzhalter" sagte.
+            .Where(e => ModusVon(e.RelativePath) != false)
             .Select(e => LocalPathOf(e.RelativePath))
             .Where(FehltHier)
             .ToList();
