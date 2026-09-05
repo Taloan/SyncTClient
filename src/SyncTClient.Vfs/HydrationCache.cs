@@ -142,6 +142,19 @@ public sealed class HydrationCache
     /// <summary>Wie viele Dateien das sind.</summary>
     public int LimitFiles { get { Zaehlen(); return _stueckImLimit; } }
 
+    /// <summary>
+    /// Verwirft die gezaehlten Werte, damit die naechste Frage neu rechnet.
+    /// </summary>
+    /// <remarks>
+    /// Noetig, wenn sich geaendert hat, <b>was</b> gezaehlt wird und nicht
+    /// nur, wie viel: nach "Speicherplatz freigeben" zaehlen Dateien zum
+    /// Limit, die vorher nicht mitzaehlten. Die Pruefung unmittelbar danach
+    /// las sonst den Wert von vor der Aenderung, fand das Limit eingehalten
+    /// und gab nichts frei -- bis irgendein anderer Anlass eine Minute
+    /// spaeter erneut pruefte.
+    /// </remarks>
+    public void Nachzaehlen() => _gezaehlt = DateTime.MinValue;
+
     private void Zaehlen()
     {
         if (DateTime.UtcNow - _gezaehlt < TimeSpan.FromSeconds(2)) return;
@@ -335,7 +348,7 @@ public sealed class HydrationCache
     public Func<string, bool>? Wiederbeschaffbar { get; set; }
 
     /// <summary>Gibt die Bytes einer einzelnen Datei frei.</summary>
-    public bool Evict(string relativePath)
+    public bool Evict(string relativePath, string grund = "Limit erreicht")
     {
         if (!_entries.ContainsKey(relativePath)) return false;
 
@@ -352,7 +365,7 @@ public sealed class HydrationCache
         // fortgedraengt; sie ist an ihrem Platz geblieben und hat nur ihren
         // Speicherplatz abgegeben, weil das Limit des Datentraegers erreicht
         // war.
-        if (!Dehydrate(relativePath, "Limit erreicht")) return false;
+        if (!Dehydrate(relativePath, grund)) return false;
 
         _entries.TryRemove(relativePath, out _);
         return true;
