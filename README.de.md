@@ -9,6 +9,33 @@ Die Dateien bleiben dabei gewöhnliche Dateien im Dateisystem. Kein Container,
 kein virtuelles Laufwerk, kein eigenes Format: was der Client einbindet, kann
 jedes andere Programm gleichzeitig lesen.
 
+> [!CAUTION]
+> ## Keinerlei Haftung. Keinerlei Gewährleistung. Nutzung auf eigene Gefahr.
+>
+> **Diese Software überträgt, ersetzt, verdrängt und löscht Dateien.** Sie
+> ändert Einstellungen des Betriebssystems, meldet Synchronisationswurzeln an
+> und greift in den Dateimanager ein.
+>
+> **Der Autor haftet unter keinen Umständen und aus keinem Rechtsgrund für
+> Schäden irgendwelcher Art**, die aus der Installation, der Nutzung, der
+> Fehlfunktion oder der Nichtnutzbarkeit dieser Software entstehen oder mit ihr
+> in Zusammenhang stehen — einschließlich Verlust, Löschung, Überschreibung
+> oder Beschädigung von Daten auf diesem Rechner und auf jedem anderen Gerät,
+> das mit ihm Daten austauscht, Datenabfluss an Gegenstellen, Rückständen im
+> System, entgangenem Gewinn, Betriebsunterbrechung und Kosten der
+> Wiederbeschaffung von Daten. Das gilt auch dann, wenn auf die Möglichkeit
+> solcher Schäden hingewiesen wurde. **Jegliche Schadensersatzansprüche werden
+> hiermit ausdrücklich abgelehnt.**
+>
+> **Die volle Verantwortung trägt allein der Nutzer.** Sie allein entscheiden,
+> ob und wofür Sie diese Software einsetzen, und Sie allein tragen die Folgen.
+> **Setzen Sie sie niemals ohne eine unabhängige, geprüfte Sicherung ein, und
+> niemals als einzige Ablage von Daten, deren Verlust Sie nicht hinnehmen
+> können.**
+>
+> Vollständiger Text: [Nutzungsbedingungen](setup/EULA.de.txt) — der Installer
+> zeigt sie als Seite, die vor der Installation bestätigt werden muss.
+
 ## Warum
 
 Kein existierender Sync-Dienst kann alle vier Dinge gleichzeitig:
@@ -183,6 +210,12 @@ Dieses Verzeichnis ist für alle außer seinem Autor nur lesbar. Der Quelltext
 darf heruntergeladen, gelesen und benutzt werden; Fehlermeldungen über Issues
 sind willkommen. Für Änderungen gibt es eine einzige Quelle, und das ist so
 gewollt.
+
+## Haftung
+
+Keine. Siehe den Hinweis am Anfang dieser Seite und die vollständigen
+[Nutzungsbedingungen](setup/EULA.de.txt). Der Installer zeigt sie als Seite, die
+bestätigt werden muss, bevor irgendetwas auf die Platte geschrieben wird.
 
 ## Lizenz
 

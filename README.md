@@ -9,6 +9,30 @@ The files stay ordinary files in the filesystem. No container, no virtual
 drive, no proprietary format: whatever the client mounts, any other program can
 read at the same time.
 
+> [!CAUTION]
+> ## No warranty. No liability. Use entirely at your own risk.
+>
+> **This software transfers, replaces, evicts and deletes files.** It changes
+> operating system settings, registers sync roots and hooks into the file
+> manager.
+>
+> **The author accepts no liability of any kind, on any legal basis, for any
+> damage whatsoever** arising out of or connected with the installation, use,
+> malfunction or unusability of this software — including loss, deletion,
+> overwriting or corruption of data on this computer and on every other device
+> exchanging data with it, leakage of data to peers, changes left behind on the
+> system, lost profit, business interruption and cost of recovering data. This
+> applies even if the possibility of such damage was pointed out. **Any and all
+> claims for damages are hereby expressly rejected.**
+>
+> **Full responsibility rests with the user alone.** You alone decide whether
+> and for what purpose to use this software, and you alone bear the
+> consequences. **Never use it without an independent, verified backup, and
+> never as the only place where data lives whose loss you could not accept.**
+>
+> Full text: [Terms of Use](setup/EULA.en.txt) · the installer shows the German
+> version, which must be accepted before installing.
+
 ## Why
 
 No existing sync service does all four of these at once:
@@ -177,6 +201,12 @@ Windows reports a lock on the file.
 This repository is read-only for everyone but its author. Feel free to
 download, read and use the code; bug reports through issues are welcome. There
 is a single source for changes, and that is deliberate.
+
+## Liability
+
+None. See the warning at the top of this page and the full
+[Terms of Use](setup/EULA.en.txt). The installer presents these terms as a page
+that has to be accepted before anything is written to disk.
 
 ## License
 

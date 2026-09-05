@@ -1,0 +1,88 @@
+﻿SyncTClient — Nutzungsbedingungen
+
+Bitte vollständig lesen. Mit der Installation und der Nutzung dieser Software
+erklären Sie sich mit den nachfolgenden Bedingungen einverstanden. Wenn Sie
+damit nicht einverstanden sind, brechen Sie die Installation jetzt ab.
+
+
+================================================================================
+
+    KEINERLEI HAFTUNG.  KEINERLEI GEWÄHRLEISTUNG.
+    DIE NUTZUNG ERFOLGT AUSSCHLIESSLICH AUF EIGENE GEFAHR.
+    DIE VOLLE VERANTWORTUNG TRÄGT ALLEIN DER NUTZER.
+
+================================================================================
+
+
+1. KEINE GEWÄHRLEISTUNG
+
+Diese Software wird bereitgestellt "WIE SIE IST", ohne jede ausdrückliche oder
+stillschweigende Gewährleistung. Ausgeschlossen ist insbesondere jede
+Gewährleistung der Marktgängigkeit, der Eignung für einen bestimmten Zweck, der
+Fehlerfreiheit, der Verfügbarkeit, der Datensicherheit und der Nichtverletzung
+von Rechten Dritter.
+
+Es wird nicht zugesichert, dass die Software fehlerfrei arbeitet, dass sie
+ununterbrochen läuft, dass Daten vollständig oder richtig übertragen werden
+oder dass vorhandene Daten unverändert erhalten bleiben.
+
+
+2. VOLLSTÄNDIGER HAFTUNGSAUSSCHLUSS
+
+Der Autor haftet unter keinen Umständen und aus keinem Rechtsgrund für Schäden
+irgendwelcher Art, die aus der Installation, der Nutzung, der Fehlfunktion oder
+der Nichtnutzbarkeit dieser Software entstehen oder mit ihr in Zusammenhang
+stehen.
+
+Das gilt ohne Einschränkung für:
+
+  - Verlust, Löschung, Überschreibung, Beschädigung oder Veränderung von Daten
+    jeder Art, auf diesem Rechner und auf jedem anderen Gerät, das mit ihm
+    Daten austauscht;
+  - Datenabfluss, unbeabsichtigte Weitergabe von Daten an Gegenstellen und jede
+    Folge daraus;
+  - Änderungen an Einstellungen des Betriebssystems, an der Registrierung, an
+    der Einbindung in den Dateimanager sowie an angemeldeten Synchronisations-
+    wurzeln, einschließlich Rückständen nach einer Deinstallation;
+  - Ausfall oder Fehlfunktion von Hardware, Betriebssystem oder anderer
+    Software;
+  - entgangenen Gewinn, Betriebsunterbrechung, Arbeitsausfall, Kosten für
+    Datenverkehr, Kosten der Wiederbeschaffung von Daten und jeden sonstigen
+    unmittelbaren, mittelbaren, zufälligen, besonderen oder Folgeschaden.
+
+Dies gilt auch dann, wenn auf die Möglichkeit solcher Schäden hingewiesen
+wurde. Jegliche Schadensersatzansprüche gegen den Autor werden hiermit
+ausdrücklich abgelehnt.
+
+
+3. VERANTWORTUNG DES NUTZERS
+
+Der Einsatz dieser Software erfolgt vollständig auf eigene Verantwortung und
+eigenes Risiko. Der Nutzer entscheidet allein darüber, ob und wofür er sie
+einsetzt, und trägt allein die Folgen.
+
+Der Nutzer ist allein verantwortlich für vollständige und geprüfte
+Sicherungskopien seiner Daten, bevor er die Software installiert oder einsetzt.
+Diese Software überträgt, ersetzt, verdrängt und löscht Dateien. Setzen Sie sie
+niemals ohne eine unabhängige Sicherung ein, und niemals als einzige Ablage von
+Daten, deren Verlust Sie nicht hinnehmen können.
+
+
+4. SALVATORISCHE KLAUSEL
+
+Soweit ein Haftungsausschluss oder eine Haftungsbegrenzung nach zwingendem
+Recht unwirksam ist, gilt sie in dem größtmöglichen gesetzlich zulässigen
+Umfang. Die Unwirksamkeit einer Bestimmung lässt die übrigen Bestimmungen
+unberührt.
+
+
+5. LIZENZ
+
+Die Software steht unter der Apache License, Version 2.0. Der vollständige
+Lizenztext liegt nach der Installation als Datei LICENSE.txt im
+Programmverzeichnis und ist abrufbar unter
+http://www.apache.org/licenses/LICENSE-2.0
+
+Die Abschnitte 7 und 8 jener Lizenz enthalten denselben Ausschluss von
+Gewährleistung und Haftung. Die vorstehenden Punkte 1 bis 4 erläutern ihn und
+treten nicht an seine Stelle.

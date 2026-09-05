@@ -1,4 +1,4 @@
-; Das Installationspaket fuer SyncTClient.
+﻿; Das Installationspaket fuer SyncTClient.
 ;
 ; Uebersetzt wird es von tools\Veroeffentlichen.ps1; die Fassung kommt von
 ; dort und steht nicht hier, sonst gaebe es zwei Stellen mit derselben Zahl:
@@ -54,8 +54,12 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Languages]
-Name: "deutsch"; MessagesFile: "compiler:Languages\German.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
+; Die Nutzungsbedingungen haengen an der Sprache. Inno zeigt sie als eigene
+; Seite mit den Schaltern "Ich akzeptiere" / "Ich akzeptiere nicht"; ohne
+; Zustimmung geht es nicht weiter. Der Haftungsausschluss ist der Grund fuer
+; diese Seite -- in der Lizenz steht er auch, aber dort liest ihn niemand.
+Name: "deutsch"; MessagesFile: "compiler:Languages\German.isl"; LicenseFile: "EULA.de.txt"
+Name: "english"; MessagesFile: "compiler:Default.isl";           LicenseFile: "EULA.en.txt"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
@@ -65,6 +69,12 @@ Name: "autostart"; Description: "Beim Anmelden starten"; Flags: unchecked
 ; Das ganze Veroeffentlichungsverzeichnis. Es ist self-contained -- die
 ; Laufzeit liegt darin, auf dem Zielrechner wird nichts vorausgesetzt.
 Source: "{#Quelle}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+; Lizenz und Bedingungen zum Nachlesen. Die Bedingungen nennen die Datei
+; LICENSE.txt ausdruecklich; ohne sie waere der Verweis ins Leere.
+Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "EULA.de.txt"; DestDir: "{app}"; DestName: "Nutzungsbedingungen.txt"; Flags: ignoreversion
+Source: "EULA.en.txt"; DestDir: "{app}"; DestName: "TermsOfUse.txt"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\SyncTClient"; Filename: "{app}\SyncTClient.exe"
@@ -81,4 +91,5 @@ Filename: "{app}\SyncTClient.exe"; Description: "{cm:LaunchProgram,SyncTClient}"
 Type: filesandordirs; Name: "{app}\synct-home"
 
 [Messages]
+english.WelcomeLabel2=This will install SyncTClient {#Fassung} on this computer.%n%nThe program registers its Explorer integration -- thumbnails and context menu -- itself on first start. No administrator rights are needed for that.
 deutsch.WelcomeLabel2=Damit wird SyncTClient {#Fassung} auf diesem Rechner eingerichtet.%n%nDie Einbindung in den Explorer -- Vorschaubilder und Kontextmenü -- trägt das Programm beim ersten Start selbst ein. Administratorrechte werden dafür nicht gebraucht.
