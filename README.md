@@ -35,6 +35,12 @@ read at the same time.
 > Full text: [Terms of Use](setup/EULA.en.txt) · the installer shows the German
 > version, which must be accepted before installing.
 
+![The SyncTClient main window](docs/interface.png)
+
+*Shares with status, progress, backlog and throughput. The unfolded share
+shows what the peers carry, what is held locally, and what has gone over the
+line so far.*
+
 ## Why
 
 No existing sync service does all four of these at once:
@@ -129,6 +135,11 @@ known one. The placeholder stays a placeholder throughout.
 - Log window, tray icon with a status badge
 - German and English, light and dark theme
 - Daily backup of the configuration including the device certificate
+
+![Subtree selection](docs/directory-select.png)
+
+*Subtree selection: which branches live on this device. Every node carries its
+file count and size, so the choice is made against numbers rather than guesses.*
 
 ## Installation
 

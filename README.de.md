@@ -38,6 +38,12 @@ jedes andere Programm gleichzeitig lesen.
 > Vollständiger Text: [Nutzungsbedingungen](setup/EULA.de.txt) — der Installer
 > zeigt sie als Seite, die vor der Installation bestätigt werden muss.
 
+![Das Hauptfenster von SyncTClient](docs/interface.png)
+
+*Freigaben mit Zustand, Fortschritt, Rückstand und Durchsatz. Die aufgeklappte
+Freigabe zeigt, was die Gegenstellen führen, was hier lokal liegt und was
+bisher über die Leitung ging.*
+
 ## Warum
 
 Kein existierender Sync-Dienst kann alle vier Dinge gleichzeitig:
@@ -136,6 +142,11 @@ ein neues Bild, 2 ms für ein bekanntes. Der Platzhalter bleibt dabei stehen.
 - Protokollfenster, Symbol im Infobereich mit Zustandsplakette
 - Deutsch und Englisch, helles und dunkles Thema
 - Tagessicherung der Konfiguration samt Gerätezertifikat
+
+![Teilbaum-Auswahl](docs/directory-select.png)
+
+*Teilbaum-Auswahl: welche Zweige auf diesem Gerät liegen sollen. Jeder Knoten
+nennt Anzahl und Größe, damit die Wahl an Zahlen hängt und nicht am Gefühl.*
 
 ## Installation
 
