@@ -1,14 +1,14 @@
-﻿<Project>
+<Project>
 
   <!--
     Die Fassung des ganzen Programms, an einer Stelle.
 
-    Jedes Projekt der Mappe erbt sie von hier; ohne das trÃ¤gt jede Datei die
+    Jedes Projekt der Mappe erbt sie von hier; ohne das trägt jede Datei die
     Vorgabe 1.0.0, und im Dateimanager stehen unter "Eigenschaften" andere
     Zahlen als in der Freigabe auf GitHub.
 
-    Geschrieben wird sie von tools\Veroeffentlichen.ps1. Von Hand geÃ¤ndert
-    werden darf sie auch â€” das Werkzeug liest, was hier steht, und zÃ¤hlt von
+    Geschrieben wird sie von tools\Veroeffentlichen.ps1. Von Hand geändert
+    werden darf sie auch — das Werkzeug liest, was hier steht, und zählt von
     dort weiter.
   -->
   <PropertyGroup>
