@@ -66,7 +66,7 @@
          auf dem Rest lesbar bleibt: dasselbe Verfahren wie bei Untertiteln
          in einem Film, aus demselben Grund. -->
     <DataTemplate x:Key="Uebertragung">
-      <Grid Margin="0,2" Height="24" ToolTip="{Binding RelativePath}">
+      <Grid Margin="0,2" Height="24" ToolTip="{Binding Tip}">
         <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent, Mode=OneWay}" Height="24"
                      Template="{StaticResource BalkenVorlage}" Background="{DynamicResource Feld}" Foreground="{DynamicResource Ein}" />
 

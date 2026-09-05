@@ -77,6 +77,15 @@ public sealed class TransferInfo : INotifyPropertyChanged
     /// </remarks>
     public string Arrow => Direction == TransferDirection.Hinaus ? "↑" : "↓";
 
+    /// <summary>Was im Hinweisfenster der Zeile steht.</summary>
+    /// <remarks>
+    /// Der Pfad, und bei einem Fehler die Meldung darunter. In der Zeile
+    /// selbst ist fuer sie kein Platz.
+    /// </remarks>
+    public string Tip => _error is null
+        ? RelativePath
+        : RelativePath + Environment.NewLine + Environment.NewLine + _error;
+
     public string Folder
     {
         get
@@ -109,7 +118,7 @@ public sealed class TransferInfo : INotifyPropertyChanged
     public string? Error
     {
         get => _error;
-        set { _error = value; Notify(); Notify(nameof(StateText)); }
+        set { _error = value; Notify(); Notify(nameof(StateText)); Notify(nameof(Tip)); }
     }
 
     public string StateText => _state switch
@@ -120,7 +129,12 @@ public sealed class TransferInfo : INotifyPropertyChanged
         // Auch am Ende bleibt die Richtung ablesbar. "fertig" sagt, dass
         // nichts mehr laeuft, und verschweigt, was gelaufen ist.
         TransferState.Fertig => Direction == TransferDirection.Hinaus ? "gesendet" : "geladen",
-        TransferState.Fehler => _error ?? "Fehler",
+        // Nur das Wort. Die Meldung selbst gehoert nicht in die Spalte
+        // rechts: sie ist ein ganzer Satz mit Pfad, und der DockPanel gibt
+        // ihr so viel Platz, wie sie braucht -- der Dateiname wird dabei aus
+        // der Zeile gedraengt und ist gar nicht mehr zu sehen. Sie steht im
+        // Hinweisfenster der Zeile.
+        TransferState.Fehler => "Fehler",
         _ => ""
     };
 
