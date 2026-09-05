@@ -39,6 +39,13 @@
     Nur den Installer bauen, nichts hochladen. Fuer den Blick darauf, bevor
     etwas nach draussen geht.
 
+.PARAMETER GitHubUeberschreiben
+    Ersetzt den Verlauf auf GitHub durch den hiesigen, statt ihn
+    fortzuschreiben. Noetig genau einmal: wenn das Verzeichnis dort
+    angelegt wurde, bevor es diesen Quelltext gab, und die beiden
+    Verlaeufe nichts gemeinsam haben. Was auf GitHub steht und hier
+    fehlt, ist danach verloren.
+
 .EXAMPLE
     .\tools\Veroeffentlichen.ps1
     .\tools\Veroeffentlichen.ps1 -Fassung 1.0.0 -Hinweise "Erste oeffentliche Fassung."
@@ -51,7 +58,8 @@ param(
     [string] $Hinweise,
     [string] $Repo,
     [switch] $Entwurf,
-    [switch] $NurPaket
+    [switch] $NurPaket,
+    [switch] $GitHubUeberschreiben
 )
 
 $ErrorActionPreference = 'Stop'
@@ -110,7 +118,14 @@ Write-Host "    $Iscc"
 
 Schritt 'Fassung bestimmen'
 
-$props = Get-Content -LiteralPath $PropsDatei -Raw
+# Ausdruecklich UTF-8, in beide Richtungen.
+#
+# Get-Content liest in Windows PowerShell ohne Angabe in der Kodierung
+# des Systems. Die Datei ist UTF-8 ohne Vorzeichen; jeder Umlaut kam als
+# zwei Zeichen zurueck und wurde beim Zurueckschreiben ein zweites Mal
+# kodiert. Nach einem Lauf stand in der Datei "trAcgt" statt "traegt".
+$ohneVorzeichen = New-Object System.Text.UTF8Encoding($false)
+$props = [System.IO.File]::ReadAllText($PropsDatei, $ohneVorzeichen)
 if ($props -notmatch '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>') {
     Abbruch "In $PropsDatei steht keine Fassung."
 }
@@ -127,7 +142,22 @@ if ($Fassung -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Abbruch "Ungueltige Fassung
 Write-Host "    $bisher -> $Fassung"
 
 $etikett = "v$Fassung"
-if ((git tag --list $etikett)) { Abbruch "Das Etikett $etikett gibt es schon." }
+# Ein Lauf, der weiter hinten abgebrochen ist -- beim Schieben nach GitHub
+# etwa -- hat Fassung, Commit und Etikett schon abgelegt. Der zweite Lauf
+# soll dort weitermachen und nicht an der eigenen Vorarbeit scheitern.
+$schonFestgeschrieben = $false
+
+if ((git tag --list $etikett)) {
+    if ($bisher -ne $Fassung) {
+        Abbruch "Das Etikett $etikett gibt es schon, in $PropsDatei steht aber $bisher. Mit -Fassung eine andere angeben."
+    }
+
+    git merge-base --is-ancestor $etikett HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) { Abbruch "Das Etikett $etikett zeigt nicht in den aktuellen Zweig." }
+
+    $schonFestgeschrieben = $true
+    Write-Host "    $etikett ist schon festgeschrieben -- es wird nur noch geschoben."
+}
 
 # ---------------------------------------------------------------- Paket
 
@@ -179,12 +209,17 @@ Write-Host "    $Repo"
 
 Schritt 'Fassung festschreiben und etikettieren'
 
-$props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Version>$Fassung</Version>" |
-    Set-Content -LiteralPath $PropsDatei -Encoding utf8 -NoNewline
+if ($schonFestgeschrieben) {
+    Write-Host "    Fassung, Commit und Etikett liegen schon vor."
+}
+else {
+    $neueProps = $props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Version>$Fassung</Version>"
+    [System.IO.File]::WriteAllText($PropsDatei, $neueProps, $ohneVorzeichen)
 
-git add $PropsDatei
-git commit -m "Fassung $Fassung" | Out-Null
-git tag -a $etikett -m "SyncTClient $Fassung"
+    git add $PropsDatei
+    git commit -m "Fassung $Fassung" | Out-Null
+    git tag -a $etikett -m "SyncTClient $Fassung"
+}
 
 # Zuerst auf die eigene Gegenstelle. Sie ist das Original.
 git push
@@ -205,15 +240,41 @@ if (-not (git remote | Where-Object { $_ -eq 'github' })) {
 
 $zweig = (git rev-parse --abbrev-ref HEAD).Trim()
 
-git push github $zweig
-if ($LASTEXITCODE -ne 0) { Abbruch 'Der Quelltext liess sich nicht nach GitHub schieben.' }
+if ($GitHubUeberschreiben) { git push --force github $zweig }
+else                       { git push         github $zweig }
 
-git push github $etikett
+if ($LASTEXITCODE -ne 0) {
+    Abbruch @"
+Der Quelltext liess sich nicht nach GitHub schieben.
+
+Auf GitHub liegt ein Verlauf, der hier nicht vorkommt -- meist, weil das
+Verzeichnis dort mit README und Lizenz angelegt wurde. Von GitHub wird
+grundsaetzlich nicht gezogen: nichts von dort soll je in diesen
+Arbeitsordner gelangen.
+
+Steht der Inhalt von dort hier ohnehin schon, dann ersetzt
+
+    .\tools\Veroeffentlichen.ps1 -Fassung $Fassung -GitHubUeberschreiben
+
+den Verlauf auf GitHub durch diesen. Was dort steht und hier fehlt, ist
+danach verloren.
+"@
+}
+
+if ($GitHubUeberschreiben) { git push --force github $etikett }
+else                       { git push         github $etikett }
 if ($LASTEXITCODE -ne 0) { Abbruch 'Das Etikett liess sich nicht nach GitHub schieben.' }
 
 # ---------------------------------------------------------------- Freigabe
 
 Schritt 'Freigabe anlegen'
+
+# gh legt keine zweite Freigabe unter demselben Etikett an. Das vorher zu
+# sagen ist verstaendlicher als der Fehler, der sonst kommt.
+gh release view $etikett --repo $Repo *> $null
+if ($LASTEXITCODE -eq 0) {
+    Abbruch "Auf GitHub gibt es die Freigabe $etikett schon. Loeschen mit: gh release delete $etikett --repo $Repo"
+}
 
 if (-not $Hinweise) {
     $letztes = git describe --tags --abbrev=0 "$etikett^" 2>$null
