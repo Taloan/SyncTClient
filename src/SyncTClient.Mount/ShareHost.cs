@@ -481,19 +481,26 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         return "OFFEN";
     }
 
-    /// <summary>Ein Eintrag, der auf das Limit seines Datentraegers zaehlt.</summary>
+    /// <summary>Ein Eintrag mit einem Modus oder einem Platz im Cache.</summary>
     /// <param name="Name">Der Pfad ab der Wurzel der Freigabe, mit "/" getrennt.</param>
-    /// <param name="Hydriert">Ob der Inhalt gerade lokal liegt.</param>
-    public sealed record CacheEintrag(string Name, long Size, bool Hydriert);
+    /// <param name="Hydriert">Ob der Inhalt gerade hier liegt.</param>
+    /// <param name="Lokal">
+    /// Der Modus, der fuer diesen Namen gilt: true heisst "immer lokal".
+    /// Etwas anderes als <paramref name="Hydriert"/> -- der Modus ist die
+    /// Entscheidung, der Inhalt ihr Ergebnis, und zwischen beiden liegt eine
+    /// Uebertragung.
+    /// </param>
+    public sealed record CacheEintrag(string Name, long Size, bool Hydriert, bool Lokal);
 
     /// <summary>
     /// Was von dieser Freigabe auf das Limit ihres Datentraegers zaehlt.
     /// </summary>
     /// <remarks>
-    /// Bei "bei Bedarf" der ganze Bestand -- dort ist jede Datei ein
-    /// Platzhalter. Bei "vollstaendig lokal" nur, was freigegeben wurde.
-    /// Ob der Inhalt gerade liegt oder nicht, aendert an der Zugehoerigkeit
-    /// nichts; sie steht in <see cref="CacheEintrag.Hydriert"/> daneben.
+    /// Aufgezaehlt wird, was auf das Limit zaehlt -- bei "bei Bedarf" der
+    /// ganze Bestand, bei "vollstaendig lokal" das Freigegebene -- und dazu
+    /// alles, wofuer ein Modus vermerkt ist. Auch das Angeheftete: es zaehlt
+    /// zwar auf kein Limit, aber es ist eine Entscheidung, und wer sie
+    /// zuruecknehmen will, muss sie sehen.
     /// </remarks>
     public IReadOnlyList<CacheEintrag> CacheEintraege()
     {
@@ -509,9 +516,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 // Mitgezaehlt liess es eine Freigabe ohne einen einzigen
                 // freigegebenen Inhalt als leeren Zweig im Baum stehen.
                 if (isDirectory || name.Length == 0 || IsHousekeeping(name)) continue;
-                if (!ZaehltZumCache(name)) continue;
 
-                liste.Add(new CacheEintrag(name, size, HatInhalt(name)));
+                var modus = ModusVon(name);
+                if (modus is null && !ZaehltZumCache(name)) continue;
+
+                liste.Add(new CacheEintrag(
+                    name, size, HatInhalt(name),
+                    modus ?? _config.Mode == ShareMode.AlwaysLocal));
             }
 
         return liste;

@@ -88,8 +88,8 @@ public sealed class CacheNode(string name, string path, CacheNode? parent) : INo
     public string Summary => IsDirectory || Children.Count > 0
         ? Dateien == 0
             ? ""
-            : $"{Dateien} Dateien · {Format.Bytes(Bytes)} · {Gefuellt} lokal"
-        : Format.Bytes(Bytes) + (Hydriert ? " · lokal" : " · Platzhalter");
+            : $"{Dateien} Dateien · {Format.Bytes(Bytes)} · {Gefuellt} mit Inhalt"
+        : Format.Bytes(Bytes) + (Hydriert ? " · Inhalt liegt hier" : " · Inhalt nicht uebertragen");
 
     /// <summary>Setzt den Anfangszustand, ohne ihn als Änderung zu werten.</summary>
     public void Festhalten()
@@ -187,7 +187,12 @@ public sealed class CacheNode(string name, string path, CacheNode? parent) : INo
                 Host = host,
                 Bytes = eintrag.Size,
                 Hydriert = eintrag.Hydriert,
-                IsChecked = eintrag.Hydriert
+
+                // Das Kaestchen zeigt den Modus, nicht den Inhalt. Wo der
+                // Inhalt gerade liegt, steht daneben -- beides zu vermengen
+                // hiess, eine freigegebene Datei als angeheftet auszuweisen,
+                // solange ihr Inhalt noch nicht verdraengt war.
+                IsChecked = eintrag.Lokal
             };
 
             eltern.Children.Add(datei);
