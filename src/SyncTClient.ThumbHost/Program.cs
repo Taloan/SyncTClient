@@ -1,7 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 
-namespace SyncTClient.ThumbProvider;
+namespace SyncTClient.ExplorerProvider;
 
 /// <summary>
 /// Der Vorschau-Erzeuger als eigenstaendiges Programm statt als DLL im

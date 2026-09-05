@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
-using SyncTClient.ThumbProvider;
+using SyncTClient.ExplorerProvider;
 
 namespace SyncTClient.Mount;
 

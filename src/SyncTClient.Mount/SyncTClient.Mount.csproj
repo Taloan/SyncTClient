@@ -16,13 +16,13 @@
   <ItemGroup>
     <!-- Dieselbe Umsetzung wie die DLL. Der laufende Client meldet die Klasse
          zur Laufzeit an, so wie es Microsofts CloudMirror-Beispiel tut. -->
-    <Compile Include="..\SyncTClient.ThumbProvider\ThumbnailProvider.cs" Link="ThumbnailProvider.cs" />
+    <Compile Include="..\SyncTClient.ExplorerProvider\ThumbnailProvider.cs" Link="ThumbnailProvider.cs" />
 
     <!-- Der Einstiegspunkt der DLL bedient beide Klassen und nennt deshalb
          auch die des Kontextmenues. Sie kommt hier nie zum Einsatz, denn der
          Client ruft DllGetClassObject nicht auf; uebersetzen muss es sich
          trotzdem. -->
-    <Compile Include="..\SyncTClient.ThumbProvider\ContextMenu.cs" Link="ContextMenu.cs" />
+    <Compile Include="..\SyncTClient.ExplorerProvider\ContextMenu.cs" Link="ContextMenu.cs" />
   </ItemGroup>
 
   <ItemGroup>

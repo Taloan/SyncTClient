@@ -82,13 +82,13 @@
     ab, die nach einem fehlenden Visual Studio aussieht, obwohl eines da ist.
 
     Immer Release, gleich in welcher Fassung das Programm gebaut wird: nur
-    dort sucht ThumbnailProviderRegistration.FindLibrary im Entwicklungsbaum
+    dort sucht ExplorerRegistration.FindLibrary im Entwicklungsbaum
     nach ihr. Je nach Plattformwahl liegt sie mit oder ohne x64-Zwischenstufe.
   -->
   <PropertyGroup>
-    <VorschauProjekt>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\SyncTClient.ThumbProvider.csproj</VorschauProjekt>
-    <VorschauDllRelease>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllRelease>
-    <VorschauDllReleaseX64>$(MSBuildThisFileDirectory)..\SyncTClient.ThumbProvider\bin\x64\Release\net10.0-windows\win-x64\publish\synctthumbs.dll</VorschauDllReleaseX64>
+    <VorschauProjekt>$(MSBuildThisFileDirectory)..\SyncTClient.ExplorerProvider\SyncTClient.ExplorerProvider.csproj</VorschauProjekt>
+    <VorschauDllRelease>$(MSBuildThisFileDirectory)..\SyncTClient.ExplorerProvider\bin\Release\net10.0-windows\win-x64\publish\synctexplorer.dll</VorschauDllRelease>
+    <VorschauDllReleaseX64>$(MSBuildThisFileDirectory)..\SyncTClient.ExplorerProvider\bin\x64\Release\net10.0-windows\win-x64\publish\synctexplorer.dll</VorschauDllReleaseX64>
 
     <VsInstallerVerzeichnis>$([System.Environment]::GetFolderPath(SpecialFolder.ProgramFilesX86))\Microsoft Visual Studio\Installer</VsInstallerVerzeichnis>
     <VorschauBefehl>set "PATH=%25PATH%25;$(VsInstallerVerzeichnis)" &amp;&amp; dotnet publish "$(VorschauProjekt)" -c Release -r win-x64 --nologo</VorschauBefehl>
@@ -139,7 +139,7 @@
     </PropertyGroup>
 
     <Error Condition="'$(VorschauDll)' == ''"
-           Text="synctthumbs.dll wurde nicht erzeugt. Ohne sie gibt es im veroeffentlichten Programm keine Vorschaubilder und kein Kontextmenue." />
+           Text="synctexplorer.dll wurde nicht erzeugt. Ohne sie gibt es im veroeffentlichten Programm keine Vorschaubilder und kein Kontextmenue." />
 
     <Copy SourceFiles="$(VorschauDll)" DestinationFolder="$(PublishDir)" />
   </Target>

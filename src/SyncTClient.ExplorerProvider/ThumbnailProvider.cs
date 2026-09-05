@@ -3,7 +3,7 @@ using System.Runtime.InteropServices.Marshalling;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace SyncTClient.ThumbProvider;
+namespace SyncTClient.ExplorerProvider;
 
 // Diese DLL laedt der Explorer in seinen eigenen Prozess. Sie ist deshalb
 // bewusst einfach gehalten: sie liest eine lokale Datei und gibt sie zurueck.
@@ -179,7 +179,7 @@ internal sealed partial class SyncTThumbnailProvider : IInitializeWithFile, IIni
 internal static class Trace
 {
     private static readonly string Path =
-        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "synctthumbs.log");
+        System.IO.Path.Combine(System.IO.Path.GetTempPath(), "synctexplorer.log");
 
     public static void Write(string line)
     {

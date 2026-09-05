@@ -194,7 +194,7 @@ public partial class ProgramSettingsWindow : Window
     /// </remarks>
     private void ShowShellState()
     {
-        var zustand = ThumbnailProviderRegistration.Nachsehen();
+        var zustand = ExplorerRegistration.Nachsehen();
 
         Eintragen(zustand.Mitgeliefert, ShipName, ShipVersion, ShipChanged, ShipFolder);
         Eintragen(zustand.Eingetragen, RegName, RegVersion, RegChanged, RegFolder);
@@ -216,12 +216,12 @@ public partial class ProgramSettingsWindow : Window
         ShellUnregisterButton.IsEnabled = zustand.ClassRegistered || zustand.MenuRegistered;
 
         // Erzeugen geht nur, wo der Quelltext liegt.
-        ShellRebuildButton.IsEnabled = ThumbnailProviderRegistration.FindProject() is not null;
+        ShellRebuildButton.IsEnabled = ExplorerRegistration.FindProject() is not null;
     }
 
     /// <summary>Traegt eine Datei in ihre Spalte ein.</summary>
     private static void Eintragen(
-        ThumbnailProviderRegistration.Datei datei,
+        ExplorerRegistration.Datei datei,
         TextBlock name, TextBlock fassung, TextBlock geaendert, TextBlock ordner)
     {
         // Ein Strich, wo nichts ist. Ein leeres Feld sieht aus wie ein Fehler
@@ -251,7 +251,7 @@ public partial class ProgramSettingsWindow : Window
     /// </remarks>
     private async void OnRebuildShell(object sender, RoutedEventArgs e)
     {
-        if (ThumbnailProviderRegistration.FindProject() is not { } projekt) return;
+        if (ExplorerRegistration.FindProject() is not { } projekt) return;
 
         ShellRebuildButton.IsEnabled = false;
         ShellRegisterButton.IsEnabled = false;
@@ -268,10 +268,10 @@ public partial class ProgramSettingsWindow : Window
             return;
         }
 
-        ThumbnailProviderRegistration.RegisterClass(
-            ThumbnailProviderRegistration.FindLibrary() ?? "");
-        ThumbnailProviderRegistration.RegisterMenu(
-            ThumbnailProviderRegistration.FindLibrary() ?? "");
+        ExplorerRegistration.RegisterClass(
+            ExplorerRegistration.FindLibrary() ?? "");
+        ExplorerRegistration.RegisterMenu(
+            ExplorerRegistration.FindLibrary() ?? "");
 
         ShowShellState();
         await ExplorerAnbieten();
@@ -335,10 +335,10 @@ public partial class ProgramSettingsWindow : Window
 
     private async void OnRegisterShell(object sender, RoutedEventArgs e)
     {
-        if (ThumbnailProviderRegistration.FindLibrary() is not { } library) return;
+        if (ExplorerRegistration.FindLibrary() is not { } library) return;
 
-        ThumbnailProviderRegistration.RegisterClass(library);
-        ThumbnailProviderRegistration.RegisterMenu(library);
+        ExplorerRegistration.RegisterClass(library);
+        ExplorerRegistration.RegisterMenu(library);
 
         ShowShellState();
         await ExplorerAnbieten();
@@ -354,8 +354,8 @@ public partial class ProgramSettingsWindow : Window
     /// </remarks>
     private async void OnUnregisterShell(object sender, RoutedEventArgs e)
     {
-        ThumbnailProviderRegistration.UnregisterMenu();
-        ThumbnailProviderRegistration.UnregisterClass();
+        ExplorerRegistration.UnregisterMenu();
+        ExplorerRegistration.UnregisterClass();
 
         ShowShellState();
         await ExplorerAnbieten();

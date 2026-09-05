@@ -338,7 +338,7 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="M.ShellRemoved">Einträge entfernt. Der Explorer übernimmt das nach einem Neustart.</s:String>
   <s:String x:Key="M.ShellOutdated">Die eingetragene Datei ist eine andere als die mitgelieferte. Eintragen bringt beide wieder zusammen.</s:String>
   <s:String x:Key="M.ShellRestartAsk">Der Explorer liest diese Einträge beim Start. Damit die Änderung wirkt, muss er neu gestartet werden.&#10;&#10;Offene Explorer-Fenster werden dabei geschlossen. Der Desktop kommt von selbst zurück.&#10;&#10;Jetzt neu starten? Nein bedeutet: später selbst.</s:String>
-  <s:String x:Key="M.ShellMissing">Die Vorschau-DLL „synctthumbs.dll" liegt nicht neben dem Programm. Ohne sie gibt es weder Vorschaubilder noch Kontextmenü. Sie gehört in denselben Ordner wie SyncTClient.exe; unter Einstellungen steht, was eingetragen ist.</s:String>
+  <s:String x:Key="M.ShellMissing">Die Vorschau-DLL „synctexplorer.dll" liegt nicht neben dem Programm. Ohne sie gibt es weder Vorschaubilder noch Kontextmenü. Sie gehört in denselben Ordner wie SyncTClient.exe; unter Einstellungen steht, was eingetragen ist.</s:String>
   <s:String x:Key="M.ShellStale">Die eingetragene Vorschau-DLL ist eine andere als die mitgelieferte. Unter Einstellungen lässt sich das richtigstellen.</s:String>
   <s:String x:Key="G.ThresholdInvalid">Die Platzhalter-Schwelle muss mindestens 1 sein.</s:String>
   <s:String x:Key="M.VolumeLine">Laufwerk {0}   {1} in {2} Dateien   |   {3} frei</s:String>

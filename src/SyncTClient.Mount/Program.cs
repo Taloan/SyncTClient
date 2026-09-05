@@ -89,21 +89,21 @@ if (args.Contains("--announce"))
 // Meldet die Vorschau-Erweiterung an, ohne den Client zu starten.
 if (Arg("--register-thumbs") is { } thumbStore)
 {
-    if (ThumbnailProviderRegistration.FindLibrary() is not { } thumbLibrary)
+    if (ExplorerRegistration.FindLibrary() is not { } thumbLibrary)
     {
-        Console.Error.WriteLine("synctthumbs.dll nicht gefunden -- ThumbProvider veroeffentlichen.");
+        Console.Error.WriteLine("synctexplorer.dll nicht gefunden -- ExplorerProvider veroeffentlichen.");
         return 1;
     }
 
     Directory.CreateDirectory(thumbStore);
-    ThumbnailProviderRegistration.RegisterStore(Path.GetFullPath(thumbStore));
-    ThumbnailProviderRegistration.RegisterClass(thumbLibrary);
-    Console.WriteLine($"Klasse:  {ThumbnailProviderRegistration.ClassId} -> {thumbLibrary}");
-    Console.WriteLine($"Wirt:    {ThumbnailProviderRegistration.AppId} (DllSurrogate)");
+    ExplorerRegistration.RegisterStore(Path.GetFullPath(thumbStore));
+    ExplorerRegistration.RegisterClass(thumbLibrary);
+    Console.WriteLine($"Klasse:  {ExplorerRegistration.ClassId} -> {thumbLibrary}");
+    Console.WriteLine($"Wirt:    {ExplorerRegistration.AppId} (DllSurrogate)");
     Console.WriteLine($"Vorrat:  {Path.GetFullPath(thumbStore)}");
 
-    foreach (var id in ThumbnailProviderRegistration.OwnSyncRootIds())
-        Console.WriteLine($"Sync-Root {id}: {(ThumbnailProviderRegistration.AttachToSyncRoot(id) ? "verbunden" : "nicht schreibbar")}");
+    foreach (var id in ExplorerRegistration.OwnSyncRootIds())
+        Console.WriteLine($"Sync-Root {id}: {(ExplorerRegistration.AttachToSyncRoot(id) ? "verbunden" : "nicht schreibbar")}");
 
     return 0;
 }
