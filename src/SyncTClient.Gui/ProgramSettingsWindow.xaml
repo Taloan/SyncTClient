@@ -198,6 +198,11 @@
               Padding="10,3" Click="OnRegisterShell" />
       <Button x:Name="ShellUnregisterButton" Content="{DynamicResource S.Settings.ShellUnregister}"
               Padding="10,3" Margin="8,0,0,0" Click="OnUnregisterShell" />
+      <!-- Nur im Entwicklungsbaum. Ohne Projektdatei laesst sich die DLL
+           nicht erzeugen, und der Knopf bleibt aus. -->
+      <Button x:Name="ShellRebuildButton" Content="{DynamicResource S.Settings.ShellRebuild}"
+              Padding="10,3" Margin="8,0,0,0" Click="OnRebuildShell"
+              ToolTip="{DynamicResource S.Settings.ShellRebuildHint}" />
     </StackPanel>
 
     <TextBlock Text="{DynamicResource S.Settings.DataGroup}" Style="{StaticResource Gruppe}" />

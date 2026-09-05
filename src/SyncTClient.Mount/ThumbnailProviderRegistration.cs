@@ -158,6 +158,30 @@ public static class ThumbnailProviderRegistration
     }
 
     /// <summary>
+    /// Die Projektdatei der Erweiterung, sofern der Quelltext danebenliegt.
+    /// </summary>
+    /// <remarks>
+    /// Nur im Entwicklungsbaum vorhanden. In einer veroeffentlichten Fassung
+    /// gibt es sie nicht -- dort laesst sich die DLL auch nicht erzeugen, und
+    /// der Knopf dafuer bleibt aus.
+    /// </remarks>
+    public static string? FindProject()
+    {
+        var verzeichnis = new DirectoryInfo(AppContext.BaseDirectory);
+
+        for (var i = 0; i < 8 && verzeichnis is not null; i++, verzeichnis = verzeichnis.Parent)
+        {
+            var kandidat = Path.Combine(
+                verzeichnis.FullName, "src", "SyncTClient.ThumbProvider",
+                "SyncTClient.ThumbProvider.csproj");
+
+            if (File.Exists(kandidat)) return kandidat;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Traegt die COM-Klasse als DLL ein.
     /// </summary>
     /// <remarks>

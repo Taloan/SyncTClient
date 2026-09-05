@@ -319,6 +319,10 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Settings.ShellHint">Vorschaubilder und Kontextmenü hängen an Einträgen in der Registrierung. Sie entstehen beim Start von selbst und stehen nur für den angemeldeten Benutzer; Administratorrechte werden nicht gebraucht.</s:String>
   <s:String x:Key="S.Settings.ShellRegister">Jetzt eintragen</s:String>
   <s:String x:Key="S.Settings.ShellUnregister">Einträge entfernen</s:String>
+  <s:String x:Key="S.Settings.ShellRebuild">Erweiterung neu erzeugen</s:String>
+  <s:String x:Key="S.Settings.ShellRebuildHint">Die Erweiterung ist ein eigenes Projekt und wird beim Bau der Anwendung nicht miterzeugt. Nach einer Änderung an Vorschaubildern oder Kontextmenü steht sonst weiter die alte Datei in der Registrierung.&#10;Der Datei-Manager muss dabei beendet sein — solange er läuft, hält er die Datei.</s:String>
+  <s:String x:Key="M.ShellRebuilding">Die Erweiterung wird erzeugt …</s:String>
+  <s:String x:Key="M.ShellRebuildFailed">Die Erweiterung liess sich nicht erzeugen: {0}</s:String>
   <s:String x:Key="S.Settings.ShellShipped">Mitgeliefert</s:String>
   <s:String x:Key="S.Settings.ShellRegistered">Eingetragen</s:String>
   <s:String x:Key="S.Settings.ShellFile">Datei</s:String>

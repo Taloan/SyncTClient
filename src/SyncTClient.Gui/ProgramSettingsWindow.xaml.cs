@@ -214,6 +214,9 @@ public partial class ProgramSettingsWindow : Window
         // Verweis auf nichts.
         ShellRegisterButton.IsEnabled = zustand.Mitgeliefert.Pfad is not null;
         ShellUnregisterButton.IsEnabled = zustand.ClassRegistered || zustand.MenuRegistered;
+
+        // Erzeugen geht nur, wo der Quelltext liegt.
+        ShellRebuildButton.IsEnabled = ThumbnailProviderRegistration.FindProject() is not null;
     }
 
     /// <summary>Traegt eine Datei in ihre Spalte ein.</summary>
@@ -229,6 +232,105 @@ public partial class ProgramSettingsWindow : Window
         fassung.Text = datei.Fassung.Length > 0 ? datei.Fassung : fehlt;
         geaendert.Text = datei.Geaendert.Length > 0 ? datei.Geaendert : fehlt;
         ordner.Text = datei.Pfad is null ? fehlt : datei.Ordner;
+    }
+
+    /// <summary>
+    /// Erzeugt die DLL der Erweiterung neu.
+    /// </summary>
+    /// <remarks>
+    /// Sie ist ein eigenes NativeAOT-Projekt, das niemand referenziert -- der
+    /// Bau der Anwendung erzeugt sie nicht mit. Nach einer Aenderung am
+    /// Kontextmenue stand deshalb weiter die alte Datei in der Registrierung,
+    /// und die Aenderung wirkte scheinbar nicht.
+    ///
+    /// Zwei Dinge braucht der Aufruf, die eine gewoehnliche Eingabeaufforderung
+    /// nicht hat: vswhere im Pfad, damit der Binder die MSVC-Umgebung findet,
+    /// und einen Datei-Manager, der die DLL gerade nicht geladen hat. Das
+    /// erste wird hier nachgeholt, das zweite gemeldet -- der Bau nennt in
+    /// diesem Fall selbst, wer die Datei haelt.
+    /// </remarks>
+    private async void OnRebuildShell(object sender, RoutedEventArgs e)
+    {
+        if (ThumbnailProviderRegistration.FindProject() is not { } projekt) return;
+
+        ShellRebuildButton.IsEnabled = false;
+        ShellRegisterButton.IsEnabled = false;
+        ShellUnregisterButton.IsEnabled = false;
+        ShellStateText.Text = App.S("M.ShellRebuilding");
+
+        var (erfolg, meldung) = await Task.Run(() => Erzeugen(projekt));
+
+        ShowShellState();
+
+        if (!erfolg)
+        {
+            ShellStateText.Text = App.S("M.ShellRebuildFailed", meldung);
+            return;
+        }
+
+        ThumbnailProviderRegistration.RegisterClass(
+            ThumbnailProviderRegistration.FindLibrary() ?? "");
+        ThumbnailProviderRegistration.RegisterMenu(
+            ThumbnailProviderRegistration.FindLibrary() ?? "");
+
+        ShowShellState();
+        await ExplorerAnbieten();
+    }
+
+    /// <summary>Ruft den Bau auf und gibt die letzte Fehlerzeile zurueck.</summary>
+    private static (bool Erfolg, string Meldung) Erzeugen(string projekt)
+    {
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo("dotnet")
+            {
+                ArgumentList = { "publish", projekt, "-c", "Release", "--nologo", "-v", "q" },
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+
+            // vswhere liegt beim Installationsprogramm von Visual Studio und
+            // steht in einer gewoehnlichen Eingabeaufforderung nicht im Pfad.
+            // Ohne es bricht der Binder mit "vswhere.exe ist entweder falsch
+            // geschrieben oder konnte nicht gefunden werden" ab.
+            foreach (var ordner in new[]
+                     {
+                         @"C:\Program Files (x86)\Microsoft Visual Studio\Installer",
+                         @"C:\Program Files\Microsoft Visual Studio\Installer"
+                     })
+            {
+                if (!File.Exists(Path.Combine(ordner, "vswhere.exe"))) continue;
+
+                start.Environment["PATH"] = ordner + ";" + Environment.GetEnvironmentVariable("PATH");
+                break;
+            }
+
+            using var lauf = System.Diagnostics.Process.Start(start);
+            if (lauf is null) return (false, "dotnet liess sich nicht starten.");
+
+            var ausgabe = lauf.StandardOutput.ReadToEnd() + lauf.StandardError.ReadToEnd();
+            lauf.WaitForExit();
+
+            if (lauf.ExitCode == 0) return (true, "");
+
+            // Die letzte Zeile mit "error" sagt, woran es lag -- meist, dass
+            // ein Datei-Manager die DLL haelt. Sie nennt ihn beim Namen.
+            // Wagenruecklauf und Zeilenvorschub als Zahlen, damit hier
+            // keine Fluchtfolge steht, die beim Bearbeiten kippt.
+            var zeilen = ausgabe
+                .Split([(char)13, (char)10], StringSplitOptions.RemoveEmptyEntries)
+                .Select(z => z.Trim())
+                .Where(z => z.Contains("error", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            return (false, zeilen.Count > 0 ? zeilen[^1] : ausgabe.Trim());
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
     }
 
     private async void OnRegisterShell(object sender, RoutedEventArgs e)
