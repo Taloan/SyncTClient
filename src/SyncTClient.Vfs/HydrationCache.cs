@@ -287,6 +287,14 @@ public sealed class HydrationCache
         return !result.Failed;
     }
 
+    /// <summary>Haelt diese Datei ihren Inhalt gerade hier?</summary>
+    /// <remarks>
+    /// Die Buchfuehrung des Caches und nicht der Bestand des letzten
+    /// Durchgangs: sie wird bei jeder Uebertragung und bei jeder Verdraengung
+    /// nachgezogen, jener stuendlich.
+    /// </remarks>
+    public bool Hat(string relativePath) => _entries.ContainsKey(relativePath);
+
     public void NoteAccess(string relativePath)
     {
         if (_entries.TryGetValue(relativePath, out var entry))

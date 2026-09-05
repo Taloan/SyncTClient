@@ -531,7 +531,13 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     }
 
     /// <summary>Liegt der Inhalt dieser Datei gerade hier?</summary>
-    public bool HatInhalt(string relativePath) => _mitInhalt.ContainsKey(relativePath);
+    /// <remarks>
+    /// Aus der Buchfuehrung des Caches. Der Bestand des letzten Durchgangs
+    /// stand hier einmal, und der laeuft stuendlich: eine eben verdraengte
+    /// Datei galt danach noch eine Stunde lang als gefuellt, und der Baum
+    /// des Datentraegers widersprach dem Balken darueber.
+    /// </remarks>
+    public bool HatInhalt(string relativePath) => _cache?.Hat(relativePath) ?? false;
 
     /// <summary>
     /// Zaehlt der Inhalt dieser Datei auf das Limit des Datentraegers?
