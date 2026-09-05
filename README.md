@@ -150,6 +150,34 @@ Requires Windows 10 version 2004 (build 19041) or newer, 64-bit.
 integration itself on first start, under `HKEY_CURRENT_USER`, and removes it
 again on request.
 
+### SmartScreen will warn you
+
+![The Microsoft Defender SmartScreen warning](docs/smartscreen.png)
+
+When you start the installer, Microsoft Defender SmartScreen says "Windows
+protected your PC" and reports the publisher as unknown. There are two reasons
+for that, and neither is a finding:
+
+- **There is no code signing certificate.** A certificate Windows trusts costs
+  money every year. For a program I write alone and earn nothing from, that is
+  not on the cards.
+- **SyncTClient is new.** SmartScreen also judges by reputation: something that
+  has rarely been downloaded is unknown to it, and it warns to be safe. That
+  fades as the number of installations grows, but it can take a while.
+
+To continue: **More info**, then **Run anyway**.
+
+To make sure the file is the one published here, compare its checksum with the
+one given on the
+[release](https://github.com/Taloan/SyncTClient/releases/latest):
+
+```powershell
+Get-FileHash .\SyncTClient-0.9.1-setup.exe -Algorithm SHA256
+```
+
+If the two match, nothing was altered on the way. It does not prove who built
+the file — only a signature could do that.
+
 ## Layout
 
 ```
