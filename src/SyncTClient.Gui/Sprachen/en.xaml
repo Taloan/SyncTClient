@@ -408,7 +408,7 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.New.NoFolderId">A folder ID is required.</s:String>
   <s:String x:Key="S.New.FolderIdTaken">The ID “{0}” is already taken.</s:String>
   <s:String x:Key="C.Pinned">{0} files ({1}) will stay local.</s:String>
-  <s:String x:Key="C.Freed">{0} files ({1}) turned into placeholders.</s:String>
+  <s:String x:Key="C.Freed">{0} files ({1}) are placeholders now and count toward the cache. The content stays until the space is needed.</s:String>
   <s:String x:Key="C.Hidden">{0} branches hidden.</s:String>
   <s:String x:Key="C.Blocked">Not possible: {0} files have not reached the placeholder threshold.</s:String>
   <s:String x:Key="S.Share.TreeHint">Checked: kept here, as a placeholder or with content.&#10;Not checked: still transferred, then deleted here once the placeholder threshold is reached.</s:String>

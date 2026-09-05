@@ -83,8 +83,26 @@ public sealed class HydrationCache
     /// </remarks>
     public Func<string, bool>? MayEvict { get; set; }
 
+    /// <summary>
+    /// Ob dieser Eintrag auf das Limit des Datenträgers angerechnet wird.
+    /// </summary>
+    /// <remarks>
+    /// Nicht gesetzt heißt: alle. Das ist der Fall „bei Bedarf" — dort ist
+    /// jeder lokal gefüllte Platzhalter Cache.
+    ///
+    /// Bei „vollständig lokal" ist er es nicht: der Inhalt liegt dort auf
+    /// Zusage und nicht auf Vorrat. Angerechnet wird nur, was der Anwender
+    /// ausdrücklich freigegeben hat. Ohne diese Unterscheidung stünden 166 GB
+    /// gegen ein Limit von 2 GB, und jede freigegebene Datei wäre im nächsten
+    /// Durchgang verdrängt statt liegenzubleiben, bis Neueres den Platz
+    /// braucht.
+    /// </remarks>
+    public Func<string, bool>? ZaehltZumCache { get; set; }
+
     private long _belegt;
     private int _stueck;
+    private long _belegtImLimit;
+    private int _stueckImLimit;
     private DateTime _gezaehlt = DateTime.MinValue;
 
     /// <summary>
@@ -106,9 +124,23 @@ public sealed class HydrationCache
     /// Sekunden alt ist, unterscheidet sich in dieser Anzeige durch nichts von
     /// der aktuellen.
     /// </remarks>
+    /// <summary>Was in dieser Freigabe lokal liegt. Alles, ohne Ansehen des Limits.</summary>
     public long UsedBytes { get { Zaehlen(); return _belegt; } }
 
+    /// <summary>Wie viele Dateien das sind.</summary>
     public int FileCount { get { Zaehlen(); return _stueck; } }
+
+    /// <summary>Was davon auf das Limit des Datenträgers angerechnet wird.</summary>
+    /// <remarks>
+    /// Bei „bei Bedarf" dasselbe wie <see cref="UsedBytes"/>. Bei „vollständig
+    /// lokal" nur das Freigegebene — der Rest liegt auf Zusage und zählt nicht.
+    /// Getrennt geführt, weil die Übersicht in ihrer Spalte „lokal" die ganze
+    /// Wahrheit zeigen soll und nicht nur den Cache-Anteil.
+    /// </remarks>
+    public long LimitBytes { get { Zaehlen(); return _belegtImLimit; } }
+
+    /// <summary>Wie viele Dateien das sind.</summary>
+    public int LimitFiles { get { Zaehlen(); return _stueckImLimit; } }
 
     private void Zaehlen()
     {
@@ -121,14 +153,25 @@ public sealed class HydrationCache
         long summe = 0;
         var anzahl = 0;
 
+        var zaehlt = ZaehltZumCache;
+        long summeImLimit = 0;
+        var anzahlImLimit = 0;
+
         foreach (var eintrag in _entries)
         {
             summe += eintrag.Value.Bytes;
             anzahl++;
+
+            if (zaehlt is not null && !zaehlt(eintrag.Key)) continue;
+
+            summeImLimit += eintrag.Value.Bytes;
+            anzahlImLimit++;
         }
 
         _belegt = summe;
         _stueck = anzahl;
+        _belegtImLimit = summeImLimit;
+        _stueckImLimit = anzahlImLimit;
     }
 
     /// <summary>Wo diese Freigabe liegt. Das Limit gruppiert danach.</summary>
