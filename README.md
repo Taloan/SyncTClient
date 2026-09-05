@@ -219,7 +219,7 @@ dotnet build SyncTClient.slnx -c Release
 
 Runs as `win-x64` only; any other RuntimeIdentifier fails with a message.
 Publishing goes through the `FolderProfile` profile into `BIN`, after which
-`tools\Veroeffentlichen.ps1` turns that into the installer and the release.
+`tools\Veroeffentlichen.cmd` turns that into the installer and the release.
 
 The console tool prints a peer's index **without writing anything to disk**:
 
