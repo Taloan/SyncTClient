@@ -70,17 +70,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// <summary>FILE_ATTRIBUTE_OFFLINE: der Inhalt liegt woanders.</summary>
     private const uint Offline = 0x1000;
 
-    /// <summary>
-    /// FILE_ATTRIBUTE_UNPINNED: der Inhalt darf freigegeben werden.
-    /// </summary>
-    /// <remarks>
-    /// Setzt Windows, wenn CfSetPinState auf CF_PIN_STATE_UNPINNED steht --
-    /// also nach "Speicherplatz freigeben". Es ist die Aussage des Anwenders
-    /// ueber genau diese Datei und wiegt schwerer als die Betriebsart, die
-    /// fuer neue Dateien gilt.
-    /// </remarks>
-    private const uint Unpinned = 0x0010_0000;
-
     /// <summary>Groesster Block, den das Protokoll kennt: 16 MiB.</summary>
     private const int MaximumRequestSize = 16 << 20;
 
@@ -1663,6 +1652,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             Wiederbeschaffbar = ByteIdentischDort
         };
 
+        // Vor dem ersten Durchgang: er nimmt heraus, was es nicht mehr gibt,
+        // und braucht dazu die Liste von der letzten Sitzung.
+        FreigabenLesen();
+
         _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
         _thumbnails.Prepare();
 
@@ -3078,6 +3071,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         var anzahl = 0;
         long bytes = 0;
+        var geaendert = false;
 
         foreach (var pfad in Dateien(paths))
         {
@@ -3089,10 +3083,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 {
                     _mount?.SetPinned(pfad, true);
 
-                    // Angeheftet ist nicht mehr freigegeben. Der naechste
-                    // Durchgang liest das ohnehin am Attribut ab; bis dahin
-                    // zaehlte die Datei sonst weiter auf das Limit.
-                    _freigegeben.TryRemove(name, out _);
+                    // Angeheftet ist nicht mehr freigegeben.
+                    if (_freigegeben.TryRemove(name, out _)) geaendert = true;
 
                     // Anheften allein holt nichts. Ein einziges gelesenes Byte
                     // loest die Hydration der ganzen Datei aus -- derselbe Weg,
@@ -3112,7 +3104,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                     // first out: zuerst weicht, was am laengsten niemand
                     // angefasst hat, und das ist nicht diese hier.
                     _mount?.SetPinned(pfad, false);
-                    _freigegeben[name] = 0;
+                    if (_freigegeben.TryAdd(name, 0)) geaendert = true;
                     _cache?.NoteAccess(name);
                 }
 
@@ -3126,6 +3118,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
 
         if (!keep) _cache?.Persist();
+        if (geaendert) FreigabenSchreiben();
         CacheChanged?.Invoke();
 
         // Freigeben rechnet auf einen Schlag an, was bisher nicht zaehlte.
