@@ -1063,8 +1063,21 @@ public partial class MainWindow : Window
             .Select(r => (Host: r.Share!, r.Name))
             .ToList();
 
-        var fenster = new VolumeWindow(zeile.Drive, zeile.Text, shares) { Owner = this };
-        if (fenster.ShowDialog() != true || fenster.Auftraege.Count == 0) return;
+        var fenster = new VolumeWindow(
+            zeile.Drive, zeile.Text, shares, _config,
+            wurzel => _runtime.Cache.VolumesWithCandidates()
+                .FirstOrDefault(v => v.Root.Equals(wurzel, StringComparison.OrdinalIgnoreCase)),
+            ReleaseVolumeAsync)
+        {
+            Owner = this
+        };
+
+        var angenommen = fenster.ShowDialog() == true;
+
+        // Die Grenzen gelten auch dann, wenn am Baum nichts gewaehlt wurde.
+        if (angenommen && fenster.GrenzenGeaendert) Persist();
+
+        if (!angenommen || fenster.Auftraege.Count == 0) return;
 
         Status(App.S("M.VolumeWorking", Format.Count(fenster.Auftraege.Count)));
 
@@ -2517,8 +2530,6 @@ public partial class MainWindow : Window
     {
         var dialog = new ProgramSettingsWindow(
             _config, Path.GetDirectoryName(_configPath)!,
-            () => _runtime.Cache.VolumesWithCandidates(),
-            ReleaseVolumeAsync,
             () => Vorschau().Usage(),
             ClearThumbnailsAsync)
         {

@@ -91,66 +91,6 @@
     </StackPanel>
     <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ThresholdHint}" />
 
-    <!-- ================= Je Datentraeger ================= -->
-    <TextBlock Text="{DynamicResource S.Settings.VolumeGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
-
-    <!-- Wie viele Abschnitte es sind, entscheidet sich erst zur Laufzeit:
-         Freigaben duerfen auf verschiedenen Laufwerken liegen. Jedes bekommt
-         einen eigenen Rahmen, denn die Zahlen darin gelten nur dort. Ohne
-         Trennung liest sich das wie eine einzige lange Liste. -->
-    <ItemsControl x:Name="VolumeList">
-      <ItemsControl.ItemTemplate>
-        <DataTemplate>
-          <Border BorderBrush="{DynamicResource Rahmen}" BorderThickness="1" CornerRadius="3"
-                  Padding="10,8" Margin="0,0,0,10">
-            <StackPanel>
-              <TextBlock Text="{Binding Text}" FontWeight="SemiBold" TextWrapping="Wrap" />
-
-              <Grid Margin="0,8,0,0">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="Auto" />
-                  <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto" />
-                  <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-
-                <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource S.Settings.UseLimit}"
-                           HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBox Grid.Row="0" Grid.Column="1" Width="70"
-                         Text="{Binding MaxGb, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Grid.Row="0" Grid.Column="2" Style="{StaticResource Hinweis}"
-                           Text="{DynamicResource S.Settings.UseLimitNote}"
-                           VerticalAlignment="Center" Margin="8,0,0,0" />
-
-                <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource S.Settings.KeepLimit}"
-                           HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,6,6,0" />
-                <TextBox Grid.Row="1" Grid.Column="1" Width="70" Margin="0,6,0,0"
-                         Text="{Binding MinFreeGb, UpdateSourceTrigger=PropertyChanged}" />
-                <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Hinweis}"
-                           Text="{DynamicResource S.Settings.KeepLimitNote}"
-                           VerticalAlignment="Center" Margin="8,6,0,0" />
-              </Grid>
-
-              <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.LimitsLead}" />
-
-              <TextBlock Text="{Binding EvictText}" TextWrapping="Wrap" Margin="0,10,0,0" />
-              <Button Content="{Binding ButtonText}" Padding="10,3" HorizontalAlignment="Left"
-                      Margin="0,4,0,0" IsEnabled="{Binding CanRelease}"
-                      Tag="{Binding Root}" Click="OnReleaseVolume" />
-            </StackPanel>
-          </Border>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
-
-    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.VolumeDefaults}" Margin="0,0,0,0" />
-
-    <!-- Erzeugen, Bestand und Loeschen stehen beieinander. Das Kaestchen
-         allein sagt nichts darueber, was bereits liegt, und ein Knopf am
-         anderen Ende des Fensters gehoerte sichtbar nirgends hin. -->
     <TextBlock Text="{DynamicResource S.Settings.ThumbGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
 
     <CheckBox x:Name="ThumbsBox" Content="{DynamicResource S.Settings.Thumbs}" />
@@ -220,13 +160,7 @@
       <Button x:Name="ShellRegisterButton" Content="{DynamicResource S.Settings.ShellRegister}"
               Padding="10,3" Click="OnRegisterShell" />
       <Button x:Name="ShellUnregisterButton" Content="{DynamicResource S.Settings.ShellUnregister}"
-              Padding="10,3" Margin="8,0,0,0" Click="OnUnregisterShell" />
-      <!-- Nur im Entwicklungsbaum. Ohne Projektdatei laesst sich die DLL
-           nicht erzeugen, und der Knopf bleibt aus. -->
-      <Button x:Name="ShellRebuildButton" Content="{DynamicResource S.Settings.ShellRebuild}"
-              Padding="10,3" Margin="8,0,0,0" Click="OnRebuildShell"
-              ToolTip="{DynamicResource S.Settings.ShellRebuildHint}" />
-    </StackPanel>
+              Padding="10,3" Margin="8,0,0,0" Click="OnUnregisterShell" />    </StackPanel>
 
     <TextBlock Text="{DynamicResource S.Settings.DataGroup}" Style="{StaticResource Gruppe}" />
 

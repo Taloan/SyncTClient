@@ -1,5 +1,6 @@
-using System.Windows;
+﻿using System.Windows;
 using SyncTClient.Mount;
+using SyncTClient.Vfs;
 
 namespace SyncTClient.Gui;
 
@@ -19,17 +20,38 @@ namespace SyncTClient.Gui;
 /// </remarks>
 public partial class VolumeWindow : Window
 {
+    private const long Gigabyte = 1024L * 1024 * 1024;
+
     private readonly List<CacheNode> _wurzeln = [];
+    private readonly AppConfig _config;
+    private readonly string _wurzel;
+    private readonly Func<string, VolumeUsage?> _belegung;
+    private readonly Func<string, Task<string>> _freigeben;
 
     /// <param name="laufwerk">Die Wurzel des Datenträgers, etwa <c>C:</c>.</param>
     /// <param name="belegung">Der Satz über Belegung und Limit, wie in der Statistik.</param>
     /// <param name="shares">Alle Freigaben, die auf diesem Datenträger liegen.</param>
-    public VolumeWindow(string laufwerk, string belegung, IReadOnlyList<(ShareHost Host, string Name)> shares)
+    /// <param name="config">Für die Grenzen dieses Datenträgers.</param>
+    /// <param name="zahlen">Belegung und Verdrängbares, für die Zeile über dem Knopf.</param>
+    /// <param name="freigeben">Gibt auf diesem Datenträger frei, was freigegeben werden darf.</param>
+    public VolumeWindow(
+        string laufwerk, string belegung, IReadOnlyList<(ShareHost Host, string Name)> shares,
+        AppConfig config, Func<string, VolumeUsage?> zahlen, Func<string, Task<string>> freigeben)
     {
         InitializeComponent();
 
+        _config = config;
+        _wurzel = laufwerk;
+        _belegung = zahlen;
+        _freigeben = freigeben;
+
         TitleText.Text = App.S("S.Vol.For", laufwerk);
         SubtitleText.Text = belegung;
+
+        var grenzen = config.LimitsFor(laufwerk);
+        MaxGbBox.Text = (grenzen.MaxBytes / Gigabyte).ToString();
+        MinFreeGbBox.Text = (grenzen.MinimumFreeBytes / Gigabyte).ToString();
+        ZahlenZeigen();
 
         // Erst zeigen, dann sammeln. Der Aufbau geht über den Index jeder
         // Freigabe dieses Datenträgers -- bei hunderttausend Einträgen
@@ -81,11 +103,75 @@ public partial class VolumeWindow : Window
     /// </remarks>
     private void OnApply(object sender, RoutedEventArgs e)
     {
+        // Erst prüfen, dann übernehmen. Ein halb angenommener Dialog, der sich
+        // trotzdem schließt, ist schlimmer als einer, der stehen bleibt.
+        if (!long.TryParse(MaxGbBox.Text.Trim(), out var max) || max < 1 ||
+            !long.TryParse(MinFreeGbBox.Text.Trim(), out var frei) || frei < 0)
+        {
+            Hint.Text = App.S("G.VolumeInvalid", _wurzel);
+            return;
+        }
+
+        var bisher = _config.LimitsFor(_wurzel);
+        GrenzenGeaendert = bisher.MaxBytes != max * Gigabyte
+                        || bisher.MinimumFreeBytes != frei * Gigabyte;
+
+        if (GrenzenGeaendert) _config.SetLimits(_wurzel, max * Gigabyte, frei * Gigabyte);
+
         var auftraege = new List<(ShareHost Host, string Path, bool Lokal)>();
         foreach (var wurzel in _wurzeln) wurzel.Sammeln(auftraege);
 
         Auftraege = auftraege;
         DialogResult = true;
+    }
+
+    /// <summary>Ob die Grenzen dieses Datenträgers geändert wurden.</summary>
+    /// <remarks>
+    /// Der Aufrufer schreibt die Konfiguration. Dieses Fenster ändert sie nur
+    /// im Speicher -- so wie es der Dialog der Einstellungen auch tut.
+    /// </remarks>
+    public bool GrenzenGeaendert { get; private set; }
+
+    /// <summary>
+    /// Die Zeile über dem Knopf: was sich auf diesem Datenträger freigeben
+    /// lässt.
+    /// </summary>
+    private void ZahlenZeigen()
+    {
+        var zahlen = _belegung(_wurzel);
+
+        var dateien = zahlen?.EvictableFiles ?? 0;
+        var bytes = zahlen?.EvictableBytes ?? 0;
+
+        EvictText.Text = App.S("M.VolumeEvictable", Format.Count(dateien), Format.Bytes(bytes));
+        ReleaseButton.Content = App.S("M.VolumeRelease", Format.Count(dateien), Format.Bytes(bytes));
+        ReleaseButton.IsEnabled = dateien > 0;
+    }
+
+    /// <summary>
+    /// Gibt auf diesem Datenträger frei, was freigegeben werden darf.
+    /// </summary>
+    /// <remarks>
+    /// Dieselben Sperren wie überall: angeheftete Dateien bleiben, und die
+    /// Platzhalter-Schwelle gilt auch hier. Der Knopf ist eine Bitte.
+    /// </remarks>
+    private async void OnRelease(object sender, RoutedEventArgs e)
+    {
+        ReleaseButton.IsEnabled = false;
+        Hint.Text = App.S("G.Clearing");
+
+        try
+        {
+            Hint.Text = await _freigeben(_wurzel);
+        }
+        catch (Exception ex)
+        {
+            Hint.Text = App.S("G.ClearFailed", ex.Message);
+        }
+        finally
+        {
+            ZahlenZeigen();
+        }
     }
 
     /// <summary>Was auszuführen ist. Erst nach dem Bestätigen belegt.</summary>
