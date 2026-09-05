@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Macht aus dem Veroeffentlichungsverzeichnis einen Installer und legt ihn
     als Freigabe auf GitHub ab.
@@ -325,7 +325,10 @@ Start selbst ein.
 "@
 
 $textDatei = Join-Path $env:TEMP "synct-freigabe-$Fassung.md"
-$text | Set-Content -LiteralPath $textDatei -Encoding utf8
+# Ohne Vorzeichen. Set-Content -Encoding utf8 setzt in Windows
+# PowerShell eines, und gh reicht es unveraendert weiter: in der
+# Freigabe stand es dann als sichtbares Zeichen vor der ersten Zeile.
+[System.IO.File]::WriteAllText($textDatei, $text, $ohneVorzeichen)
 
 $argumente = @(
     'release', 'create', $etikett, $Paket,
