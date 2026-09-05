@@ -74,6 +74,26 @@ $Einstellung = Join-Path $PSScriptRoot 'veroeffentlichung.json'
 function Schritt($text) { Write-Host "==> $text" -ForegroundColor Cyan }
 function Abbruch($text) { Write-Host "!!  $text" -ForegroundColor Red; exit 1 }
 
+# Windows PowerShell macht aus jeder Zeile, die ein Programm nach stderr
+# schreibt, einen Fehlersatz, sobald stderr umgeleitet wird. Bei
+# $ErrorActionPreference = 'Stop' bricht das Werkzeug daran ab -- auch
+# wenn das Programm nur "nicht gefunden" gemeldet hat und genau das die
+# Antwort war, auf die es ankommt.
+#
+# Aufrufe, deren Fehlschlag vorgesehen ist, laufen deshalb hierueber.
+# Zurueck kommt allein der Rueckgabewert.
+function Stumm {
+    param([Parameter(ValueFromRemainingArguments = $true)] [string[]] $Befehl)
+
+    $vorher = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $Befehl[0] @($Befehl[1..($Befehl.Count - 1)]) 2>&1 | Out-Null
+        return $LASTEXITCODE
+    }
+    finally { $ErrorActionPreference = $vorher }
+}
+
 # ---------------------------------------------------------------- Vorbedingungen
 
 # Das Veroeffentlichungsverzeichnis. Ohne die drei Dateien ist es keines:
@@ -152,8 +172,9 @@ if ((git tag --list $etikett)) {
         Abbruch "Das Etikett $etikett gibt es schon, in $PropsDatei steht aber $bisher. Mit -Fassung eine andere angeben."
     }
 
-    git merge-base --is-ancestor $etikett HEAD 2>$null
-    if ($LASTEXITCODE -ne 0) { Abbruch "Das Etikett $etikett zeigt nicht in den aktuellen Zweig." }
+    if ((Stumm git merge-base --is-ancestor $etikett HEAD) -ne 0) {
+        Abbruch "Das Etikett $etikett zeigt nicht in den aktuellen Zweig."
+    }
 
     $schonFestgeschrieben = $true
     Write-Host "    $etikett ist schon festgeschrieben -- es wird nur noch geschoben."
@@ -271,13 +292,18 @@ Schritt 'Freigabe anlegen'
 
 # gh legt keine zweite Freigabe unter demselben Etikett an. Das vorher zu
 # sagen ist verstaendlicher als der Fehler, der sonst kommt.
-gh release view $etikett --repo $Repo *> $null
-if ($LASTEXITCODE -eq 0) {
+if ((Stumm gh release view $etikett --repo $Repo) -eq 0) {
     Abbruch "Auf GitHub gibt es die Freigabe $etikett schon. Loeschen mit: gh release delete $etikett --repo $Repo"
 }
 
 if (-not $Hinweise) {
-    $letztes = git describe --tags --abbrev=0 "$etikett^" 2>$null
+    # Vor dem ersten Etikett gibt es kein vorheriges; git meldet das
+    # nach stderr. Siehe Stumm weiter oben.
+    $vorher = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $letztes = git describe --tags --abbrev=0 "$etikett^" 2>$null | Select-Object -First 1
+    if ($LASTEXITCODE -ne 0) { $letztes = $null }
+    $ErrorActionPreference = $vorher
 
     $zeilen = if ($letztes) { git log --pretty=format:'- %s' "$letztes..$etikett" }
               else          { git log --pretty=format:'- %s' -20 }
