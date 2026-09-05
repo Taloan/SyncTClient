@@ -86,6 +86,8 @@ public partial class ProgramSettingsWindow : Window
     {
         InitializeComponent();
 
+        KopfFuellen();
+
         _config = config;
         _configDirectory = configDirectory;
         _volumes = volumes;
@@ -636,6 +638,80 @@ public partial class ProgramSettingsWindow : Window
         {
             // Ungueltige Pfade gelten als ungleich. Der Fehler zeigt sich beim Speichern.
             return false;
+        }
+    }
+
+    /// <summary>Wo der Quelltext liegt.</summary>
+    private const string Heimat = "https://github.com/Taloan/SyncTClient";
+
+    /// <summary>
+    /// Fassung, Erstellungszeitpunkt und die Adresse des Quelltextes.
+    /// </summary>
+    /// <remarks>
+    /// Die Fassung kommt aus <c>Directory.Build.props</c> und steht als
+    /// InformationalVersion in der Anwendung -- also genau die Zahl, die auch
+    /// auf dem Installer steht. AssemblyVersion waere "0.9.1.0" und damit eine
+    /// Stelle mehr, als irgendwo sonst genannt wird.
+    ///
+    /// Als Erstellungszeitpunkt gilt der Schreibzeitpunkt der Anwendung. Ein
+    /// Zaehler waere schoener, aber es gibt keinen: gebaut wird hier, nicht auf
+    /// einem Server, der mitzaehlt. Das Datum beantwortet dieselbe Frage --
+    /// welcher Stand laeuft hier -- und kann nicht falsch sein.
+    /// </remarks>
+    private void KopfFuellen()
+    {
+        var anwendung = System.Reflection.Assembly.GetEntryAssembly();
+
+        var fassung = anwendung?
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
+
+        // Bei einem Bau mit Quellenverweis haengt "+<Pruefsumme>" hinten dran.
+        if (fassung is not null && fassung.IndexOf('+') is var plus && plus > 0)
+            fassung = fassung[..plus];
+
+        fassung ??= anwendung?.GetName().Version?.ToString() ?? "?";
+
+        var erstellt = string.Empty;
+        try
+        {
+            var datei = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(datei) && File.Exists(datei))
+                erstellt = File.GetLastWriteTime(datei).ToString("dd.MM.yyyy HH:mm");
+        }
+        catch (Exception)
+        {
+            // Ohne Zugriff auf die eigene Datei bleibt es bei der Fassung.
+            // Ein Dialog, der deswegen nicht aufgeht, waere die schlechtere
+            // Antwort auf eine Zeile Beiwerk.
+        }
+
+        VersionText.Text = erstellt.Length > 0
+            ? App.S("S.Settings.VersionBuild", fassung, erstellt)
+            : App.S("S.Settings.Version", fassung);
+
+        HomeText.Text = Heimat;
+    }
+
+    /// <summary>
+    /// Oeffnet die Adresse im eingestellten Browser.
+    /// </summary>
+    /// <remarks>
+    /// <c>UseShellExecute</c> muss an sein: ohne das versucht .NET, die
+    /// Adresse als ausfuehrbare Datei zu starten, und das schlaegt fehl.
+    /// </remarks>
+    private void OnOpenHome(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(Heimat) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, App.S("S.Settings.Title"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }

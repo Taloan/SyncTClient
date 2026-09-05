@@ -32,6 +32,29 @@
        ueber den Inhalt, statt Platz fuer sie zu lassen. -->
   <StackPanel Margin="16,16,32,16">
 
+    <!-- Wer wissen will, welche Fassung hier laeuft, sucht sie sonst in den
+         Eigenschaften der Datei. Sie steht jetzt dort, wo man ohnehin
+         nachsieht, wenn etwas nicht stimmt. -->
+    <Border Background="{DynamicResource Feld}" BorderBrush="{DynamicResource Rahmen}"
+            BorderThickness="1" Padding="14,12" Margin="0,0,0,4">
+      <StackPanel Orientation="Horizontal">
+        <Image Source="Logo.png" Width="48" Height="48" VerticalAlignment="Top"
+               RenderOptions.BitmapScalingMode="HighQuality" />
+        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="SyncTClient" FontSize="16" FontWeight="SemiBold"
+                     Foreground="{DynamicResource Text}" />
+          <TextBlock x:Name="VersionText" FontSize="11" Margin="0,2,0,0"
+                     Foreground="{DynamicResource Gedaempft}" />
+          <TextBlock FontSize="11" Margin="0,4,0,0">
+            <Hyperlink x:Name="HomeLink" Click="OnOpenHome"
+                       ToolTip="{DynamicResource S.Settings.HomeTip}">
+              <Run x:Name="HomeText" />
+            </Hyperlink>
+          </TextBlock>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
     <TextBlock Text="{DynamicResource S.Settings.LookGroup}" Style="{StaticResource Gruppe}" Margin="0,0,0,2" />
 
     <StackPanel Orientation="Horizontal">
