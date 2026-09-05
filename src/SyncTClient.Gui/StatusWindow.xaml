@@ -110,7 +110,7 @@
           <ItemsControl x:Name="TransferList">
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <DockPanel Margin="0,0,0,6">
+                <DockPanel Margin="0,0,0,6" ToolTip="{Binding Tip}">
                   <TextBlock Text="{Binding StateText}" DockPanel.Dock="Right" FontSize="10"
                              Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center"
                              Margin="8,0,0,0" />
