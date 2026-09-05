@@ -6,7 +6,7 @@
   <s:String x:Key="S.Close">Schließen</s:String>
   <s:String x:Key="S.Apply">Übernehmen</s:String>
   <s:String x:Key="S.Vol.Title">Datenträger</s:String>
-  <s:String x:Key="S.Vol.For">Modus der Dateien auf {0}</s:String>
+  <s:String x:Key="S.Vol.For">Immer verfügbar auf {0} (Abgewählt = Speicherplatz freigeben)</s:String>
   <s:String x:Key="S.Vol.BoxHint">Angekreuzt: immer auf diesem Gerät behalten — zählt nicht auf das Limit.&#10;Nicht angekreuzt: Platzhalter — zählt zum Cache und wird verdrängt, sobald der Platz gebraucht wird.&#10;&#10;Das Kästchen zeigt den Modus. Wo der Inhalt gerade liegt, steht daneben.</s:String>
   <s:String x:Key="S.Vol.Empty">Auf diesem Datenträger ist für keine Datei ein Modus vermerkt, und keine zählt zum Cache.</s:String>
   <s:String x:Key="S.Vol.Loading">Der Bestand wird zusammengestellt …</s:String>

@@ -6,7 +6,7 @@
   <s:String x:Key="S.Close">Close</s:String>
   <s:String x:Key="S.Apply">Apply</s:String>
   <s:String x:Key="S.Vol.Title">Volume</s:String>
-  <s:String x:Key="S.Vol.For">File mode on {0}</s:String>
+  <s:String x:Key="S.Vol.For">Always available on {0} (unticked = free up space)</s:String>
   <s:String x:Key="S.Vol.BoxHint">Ticked: always keep on this device — does not count toward the limit.&#10;Not ticked: placeholder — counts toward the cache and is evicted once the space is needed.&#10;&#10;The box shows the mode. Where the content currently is appears next to it.</s:String>
   <s:String x:Key="S.Vol.Empty">No file on this volume has a mode recorded, and none counts toward the cache.</s:String>
   <s:String x:Key="S.Vol.Loading">Collecting the inventory …</s:String>
