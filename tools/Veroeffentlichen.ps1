@@ -14,8 +14,11 @@
       * Inno Setup liegt auf dem Rechner
       * gh ist eingerichtet:  winget install GitHub.cli  und  gh auth login
 
-    Der Quelltext bleibt bei "origin". Auf GitHub liegt nur das Verzeichnis
-    fuer die Freigaben; sein Name steht in tools\veroeffentlichung.json oder
+    Der Quelltext geht mit. Das Original bleibt "origin" -- von GitHub wird
+    nie gezogen, nur geschoben. Damit kann von dort nichts in den
+    Arbeitsordner gelangen, gleich was jemand dort anstellt.
+
+    Der Name des Verzeichnisses steht in tools\veroeffentlichung.json oder
     wird mit -Repo uebergeben.
 
 .PARAMETER Fassung
@@ -27,7 +30,7 @@
     dem letzten Etikett.
 
 .PARAMETER Repo
-    Das Verzeichnis auf GitHub, etwa "dirkmertens/SyncTClient-Releases".
+    Das Verzeichnis auf GitHub, etwa "dirkmertens/SyncTClient".
 
 .PARAMETER Entwurf
     Die Freigabe wird als Entwurf angelegt und nicht veroeffentlicht.
@@ -164,7 +167,7 @@ if (-not $Repo) {
     Abbruch @"
 Kein GitHub-Verzeichnis angegeben. Einmalig festlegen:
 
-    '{ "Repo": "benutzer/SyncTClient-Releases" }' | Set-Content -Encoding utf8 "$Einstellung"
+    '{ "Repo": "benutzer/SyncTClient" }' | Set-Content -Encoding utf8 "$Einstellung"
 
 oder je Aufruf mit -Repo uebergeben.
 "@
@@ -183,10 +186,30 @@ git add $PropsDatei
 git commit -m "Fassung $Fassung" | Out-Null
 git tag -a $etikett -m "SyncTClient $Fassung"
 
-# Auf die eigene Gegenstelle. Der Quelltext bleibt dort; GitHub traegt nur
-# die Freigaben.
+# Zuerst auf die eigene Gegenstelle. Sie ist das Original.
 git push
 git push origin $etikett
+
+# Und dann derselbe Stand nach GitHub.
+#
+# Eine eigene Gegenstelle mit eigenem Namen, damit "git push" ohne Zusatz
+# weiterhin nur an "origin" geht. Gezogen wird von GitHub nie: was dort
+# jemand anstellt -- eine Abspaltung, eine Aenderungsanfrage -- bleibt dort
+# und kommt nie in diesen Arbeitsordner.
+Schritt 'Quelltext nach GitHub schieben'
+
+if (-not (git remote | Where-Object { $_ -eq 'github' })) {
+    git remote add github "https://github.com/$Repo.git"
+    Write-Host "    Gegenstelle 'github' angelegt: $Repo"
+}
+
+$zweig = (git rev-parse --abbrev-ref HEAD).Trim()
+
+git push github $zweig
+if ($LASTEXITCODE -ne 0) { Abbruch 'Der Quelltext liess sich nicht nach GitHub schieben.' }
+
+git push github $etikett
+if ($LASTEXITCODE -ne 0) { Abbruch 'Das Etikett liess sich nicht nach GitHub schieben.' }
 
 # ---------------------------------------------------------------- Freigabe
 
