@@ -213,7 +213,9 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
         // Welcher Zustand gerade gilt, steht als Haken vor dem Eintrag.
         // Ohne ihn liess sich nicht sehen, ob "freigeben" ueberhaupt noch
         // etwas aendert -- und ein Griff daneben fiel nicht auf.
-        var haltung = Sync.Haltung(_paths);
+        // Ohne laufenden Client gibt es niemanden, der antwortet -- und die
+        // Eintraege sind ohnehin grau.
+        var haltung = laeuft ? Sync.Haltung(_paths) : Sync.Zustand.Offen;
 
         AppendMenuW(untermenue, MfString | grau | (haltung == Sync.Zustand.Lokal ? MfChecked : 0),
             idFirst + 0, "Immer auf diesem Gerät behalten");
@@ -485,78 +487,31 @@ internal static class Sync
         Cache
     }
 
-    /// <summary>FILE_ATTRIBUTE_PINNED.</summary>
-    private const uint Angeheftet = 0x0008_0000;
-
-    /// <summary>FILE_ATTRIBUTE_UNPINNED.</summary>
-    private const uint Freigegeben = 0x0010_0000;
-
     /// <summary>
     /// Wie die Auswahl gerade gehalten wird.
     /// </summary>
     /// <remarks>
-    /// Gelesen wird das Attribut, das Windows selbst fuehrt -- ohne Rueckfrage
-    /// beim Client. Ein Verzeichnis traegt es nicht: dort entscheiden die
-    /// Dateien darin, und zwar einstimmig. Gefragt wird nur eine begrenzte
-    /// Zahl von ihnen; ein Kontextmenue, das erst nach dem Durchgang durch
-    /// zwanzigtausend Dateien erscheint, ist keines.
+    /// Gefragt wird der Client. Aus den Attributen ist es nicht abzulesen:
+    /// FILE_ATTRIBUTE_UNPINNED traegt jeder Platzhalter -- ohne den
+    /// Anheft-Zustand zeigt Windows an ihm gar kein Ueberlagerungssymbol --,
+    /// und welche Datei freigegeben wurde, weiss allein der Client.
+    ///
+    /// Kurze Frist, und ohne Antwort eben kein Haken. Das hier laeuft,
+    /// waehrend das Kontextmenue aufgebaut wird; darauf zu warten hiesse, den
+    /// Rechtsklick warten zu lassen.
     /// </remarks>
     public static Zustand Haltung(IReadOnlyList<string> pfade)
+        => Frage("STATE", pfade, TimeSpan.FromSeconds(1)) switch
+        {
+            "LOKAL" => Zustand.Lokal,
+            "CACHE" => Zustand.Cache,
+            _ => Zustand.Offen
+        };
+
+    private static string Frage(string befehl, IReadOnlyList<string> pfade, TimeSpan frist)
     {
-        const int Hoechstens = 64;
-
-        var lokal = 0;
-        var cache = 0;
-        var gesehen = 0;
-
-        try
-        {
-            foreach (var pfad in pfade)
-            {
-                foreach (var datei in Dateien(pfad, Hoechstens - gesehen))
-                {
-                    var werte = (uint)File.GetAttributes(datei);
-
-                    if ((werte & Angeheftet) != 0) lokal++;
-                    else if ((werte & Freigegeben) != 0) cache++;
-
-                    if (++gesehen >= Hoechstens) break;
-                }
-
-                if (gesehen >= Hoechstens) break;
-            }
-        }
-        catch (Exception)
-        {
-            return Zustand.Offen;
-        }
-
-        if (gesehen == 0) return Zustand.Offen;
-        if (lokal == gesehen) return Zustand.Lokal;
-        if (cache == gesehen) return Zustand.Cache;
-
-        return Zustand.Offen;
-    }
-
-    private static IEnumerable<string> Dateien(string pfad, int hoechstens)
-    {
-        if (hoechstens <= 0) yield break;
-
-        if (File.Exists(pfad))
-        {
-            yield return pfad;
-            yield break;
-        }
-
-        if (!Directory.Exists(pfad)) yield break;
-
-        var zahl = 0;
-
-        foreach (var datei in Directory.EnumerateFiles(pfad, "*", SearchOption.AllDirectories))
-        {
-            yield return datei;
-            if (++zahl >= hoechstens) yield break;
-        }
+        var austausch = Task.Run(() => Austausch(befehl, pfade));
+        return austausch.Wait(frist) ? austausch.Result : "";
     }
 
     public static bool Inside(string path)
