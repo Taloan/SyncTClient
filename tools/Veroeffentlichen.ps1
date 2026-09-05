@@ -69,6 +69,7 @@ $BinVerz     = Join-Path $Wurzel 'BIN'
 $DistVerz    = Join-Path $Wurzel 'dist'
 $Skript      = Join-Path $Wurzel 'setup\SyncTClient.iss'
 $PropsDatei  = Join-Path $Wurzel 'Directory.Build.props'
+$ChangeDatei = Join-Path $Wurzel 'CHANGELOG.md'
 $Einstellung = Join-Path $PSScriptRoot 'veroeffentlichung.json'
 
 function Schritt($text) { Write-Host "==> $text" -ForegroundColor Cyan }
@@ -226,6 +227,29 @@ oder je Aufruf mit -Repo uebergeben.
 
 Write-Host "    $Repo"
 
+# ---------------------------------------------------------------- Aenderungen
+
+Schritt 'Aenderungen zusammenstellen'
+
+# Von welchem Etikett bis wohin. Beim ersten Lauf gibt es das neue Etikett noch
+# nicht, dann zaehlt HEAD; beim zweiten Lauf nach einem Abbruch steht es schon.
+$bisRef = if ($schonFestgeschrieben) { $etikett } else { 'HEAD' }
+$vonRef = if ($schonFestgeschrieben) { "$etikett^" } else { 'HEAD' }
+
+# Vor dem ersten Etikett gibt es kein vorheriges; git meldet das nach stderr.
+$vorher = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$letztes = git describe --tags --abbrev=0 $vonRef 2>$null | Select-Object -First 1
+if ($LASTEXITCODE -ne 0) { $letztes = $null }
+$ErrorActionPreference = $vorher
+
+$aenderungen = if ($letztes) { git log --pretty=format:'- %s' "$letztes..$bisRef" }
+               else          { git log --pretty=format:'- %s' -20 $bisRef }
+$aenderungen = ($aenderungen -join "`n")
+
+if ($letztes) { Write-Host "    $letztes -> $etikett" }
+Write-Host ("    {0} Eintraege" -f ($aenderungen -split "`n").Count)
+
 # ---------------------------------------------------------------- Fassung festschreiben
 
 Schritt 'Fassung festschreiben und etikettieren'
@@ -237,7 +261,23 @@ else {
     $neueProps = $props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Version>$Fassung</Version>"
     [System.IO.File]::WriteAllText($PropsDatei, $neueProps, $ohneVorzeichen)
 
-    git add $PropsDatei
+    # Der neue Abschnitt ganz oben, unter der Marke. Ohne Umweg ueber einen
+    # regulaeren Ausdruck: in Commit-Betreffen steht "$" und "$1" durchaus,
+    # und -replace wuerde das als Rueckverweis lesen.
+    $changelog = [System.IO.File]::ReadAllText($ChangeDatei, $ohneVorzeichen)
+    $marke = '<!-- Neue Fassungen fügt tools/Veroeffentlichen.ps1 unter dieser Zeile ein. -->'
+
+    if (-not $changelog.Contains($marke)) { Abbruch "In $ChangeDatei fehlt die Marke fuer neue Fassungen." }
+
+    $zeilenende = if ($changelog.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $abschnitt  = "## $Fassung -- $(Get-Date -Format 'yyyy-MM-dd')" +
+                  $zeilenende + $zeilenende +
+                  ($aenderungen -replace "`n", $zeilenende) + $zeilenende
+
+    $changelog = $changelog.Replace($marke, $marke + $zeilenende + $zeilenende + $abschnitt)
+    [System.IO.File]::WriteAllText($ChangeDatei, $changelog, $ohneVorzeichen)
+
+    git add $PropsDatei $ChangeDatei
     git commit -m "Fassung $Fassung" | Out-Null
     git tag -a $etikett -m "SyncTClient $Fassung"
 }
@@ -296,20 +336,9 @@ if ((Stumm gh release view $etikett --repo $Repo) -eq 0) {
     Abbruch "Auf GitHub gibt es die Freigabe $etikett schon. Loeschen mit: gh release delete $etikett --repo $Repo"
 }
 
-if (-not $Hinweise) {
-    # Vor dem ersten Etikett gibt es kein vorheriges; git meldet das
-    # nach stderr. Siehe Stumm weiter oben.
-    $vorher = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    $letztes = git describe --tags --abbrev=0 "$etikett^" 2>$null | Select-Object -First 1
-    if ($LASTEXITCODE -ne 0) { $letztes = $null }
-    $ErrorActionPreference = $vorher
-
-    $zeilen = if ($letztes) { git log --pretty=format:'- %s' "$letztes..$etikett" }
-              else          { git log --pretty=format:'- %s' -20 }
-
-    $Hinweise = ($zeilen -join "`n")
-}
+# Derselbe Text, der im Changelog steht. Zwei Quellen fuer dieselbe Liste
+# waeren zwei Gelegenheiten, auseinanderzulaufen.
+if (-not $Hinweise) { $Hinweise = $aenderungen }
 
 $text = @"
 $Hinweise
