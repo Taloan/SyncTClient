@@ -86,6 +86,20 @@ public sealed class PersistentFolderIndex : IDisposable
 
             CREATE INDEX IF NOT EXISTS local_sequence ON local_files(sequence);
             CREATE INDEX IF NOT EXISTS local_state ON local_files(state);
+
+            -- Der Modus, den der Anwender einer Datei oder einem Ordner
+            -- gegeben hat: 1 = immer lokal, 0 = Platzhalter, zaehlt zum
+            -- Cache. Was hier nicht steht, folgt der Betriebsart der
+            -- Freigabe; ein Ordner gilt fuer alles darunter, bis ein
+            -- Eintrag weiter unten etwas anderes sagt.
+            --
+            -- Aus dem Dateisystem ist das nicht abzulesen:
+            -- FILE_ATTRIBUTE_UNPINNED traegt jeder Platzhalter, sonst zeigt
+            -- Windows an ihm kein Ueberlagerungssymbol.
+            CREATE TABLE IF NOT EXISTS modus (
+                name  TEXT PRIMARY KEY,
+                lokal INTEGER NOT NULL
+            );
             """);
 
         // Eine Ankuendigung ohne Bloecke heisst: die Gegenstelle kennt die
@@ -716,6 +730,46 @@ public sealed class PersistentFolderIndex : IDisposable
         using var command = _db.CreateCommand();
         command.CommandText = sql;
         return command.ExecuteScalar();
+    }
+
+    // ------------------------------------------------------------ Freigegeben
+
+    /// <summary>Alle vermerkten Modi. True heisst "immer lokal".</summary>
+    public List<(string Name, bool Lokal)> Modes()
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT name, lokal FROM modus";
+
+        var eintraege = new List<(string, bool)>();
+        using var leser = command.ExecuteReader();
+        while (leser.Read()) eintraege.Add((leser.GetString(0), leser.GetInt64(1) != 0));
+
+        return eintraege;
+    }
+
+    /// <summary>Vermerkt den Modus einer Datei oder eines Ordners.</summary>
+    public void SetMode(string name, bool lokal)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            INSERT INTO modus (name, lokal) VALUES ($name, $lokal)
+            ON CONFLICT(name) DO UPDATE SET lokal = excluded.lokal
+            """;
+        command.Parameters.AddWithValue("$name", name);
+        command.Parameters.AddWithValue("$lokal", lokal ? 1 : 0);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Nimmt den Vermerk zurueck; danach gilt wieder die Betriebsart.</summary>
+    public void ClearMode(string name)
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "DELETE FROM modus WHERE name = $name";
+        command.Parameters.AddWithValue("$name", name);
+        command.ExecuteNonQuery();
     }
 
     private string? GetMeta(string key)

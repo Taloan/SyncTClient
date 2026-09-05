@@ -2344,8 +2344,9 @@ public partial class MainWindow : Window
 
         // Welcher Eintrag angeklickt wurde, und worauf. Ohne diese Zeile liess
         // sich nicht unterscheiden, ob ein Befehl nicht wirkte oder ob ein
-        // anderer angekommen war als gemeint.
-        AppendLog($"Kontextmenue: {befehl} fuer " +
+        // anderer angekommen war als gemeint. Die blosse Auskunft nicht: sie
+        // kommt bei jedem Rechtsklick und saehe wie eine Handlung aus.
+        if (befehl != "STATE") AppendLog($"Kontextmenue: {befehl} fuer " +
                   string.Join(", ", pfade.Take(3).Select(p => $"\"{System.IO.Path.GetFileName(p)}\"")) +
                   (pfade.Count > 3 ? $" und {pfade.Count - 3} weitere" : ""));
 
@@ -2367,6 +2368,11 @@ public partial class MainWindow : Window
 
             switch (befehl)
             {
+                // Nur eine Auskunft. Sie kommt aus dem Aufbau des
+                // Kontextmenues und muss schnell sein.
+                case "STATE":
+                    return host.Haltung(pfade);
+
                 case "PIN":
                 case "FREE":
                 {

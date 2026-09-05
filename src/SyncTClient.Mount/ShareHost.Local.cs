@@ -596,10 +596,18 @@ public sealed partial class ShareHost
         // UNPINNED traegt jeder Platzhalter, es ist die Bedingung dafuer, dass
         // Windows ueberhaupt ein Ueberlagerungssymbol zeigt -- daran ist nicht
         // abzulesen, ob jemand den Platz freigegeben hat.
-        var verschwunden = _freigegeben.Keys.Where(n => !vorhanden.ContainsKey(n)).ToList();
+        // Was es nicht mehr gibt, braucht keinen Modus mehr. Verzeichnisse
+        // stehen nicht in "vorhanden" -- der Durchgang sammelt dort nur
+        // Dateien --, deshalb wird bei ihnen auf der Platte nachgesehen.
+        foreach (var name in _modus.Keys.ToList())
+        {
+            if (vorhanden.ContainsKey(name)) continue;
 
-        foreach (var name in verschwunden) _freigegeben.TryRemove(name, out _);
-        if (verschwunden.Count > 0) FreigabenSchreiben();
+            var pfad = LocalPathOf(name);
+            if (File.Exists(pfad) || Directory.Exists(pfad)) continue;
+
+            ModusVergessen(name);
+        }
         _vorhanden = vorhanden;
 
         // Der Durchgang rechnet die Zahlen gleich selbst; was zwischen zwei
@@ -665,49 +673,99 @@ public sealed partial class ShareHost
     /// Modus fuer neue Dateien, "Speicherplatz freigeben" ist eine Aussage
     /// ueber eine bestehende. Sonst kam sie binnen einer Minute zurueck.
     /// </remarks>
-    private readonly ConcurrentDictionary<string, byte> _freigegeben = new(StringComparer.Ordinal);
-
-    /// <summary>Wo die Liste der freigegebenen Dateien liegt.</summary>
-    private string FreigabeDatei => Path.Combine(_app.HomeDirectory, $"freigegeben-{FolderId}.txt");
-
     /// <summary>
-    /// Liest, welche Dateien freigegeben sind.
+    /// Der Modus je Datei und je Ordner. True heisst "immer lokal".
     /// </summary>
     /// <remarks>
-    /// Eine eigene Liste, weil das Dateisystem die Frage nicht beantwortet.
-    /// FILE_ATTRIBUTE_UNPINNED traegt jeder Platzhalter -- ohne den
-    /// Anheft-Zustand zeigt Windows an ihm gar kein Ueberlagerungssymbol. Wer
-    /// daran ablesen wollte, was der Anwender freigegeben hat, bekaeme jeden
-    /// neu angelegten Platzhalter dazu.
+    /// Was hier nicht steht, folgt der Betriebsart der Freigabe -- die gilt
+    /// fuer neue Dateien. Ein Eintrag auf einem Ordner gilt fuer alles
+    /// darunter, bis ein Eintrag weiter unten etwas anderes sagt; deshalb
+    /// wird von unten nach oben gesucht.
     /// </remarks>
-    private void FreigabenLesen()
+    private readonly ConcurrentDictionary<string, bool> _modus = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Liest aus dem Index, welche Dateien freigegeben sind.
+    /// </summary>
+    /// <remarks>
+    /// Gefuehrt wird das selbst, weil das Dateisystem die Frage nicht
+    /// beantwortet: FILE_ATTRIBUTE_UNPINNED traegt jeder Platzhalter -- ohne
+    /// den Anheft-Zustand zeigt Windows an ihm gar kein
+    /// Ueberlagerungssymbol. Wer daran ablesen wollte, was der Anwender
+    /// freigegeben hat, bekaeme jeden neu angelegten Platzhalter dazu.
+    ///
+    /// Und zwar im Index derselben Freigabe, in einer eigenen Tabelle. Er ist
+    /// ohnehin die Ablage fuer alles, was je Ordner zu merken ist, und eine
+    /// Datenbank haelt einen abgebrochenen Schreibvorgang aus.
+    /// </remarks>
+    private void ModiLesen()
     {
         try
         {
-            if (!File.Exists(FreigabeDatei)) return;
+            lock (_indexGate)
+            {
+                if (_index is null) return;
 
-            foreach (var zeile in File.ReadAllLines(FreigabeDatei))
-                if (zeile.Length > 0) _freigegeben[zeile] = 0;
+                foreach (var (name, lokal) in _index.Modes()) _modus[name] = lokal;
+            }
         }
         catch (Exception ex)
         {
-            _log($"[{FolderId}] Liste der freigegebenen Dateien: {Herkunft(ex)}");
+            _log($"[{FolderId}] Modi lesen: {Herkunft(ex)}");
         }
     }
 
-    private void FreigabenSchreiben()
+    /// <summary>Vermerkt den Modus einer Datei oder eines Ordners.</summary>
+    private void ModusMerken(string name, bool lokal)
     {
+        _modus[name] = lokal;
+
         try
         {
-            var namen = _freigegeben.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
-
-            if (namen.Count == 0) File.Delete(FreigabeDatei);
-            else File.WriteAllLines(FreigabeDatei, namen);
+            lock (_indexGate) _index?.SetMode(name, lokal);
         }
         catch (Exception ex)
         {
-            _log($"[{FolderId}] Liste der freigegebenen Dateien: {Herkunft(ex)}");
+            _log($"[{FolderId}] Modus schreiben: {Herkunft(ex)}");
         }
+    }
+
+    private void ModusVergessen(string name)
+    {
+        _modus.TryRemove(name, out _);
+
+        try
+        {
+            lock (_indexGate) _index?.ClearMode(name);
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] Modus schreiben: {Herkunft(ex)}");
+        }
+    }
+
+    /// <summary>
+    /// Der Modus, der fuer diesen Namen gilt -- oder null fuer die
+    /// Betriebsart der Freigabe.
+    /// </summary>
+    /// <remarks>
+    /// Von unten nach oben: der Eintrag an der Datei selbst wiegt schwerer
+    /// als der an ihrem Ordner, und der an einem Unterordner schwerer als der
+    /// am Ordner darueber. So laesst sich ein ganzer Zweig freigeben und eine
+    /// einzelne Datei darin trotzdem behalten.
+    /// </remarks>
+    public bool? ModusVon(string relativePath)
+    {
+        if (_modus.IsEmpty) return null;
+        if (_modus.TryGetValue(relativePath, out var eigen)) return eigen;
+
+        for (var schnitt = relativePath.LastIndexOf('/'); schnitt > 0;
+             schnitt = relativePath.LastIndexOf('/', schnitt - 1))
+        {
+            if (_modus.TryGetValue(relativePath[..schnitt], out var oben)) return oben;
+        }
+
+        return null;
     }
 
     /// <summary>Was der letzte Durchgang im Ordner angetroffen hat.</summary>
@@ -973,7 +1031,7 @@ public sealed partial class ShareHost
                     // waere er der Normalfall.
                     var leer = _config.Mode == ShareMode.AlwaysLocal
                                && !_mitInhalt.ContainsKey(name)
-                               && !_freigegeben.ContainsKey(name);
+                               && ModusVon(name) != false;
 
                     if (!fehlt && hatInhalt && !leer) continue;
 

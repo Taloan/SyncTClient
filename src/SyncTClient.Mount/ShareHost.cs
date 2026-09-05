@@ -432,6 +432,44 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// Ob eine Datei nach der Ankuendigung der Gegenstelle wiederbeschaffbar
     /// ist. Nur dann darf ihr Speicherplatz hier freigegeben werden.
     /// </summary>
+    /// <summary>
+    /// Wie eine Auswahl gerade gehalten wird: LOKAL, CACHE oder OFFEN.
+    /// </summary>
+    /// <remarks>
+    /// Fuer das Kontextmenue. Es kann die Frage nicht selbst beantworten:
+    /// FILE_ATTRIBUTE_UNPINNED traegt jeder Platzhalter, und welche Datei
+    /// freigegeben wurde, steht allein hier.
+    ///
+    /// Gefragt wird eine begrenzte Zahl von Dateien. Ein Kontextmenue, das
+    /// erst nach dem Durchgang durch zwanzigtausend erscheint, ist keines --
+    /// und einstimmig ist eine Auswahl fast immer schon nach den ersten.
+    /// </remarks>
+    public string Haltung(IReadOnlyList<string> pfade)
+    {
+        const int Hoechstens = 200;
+
+        var lokal = 0;
+        var cache = 0;
+        var gesehen = 0;
+
+        foreach (var pfad in Dateien(pfade))
+        {
+            if (NameOf(pfad) is not { } name) continue;
+
+            // Kein Vermerk heisst: es gilt die Betriebsart der Freigabe.
+            if (ModusVon(name) ?? _config.Mode == ShareMode.AlwaysLocal) lokal++;
+            else cache++;
+
+            if (++gesehen >= Hoechstens) break;
+        }
+
+        if (gesehen == 0) return "OFFEN";
+        if (lokal == gesehen) return "LOKAL";
+        if (cache == gesehen) return "CACHE";
+
+        return "OFFEN";
+    }
+
     /// <summary>Ein Eintrag, der auf das Limit seines Datentraegers zaehlt.</summary>
     /// <param name="Name">Der Pfad ab der Wurzel der Freigabe, mit "/" getrennt.</param>
     /// <param name="Hydriert">Ob der Inhalt gerade lokal liegt.</param>
@@ -482,7 +520,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// sie wiegt schwerer.
     /// </remarks>
     private bool ZaehltZumCache(string relativePath)
-        => _config.Mode != ShareMode.AlwaysLocal || _freigegeben.ContainsKey(relativePath);
+        => ModusVon(relativePath) is { } lokal
+            ? !lokal
+            : _config.Mode != ShareMode.AlwaysLocal;
 
     private bool MayEvict(string relativePath)
     {
@@ -1653,8 +1693,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         };
 
         // Vor dem ersten Durchgang: er nimmt heraus, was es nicht mehr gibt,
-        // und braucht dazu die Liste von der letzten Sitzung.
-        FreigabenLesen();
+        // und braucht dazu die Vermerke der letzten Sitzung.
+        ModiLesen();
 
         _thumbnails = new ThumbnailStore(_app.ThumbnailDirectory);
         _thumbnails.Prepare();
@@ -3069,11 +3109,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     public (int Files, long Bytes) SetLocal(IEnumerable<string> paths, bool keep)
     {
+        var auswahl = paths.ToList();
+
+        // Der Modus wird an dem vermerkt, was gewaehlt wurde -- auch an einem
+        // Verzeichnis. Was spaeter darin entsteht, erbt ihn: eine Freigabe
+        // "vollstaendig lokal" mit einem freigegebenen Unterordner legt dort
+        // auch neue Dateien als Platzhalter an.
+        foreach (var pfad in auswahl)
+            if (NameOf(pfad) is { } gewaehlt) ModusMerken(gewaehlt, keep);
+
         var anzahl = 0;
         long bytes = 0;
-        var geaendert = false;
-
-        foreach (var pfad in Dateien(paths))
+        foreach (var pfad in Dateien(auswahl))
         {
             if (NameOf(pfad) is not { } name) continue;
 
@@ -3082,9 +3129,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 if (keep)
                 {
                     _mount?.SetPinned(pfad, true);
-
-                    // Angeheftet ist nicht mehr freigegeben.
-                    if (_freigegeben.TryRemove(name, out _)) geaendert = true;
 
                     // Anheften allein holt nichts. Ein einziges gelesenes Byte
                     // loest die Hydration der ganzen Datei aus -- derselbe Weg,
@@ -3104,7 +3148,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                     // first out: zuerst weicht, was am laengsten niemand
                     // angefasst hat, und das ist nicht diese hier.
                     _mount?.SetPinned(pfad, false);
-                    if (_freigegeben.TryAdd(name, 0)) geaendert = true;
                     _cache?.NoteAccess(name);
                 }
 
@@ -3118,7 +3161,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
 
         if (!keep) _cache?.Persist();
-        if (geaendert) FreigabenSchreiben();
         CacheChanged?.Invoke();
 
         // Freigeben rechnet auf einen Schlag an, was bisher nicht zaehlte.
