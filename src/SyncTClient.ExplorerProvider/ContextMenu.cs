@@ -326,9 +326,21 @@ internal sealed partial class SyncTContextMenu : IShellExtInit, IContextMenu
     {
         if (invokeInfo == 0) return Fail;
 
-        // CMINVOKECOMMANDINFO: cbSize, fMask, hwnd, lpVerb ... lpVerb traegt
-        // bei einem Menueeintrag die Kennung in den unteren 16 Bit.
-        var verb = Marshal.ReadIntPtr(invokeInfo, IntPtr.Size == 8 ? 24 : 12);
+        // CMINVOKECOMMANDINFO. Bei einem Menueeintrag traegt lpVerb keine
+        // Zeichenkette, sondern die Kennung in den unteren 16 Bit.
+        //
+        //     Versatz   x64   x86   Feld
+        //        0        0     0   DWORD  cbSize
+        //        4        4     4   DWORD  fMask
+        //        8        8     8   HWND   hwnd
+        //       ..       16    12   LPCSTR lpVerb
+        //       ..       24    16   LPCSTR lpParameters
+        //
+        // Hier stand auf x64 die 24, also lpParameters. Das ist fast immer
+        // NULL, und NULL ist die Kennung 0 -- der erste Eintrag. Damit fuehrte
+        // jeder Klick in diesem Menue "Immer auf diesem Geraet behalten" aus,
+        // gleich welcher Eintrag getroffen war. Auf x86 stimmte die 12.
+        var verb = Marshal.ReadIntPtr(invokeInfo, IntPtr.Size == 8 ? 16 : 12);
         if ((ulong)verb > 0xFFFF) return Fail;
 
         var befehl = (long)verb switch
