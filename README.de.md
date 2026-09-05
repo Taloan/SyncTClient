@@ -226,7 +226,7 @@ dotnet build SyncTClient.slnx -c Release
 
 Läuft nur als `win-x64`; ein anderer RuntimeIdentifier bricht mit einer
 Meldung ab. Veröffentlicht wird über das Profil `FolderProfile` nach `BIN`,
-danach macht `tools\Veroeffentlichen.ps1` daraus den Installer und die Freigabe.
+danach macht `tools\Veroeffentlichen.cmd` daraus den Installer und die Freigabe.
 
 Das Konsolenwerkzeug zeigt den Index einer Gegenstelle an, **ohne etwas auf die
 Platte zu schreiben**:

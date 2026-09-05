@@ -27,13 +27,20 @@ AppVerName=SyncTClient {#Fassung}
 VersionInfoVersion={#Fassung}
 AppPublisher=Dirk Mertens
 
-; Ohne Administratorrechte.
+; Ohne Administratorrechte -- aber die Wahl bleibt.
 ;
-; Das Programm traegt seine Shell-Erweiterung unter HKEY_CURRENT_USER ein und
-; meldet seine Sync-Wurzeln fuer den angemeldeten Benutzer an. Eine
-; Installation fuer alle Benutzer waere ein Versprechen, das es nicht
-; einhalten kann.
+; Vorgabe ist die Installation fuer den angemeldeten Benutzer, nach
+; %LOCALAPPDATA%\Programs. Das Programm traegt seine Shell-Erweiterung unter
+; HKEY_CURRENT_USER ein und meldet seine Sync-Wurzeln fuer den angemeldeten
+; Benutzer an; fuer alle Benutzer zu installieren verspricht mehr, als es
+; einhalten kann -- ein zweiter Benutzer bekaeme ein Programm, das fuer ihn
+; erst beim ersten Start etwas tut.
+;
+; Wer trotzdem nach C:\Program Files will, bekommt die Frage: mit "dialog"
+; stellt Inno sie als erste Seite. Die Daten liegen ohnehin nicht beim
+; Programm, sondern unter %LOCALAPPDATA%\SyncTClient, deshalb traegt beides.
 PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 DefaultDirName={autopf}\SyncTClient
 DefaultGroupName=SyncTClient
 DisableProgramGroupPage=yes
