@@ -224,6 +224,15 @@ public sealed partial class ShareHost
     /// <summary>Namen, die zu pruefen sind.</summary>
     private readonly ConcurrentDictionary<string, byte> _dirty = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Namen, die zurueckgestellt sind, mit dem Zeitpunkt, ab dem sie wieder
+    /// bewertet werden.
+    /// </summary>
+    /// <remarks>
+    /// Je Datei eine eigene Frist. Siehe <see cref="Zurueckstellen"/>.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, DateTime> _wartend = new(StringComparer.Ordinal);
+
     /// <summary>Namen, zu denen eine Loeschung gemeldet wurde.</summary>
     private readonly ConcurrentDictionary<string, byte> _removed = new(StringComparer.Ordinal);
 
@@ -339,6 +348,10 @@ public sealed partial class ShareHost
             Einmal("wiederda:" + name)(
                 $"[{FolderId}] \"{name}\" ist wieder da -- die vorgemerkte Loeschung entfaellt.");
 
+        // Ein neuer Vermerk ueberholt eine laufende Frist. Die Bewertung setzt
+        // gleich eine neue, gerechnet ab der jetzigen Schreibzeit.
+        _wartend.TryRemove(name, out _);
+
         _dirty[name] = 0;
         Wake();
     }
@@ -390,6 +403,7 @@ public sealed partial class ShareHost
             && LocalCopy(name) is null) return;
 
         _dirty.TryRemove(name, out _);
+        _wartend.TryRemove(name, out _);
         _removed[name] = 0;
         Wake();
     }
@@ -1880,6 +1894,11 @@ public sealed partial class ShareHost
                     PruneExcluded();
                 }
 
+                // Was seine Frist abgesessen hat, kommt zurueck in die
+                // Bewertung. Vor der Abfrage darunter, sonst schliefe der Lauf
+                // weiter, obwohl gerade etwas faellig geworden ist.
+                Faellige();
+
                 if (_dirty.IsEmpty && _removed.IsEmpty) continue;
 
                 await Task.Delay(SettleDelay, ct).ConfigureAwait(false);
@@ -2041,19 +2060,20 @@ public sealed partial class ShareHost
         // Konflikt verursacht hat.
         //
         // Der naechste Durchgang greift den Namen von selbst wieder auf:
-        // Groesse und Zeit stehen weiterhin anders im Index als auf der
-        // Platte. Done merkt sich nichts.
+        // Der Name kommt mit seiner eigenen Frist zurueck, nicht erst beim
+        // naechsten Durchgang ueber den Ordner.
         //
         // Ein Zeitpunkt in der Zukunft -- verstellte Uhr, mitkopierter
         // Zeitstempel -- ergibt ein negatives Alter. Sonst bliebe die Datei
         // fuer immer liegen.
         var alter = DateTime.UtcNow - info.LastWriteTimeUtc;
-        if (alter >= TimeSpan.Zero && alter < Ruhefrist) return Done(name);
+        if (alter >= TimeSpan.Zero && alter < Ruhefrist)
+            return Zurueckstellen(name, info.LastWriteTimeUtc + Ruhefrist);
 
         // Smart-Datenbankmodus: eine Datenbank geht erst hinaus, wenn sie
         // alles eingearbeitet hat. Warum, steht bei Datenbank.
         if (_app.SmartDatabaseMode && (Datenbank.IstBegleitdatei(name) || Datenbank.Beschaeftigt(path)))
-            return Done(name);
+            return Zurueckstellen(name, DateTime.UtcNow + Ruhefrist);
 
         // Nach einem gewonnenen Konflikt muss die Datei hinaus, obwohl sich an
         // ihr nichts geaendert hat. Geaendert hat sich, was die Gegenstelle
@@ -2363,6 +2383,56 @@ public sealed partial class ShareHost
     {
         _attempts.TryRemove(name, out _);
         return null;
+    }
+
+    /// <summary>
+    /// Legt den Namen mit einer eigenen Frist zurueck. Ist sie um, kommt er
+    /// von selbst wieder in die Bewertung.
+    /// </summary>
+    /// <remarks>
+    /// Vorher stand hier <see cref="Done"/>, und der merkt sich nichts. Der
+    /// Vermerk war damit fort, und wieder aufgegriffen wurde der Name erst
+    /// vom naechsten Durchgang ueber den Ordner — der laeuft stuendlich.
+    ///
+    /// Eine Datei, die zehn Sekunden Ruhefrist brauchte, konnte deshalb eine
+    /// Stunde lang unangekuendigt daliegen. Das ist nicht nur langsam: genau
+    /// dieser Zustand — hier geaendert, nach aussen noch nicht gesagt — ist
+    /// der, in dem eine eingehende Ankuendigung Schaden anrichten kann. Das
+    /// Fenster gehoert so kurz wie moeglich, nicht so lang wie der
+    /// Durchgangsabstand.
+    ///
+    /// Je Datei eine eigene Frist, nicht ein Takt fuer alle: eine Datei, an
+    /// der niemand mehr schreibt, soll nicht warten, weil eine andere noch
+    /// beschrieben wird.
+    /// </remarks>
+    private BepFileInfo? Zurueckstellen(string name, DateTime faellig)
+    {
+        _attempts.TryRemove(name, out _);
+        _wartend[name] = faellig;
+        return null;
+    }
+
+    /// <summary>
+    /// Nimmt die Namen, deren Frist um ist, zurueck in die Bewertung.
+    /// </summary>
+    /// <returns>Wie viele es waren.</returns>
+    private int Faellige()
+    {
+        if (_wartend.IsEmpty) return 0;
+
+        var jetzt = DateTime.UtcNow;
+        var wieder = 0;
+
+        foreach (var (name, faellig) in _wartend)
+        {
+            if (faellig > jetzt) continue;
+            if (!_wartend.TryRemove(name, out _)) continue;
+
+            _dirty[name] = 0;
+            wieder++;
+        }
+
+        return wieder;
     }
 
     private void Retry(string name, Exception ex)
