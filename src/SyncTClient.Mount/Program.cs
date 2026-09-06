@@ -32,7 +32,9 @@ if (Arg("--thumbtest") is { } thumbTarget)
             if (((uint)new FileInfo(file).Attributes & recallOnDataAccess) != 0) { skipped++; continue; }
 
             var prefix = new byte[ExifThumbnail.RequiredPrefixBytes];
-            using var stream = File.OpenRead(file);
+            using var stream = new FileStream(
+                file, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.SequentialScan);
             var read = stream.ReadAtLeast(prefix, Math.Min(prefix.Length, (int)stream.Length), false);
 
             var thumbnail = ExifThumbnail.TryExtract(prefix.AsSpan(0, read));
@@ -361,7 +363,11 @@ int BlockCheck()
             string? problem;
             try
             {
-                using var stream = File.OpenRead(localPath);
+                // Teilend oeffnen, wie ueberall sonst: ein Pruefdurchgang
+                // ueber tausend Dateien darf kein fremdes Programm aufhalten.
+                using var stream = new FileStream(
+                    localPath, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.SequentialScan);
                 (blockSize, var blocks, blocksHash) = BlockList.For(stream, local.Length);
                 problem = BlockDifference(announced, blockSize, blocks);
             }

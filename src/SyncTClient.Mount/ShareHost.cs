@@ -3225,7 +3225,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                     // den auch "vollstaendig lokal" nimmt.
                     if (IsPlaceholder(pfad))
                     {
-                        using var strom = File.OpenRead(pfad);
+                        using var strom = new FileStream(
+                            pfad, FileMode.Open, FileAccess.Read,
+                            FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
                         strom.ReadByte();
                     }
                 }
