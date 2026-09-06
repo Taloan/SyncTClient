@@ -1297,10 +1297,26 @@ public sealed partial class ShareHost
                     // ueberhaupt angezeigt werden. Zwei Dateiabfragen je
                     // Datei und Minute waeren ueber Tausende von Dateien
                     // sonst nicht zu rechtfertigen.
-                    var grundHier = _app.SmartDatabaseMode
-                                    && Datenbank.Beschaeftigt(LocalPathOf(name))
-                        ? "Datenbank in Benutzung, zurueckgestellt"
-                        : "hier vorhanden, noch nicht angekündigt";
+                    string grundHier;
+
+                    if (_app.SmartDatabaseMode && Datenbank.Beschaeftigt(LocalPathOf(name)))
+                    {
+                        grundHier = "Datenbank in Benutzung, zurueckgestellt";
+                    }
+                    else if (_wartend.TryGetValue(name, out var faellig))
+                    {
+                        // Nicht "steht noch aus", sondern "wartet mit Absicht,
+                        // und zwar noch so lange". Sonst sieht ein
+                        // zurueckgestellter Name aus wie ein haengender.
+                        var rest = faellig - DateTime.UtcNow;
+                        grundHier = rest > TimeSpan.Zero
+                            ? $"wird noch geschrieben, Ankuendigung in {rest.TotalSeconds:0} s"
+                            : "wird noch geschrieben, Ankuendigung steht an";
+                    }
+                    else
+                    {
+                        grundHier = "hier vorhanden, noch nicht angekündigt";
+                    }
 
                     if (offeneNamen.Count < 5)
                         offeneNamen.Add($"{name} ({Format.Bytes(eintrag.Size)}, {grundHier})");
@@ -2067,9 +2083,13 @@ public sealed partial class ShareHost
         // Ein Zeitpunkt in der Zukunft -- verstellte Uhr, mitkopierter
         // Zeitstempel -- ergibt ein negatives Alter. Sonst bliebe die Datei
         // fuer immer liegen.
+        // Die Frist gilt je Datei und waechst, wenn dieselbe Datei sich
+        // wiederholt aendert. Warum, steht bei _unruhig.
+        var frist = RuhefristFuer(name);
+
         var alter = DateTime.UtcNow - info.LastWriteTimeUtc;
-        if (alter >= TimeSpan.Zero && alter < Ruhefrist)
-            return Zurueckstellen(name, info.LastWriteTimeUtc + Ruhefrist);
+        if (alter >= TimeSpan.Zero && alter < frist)
+            return Zurueckstellen(name, info.LastWriteTimeUtc + frist);
 
         // Smart-Datenbankmodus: eine Datenbank geht erst hinaus, wenn sie
         // alles eingearbeitet hat. Warum, steht bei Datenbank.
@@ -2192,6 +2212,7 @@ public sealed partial class ShareHost
         Store(file, StateAnnounced);
 
         _attempts.TryRemove(name, out _);
+        Angekuendigt(name);
         return file;
     }
 
@@ -2379,6 +2400,71 @@ public sealed partial class ShareHost
     /// noch in derselben Minute hinausgeht.
     /// </remarks>
     private static readonly TimeSpan Ruhefrist = TimeSpan.FromSeconds(10);
+
+    /// <summary>Weiter als bis hierhin wird die Ruhefrist nicht gedehnt.</summary>
+    private static readonly TimeSpan RuhefristGrenze = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// Wie oft eine Datei zuletzt hintereinander angekuendigt wurde, und wann
+    /// zum letzten Mal.
+    /// </summary>
+    /// <remarks>
+    /// Manche Programme arbeiten eine Datei in Stufen ab, und das mit gutem
+    /// Grund: erst das Ergebnis, das der Anwender sofort sehen soll, danach
+    /// die Aufnahmedaten, danach die Bewertung. Aus der Sicht des Abgleichs
+    /// aendert sich dieselbe Datei dabei drei- oder viermal in einigen
+    /// Minuten.
+    ///
+    /// Mit einer festen Ruhefrist von zehn Sekunden geht jede Zwischenstufe
+    /// einzeln hinaus: dreimal rechnen, dreimal ankuendigen, dreimal
+    /// uebertragen, und dazwischen lehnen wir die Anfragen zur ueberholten
+    /// Fassung ab. Gemessen an einem Durchgang ueber einen Fotoordner waren
+    /// das 667 MB fuer einen Bestand, der einmal haette gehen muessen.
+    ///
+    /// Die Stufen sind nicht unser Problem, sondern die Arbeitsweise des
+    /// anderen Programms -- und die ist fuer seinen Zweck richtig. Also passt
+    /// sich der Abgleich an: wer sich wiederholt aendert, bekommt eine
+    /// laengere Frist. Zehn Sekunden, dann zwanzig, vierzig, achtzig, hoechstens
+    /// zwei Minuten. Kommt die Datei zur Ruhe, faellt die Frist zurueck.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, (int Zahl, long Ticks)> _unruhig =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Die Ruhefrist fuer diesen Namen -- laenger, wenn er sich wiederholt
+    /// geaendert hat.
+    /// </summary>
+    private TimeSpan RuhefristFuer(string name)
+    {
+        if (!_unruhig.TryGetValue(name, out var eintrag)) return Ruhefrist;
+
+        // Lange nichts mehr gehoert: die Datei ist fertig, die Zaehlung auch.
+        var her = TimeSpan.FromMilliseconds(Environment.TickCount64 - eintrag.Ticks);
+        if (her > RuhefristGrenze * 2)
+        {
+            _unruhig.TryRemove(name, out _);
+            return Ruhefrist;
+        }
+
+        var frist = Ruhefrist * Math.Pow(2, Math.Min(eintrag.Zahl, 8));
+        return frist > RuhefristGrenze ? RuhefristGrenze : frist;
+    }
+
+    /// <summary>
+    /// Vermerkt eine Ankuendigung. Folgt sie kurz auf die vorige, zaehlt sie
+    /// als Wiederholung.
+    /// </summary>
+    private void Angekuendigt(string name)
+    {
+        var jetzt = Environment.TickCount64;
+
+        _unruhig.AddOrUpdate(
+            name,
+            (0, jetzt),
+            (_, alt) => TimeSpan.FromMilliseconds(jetzt - alt.Ticks) > RuhefristGrenze * 2
+                ? (0, jetzt)
+                : (alt.Zahl + 1, jetzt));
+    }
 
     private BepFileInfo? Done(string name)
     {
