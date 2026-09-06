@@ -278,6 +278,18 @@ public sealed partial class ShareHost
                  "bis unsere Loeschung dazu heraus ist.");
     }
 
+    /// <summary>
+    /// Namen, deren eingehende Fassung wartet, bis die eigene Aenderung
+    /// angekuendigt ist.
+    /// </summary>
+    /// <remarks>
+    /// Nur damit die Zeile im Protokoll einmal steht und nicht bei jedem
+    /// Index der Gegenstelle erneut. Geraeumt wird der Vermerk, sobald hier
+    /// nichts Ungesagtes mehr liegt.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, byte> _wartetAufAnkuendigung =
+        new(StringComparer.Ordinal);
+
     private void Apply(string name, Bilanz bilanz)
     {
         BepFileInfo theirs;
@@ -325,8 +337,49 @@ public sealed partial class ShareHost
         // haben geaendert, ohne voneinander zu wissen.
         var ungesagt = mine is not null && !mine.Deleted && NochNichtGesagt(name);
 
+        if (!ungesagt) _wartetAufAnkuendigung.TryRemove(name, out _);
+
         if (ungesagt && !theirs.Deleted)
         {
+            // Vergleichbar ist an dieser Stelle nur, was wir zuletzt
+            // angekuendigt haben -- die Aenderung auf der Platte steht in
+            // keinem Vektor.
+            //
+            // Kennt die Gegenstelle nichts, was wir nicht selbst schon
+            // angekuendigt haben, dann hat sie gar nicht geaendert. Dann ist
+            // das kein Konflikt, sondern eine Ankuendigung, die noch aussteht.
+            // Ein Konflikt braucht zwei Aenderungen; hier gibt es eine.
+            //
+            // Genau hier lag der Schaden. Ein Programm schreibt beim Beenden
+            // seine Konfiguration neu. Bis der Durchgang sie angekuendigt hat,
+            // vergehen die Ruhefrist und ein Durchlauf. Faellt in dieses
+            // Fenster ein Index der Gegenstelle -- und beim Verbinden schickt
+            // sie ihren ganzen, also auch das, was sie von uns hat --, dann
+            // galt die eben geschriebene Datei als Konflikt: sie wurde als
+            // Konfliktkopie zur Seite gelegt und durch die aeltere Fassung der
+            // Gegenstelle ersetzt. Das hat mehrfach eine settings.json
+            // unbrauchbar gemacht, und es waren dieselben 198 Konfliktkopien
+            // an einem Tag im Profil eines laufenden Browsers.
+            //
+            // Zurueckstellen kostet einen Durchgang. Danach steht unsere
+            // Aenderung im Vektor, und der Vergleich unten entscheidet
+            // richtig: entweder gewinnen wir sauber, oder es ist ein echter
+            // Konflikt, und dann traegt die Konfliktkopie eine Version.
+            var stand = VersionVectors.Compare(mine!.Version, theirs.Version);
+
+            if (stand is VersionOrder.Neuer or VersionOrder.Gleich)
+            {
+                if (_wartetAufAnkuendigung.TryAdd(name, 0))
+                    _log($"[{FolderId}] \"{name}\" ist hier geaendert und noch nicht " +
+                         "angekuendigt. Die Fassung der Gegenstelle wartet, bis sie heraus ist.");
+
+                // Damit das Warten ein Ende hat, auch wenn der Vermerk aus
+                // einem frueheren Lauf stammt und die Liste leer ist.
+                _dirty[name] = 0;
+                Wake();
+                return;
+            }
+
             bilanz.Konflikte++;
             if (!ResolveConflict(name, path, mine!, theirs)) return;
         }
