@@ -326,6 +326,8 @@ Senke die Grenze in den Einstellungen oder schaffe Platz auf dem Laufwerk.</s:St
   <s:String x:Key="S.Settings.StorageGroup">SPEICHERMANAGEMENT</s:String>
   <s:String x:Key="S.Settings.Threshold">Platzhalter Schwelle</s:String>
   <s:String x:Key="S.Settings.ThresholdHint">Der Wert bestimmt, bei wie vielen anderen Knoten eine Datei mindestens vollständig vorliegen muss, bevor sie lokal zum Platzhalter werden kann.</s:String>
+  <s:String x:Key="S.Settings.SmartDb">Smart-Datenbankmodus</s:String>
+  <s:String x:Key="S.Settings.SmartDbHint">Eine Datenbank ist ein Satz aus Datei und Journal, nicht eine Datei. Solange im Journal etwas steht, ist die Datenbankdatei allein ein veralteter Anfang — wer sie so überträgt, verschickt einen Stand ohne die jüngsten Buchungen, ohne dass ein Fehler auftaucht. Eingeschaltet bleibt eine solche Datei liegen, bis das Journal leer ist, und die Journaldateien selbst gehen nie hinaus. Das gilt in beide Richtungen: was hier gerade beschrieben wird, überschreibt die Gegenstelle auch nicht.</s:String>
   <s:String x:Key="S.Settings.Thumbs">Vorschaubilder on-demand erzeugen</s:String>
   <s:String x:Key="S.Settings.ThumbsHint">Fragt der Dateimanager nach einer Vorschau, lädt der Client den Dateikopf herunter — einen Block von 128 KiB — und liest das eingebettete Bild daraus. Die Datei selbst bleibt ein Platzhalter.</s:String>
   <s:String x:Key="S.Settings.ClearThumbs">Vorschaubildercache jetzt löschen …</s:String>

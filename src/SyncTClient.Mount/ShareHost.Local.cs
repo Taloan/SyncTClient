@@ -1985,6 +1985,11 @@ public sealed partial class ShareHost
         var alter = DateTime.UtcNow - info.LastWriteTimeUtc;
         if (alter >= TimeSpan.Zero && alter < Ruhefrist) return Done(name);
 
+        // Smart-Datenbankmodus: eine Datenbank geht erst hinaus, wenn sie
+        // alles eingearbeitet hat. Warum, steht bei Datenbank.
+        if (_app.SmartDatabaseMode && (Datenbank.IstBeifahrer(name) || Datenbank.Beschaeftigt(path)))
+            return Done(name);
+
         // Nach einem gewonnenen Konflikt muss die Datei hinaus, obwohl sich an
         // ihr nichts geaendert hat. Geaendert hat sich, was die Gegenstelle
         // von ihr weiss.

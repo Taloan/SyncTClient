@@ -104,6 +104,10 @@
     </StackPanel>
     <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.ThresholdHint}" />
 
+    <CheckBox x:Name="SmartDbBox" Margin="0,14,0,0"
+              Content="{DynamicResource S.Settings.SmartDb}" />
+    <TextBlock Style="{StaticResource Hinweis}" Text="{DynamicResource S.Settings.SmartDbHint}" />
+
     <TextBlock Text="{DynamicResource S.Settings.ThumbGroup}" Style="{StaticResource Kopfzeile}" Margin="0,16,0,0" />
 
     <CheckBox x:Name="ThumbsBox" Content="{DynamicResource S.Settings.Thumbs}" />

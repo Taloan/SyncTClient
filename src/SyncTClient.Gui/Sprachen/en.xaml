@@ -334,6 +334,8 @@ Lower the limit in the settings, or make room on the drive.</s:String>
   <s:String x:Key="S.Settings.StorageGroup">STORAGE MANAGEMENT</s:String>
   <s:String x:Key="S.Settings.Threshold">Placeholder threshold</s:String>
   <s:String x:Key="S.Settings.ThresholdHint">The value determines on how many other nodes a file must be present in full before it can become a placeholder locally.</s:String>
+  <s:String x:Key="S.Settings.SmartDb">Smart database mode</s:String>
+  <s:String x:Key="S.Settings.SmartDbHint">A database is a set of a file and its journal, not a single file. While anything sits in the journal, the database file on its own is a stale beginning — transferring it sends a state without the newest commits, and nothing reports an error. Switched on, such a file waits until the journal is empty, and the journal files themselves never go out at all. This holds in both directions: what is being written here is not overwritten by a peer either.</s:String>
   <s:String x:Key="S.Settings.Thumbs">Create thumbnails on demand</s:String>
   <s:String x:Key="S.Settings.ThumbsHint">When the file manager asks for a preview, the client downloads the file head — a single 128 KiB block — and extracts the embedded image. The file itself stays a placeholder.</s:String>
   <s:String x:Key="S.Settings.ClearThumbs">Clear thumbnail cache now …</s:String>
