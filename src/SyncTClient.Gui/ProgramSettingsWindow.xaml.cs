@@ -82,6 +82,7 @@ public partial class ProgramSettingsWindow : Window
 
         ThresholdBox.Text = Math.Max(1, config.MinimumCopies).ToString();
         ThumbsBox.IsChecked = config.GenerateThumbnails;
+        SmartDbBox.IsChecked = config.SmartDatabaseMode;
         ShowUsage();
         ShowShellState();
         ParallelismBox.Text = config.Parallelism.ToString();
@@ -400,6 +401,7 @@ public partial class ProgramSettingsWindow : Window
         };
         _config.MinimumCopies = schwelle;
         _config.GenerateThumbnails = ThumbsBox.IsChecked == true;
+        _config.SmartDatabaseMode = SmartDbBox.IsChecked == true;
         _config.Parallelism = parallelism;
         _config.Listen = ListenBox.IsChecked == true;
         _config.ListenPort = listenPort;

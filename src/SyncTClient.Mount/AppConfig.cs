@@ -586,6 +586,24 @@ public sealed class AppConfig
     /// </remarks>
     public bool CloseToTray { get; set; }
 
+    /// <summary>
+    /// Datenbanken erst uebertragen, wenn sie alles eingearbeitet haben.
+    /// </summary>
+    /// <remarks>
+    /// Eine SQLite-Datenbank ist ein Satz aus Datei und Journal, nicht eine
+    /// Datei. Solange im Journal etwas steht, ist die Datenbankdatei allein
+    /// ein veralteter Anfang -- wer sie so kopiert, uebertraegt einen Stand
+    /// ohne die juengsten Buchungen, und niemand sieht einen Fehler.
+    ///
+    /// Ist das eingeschaltet, bleibt eine solche Datei liegen, bis das
+    /// Journal leer ist, und die Journaldateien selbst gehen nie hinaus.
+    /// Das gilt in beide Richtungen: was hier gerade beschrieben wird, wird
+    /// auch nicht von der Gegenstelle ueberschrieben.
+    ///
+    /// Ausgeschaltet gilt der gewoehnliche Weg: jede Datei fuer sich.
+    /// </remarks>
+    public bool SmartDatabaseMode { get; set; } = true;
+
     /// <summary>Wie oft nachgesehen wird, ob eine neuere Fassung vorliegt.</summary>
     public UpdateInterval UpdateCheck { get; set; } = UpdateInterval.Weekly;
 

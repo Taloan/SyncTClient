@@ -300,6 +300,19 @@ public sealed partial class ShareHost
 
         var path = LocalPathOf(name);
 
+        // Smart-Datenbankmodus, die andere Richtung.
+        //
+        // Nur nicht zu senden genuegt nicht. Bliebe der eingehende Weg offen,
+        // haette die Gegenstelle immer die juengere Fassung -- und jede ihrer
+        // Aenderungen legte unsere lokale Datei als Konfliktkopie zur Seite,
+        // waehrend ein Programm sie offen haelt. Genau das ist hier passiert:
+        // an einem Tag 198 Konfliktkopien im Profil eines laufenden Browsers.
+        //
+        // Solange also das Journal neben unserer Datei nicht leer ist, wird
+        // hier nichts angefasst. Der naechste Durchgang sieht wieder nach.
+        if (_app.SmartDatabaseMode && (Datenbank.IstBeifahrer(name) || Datenbank.Beschaeftigt(path)))
+            return;
+
         // Solange hier geschrieben wird, ist jede Meldung darueber unsere
         // eigene. Ohne diese Sperre kuendigen wir an, was wir gerade von der
         // Gegenstelle uebernommen haben.
