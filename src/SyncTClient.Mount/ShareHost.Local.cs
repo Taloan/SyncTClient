@@ -1958,6 +1958,33 @@ public sealed partial class ShareHost
         var length = info.Length;
         var modified = new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds();
 
+        // Eine Datei, an der gerade geschrieben wird, bleibt liegen.
+        //
+        // Ohne diese Frist wird sie genau in dem Moment gehasht, in dem sie
+        // sich aendert. Das kostet zweierlei.
+        //
+        // Erstens halten wir dabei einen Griff auf die Datei, bei hundert
+        // Megabyte fuer Sekunden. Wir selbst oeffnen vertraeglich, aber wer
+        // seine eigene Arbeitsdatei exklusiv oeffnet -- und das tun Programme
+        // mit ihren Datenbanken -- scheitert daran trotzdem. Ein Abgleich hat
+        // kein anderes Programm aufzuhalten.
+        //
+        // Zweitens waere das Ergebnis wertlos: gehasht wuerde ein
+        // Zwischenstand, der schon beim naechsten Durchgang ein anderer ist,
+        // und angekuendigt ein Zustand, den es nie gegeben hat. Genau daraus
+        // entstehen Konfliktkopien einer Datenbank, an der niemand einen
+        // Konflikt verursacht hat.
+        //
+        // Der naechste Durchgang greift den Namen von selbst wieder auf:
+        // Groesse und Zeit stehen weiterhin anders im Index als auf der
+        // Platte. Done merkt sich nichts.
+        //
+        // Ein Zeitpunkt in der Zukunft -- verstellte Uhr, mitkopierter
+        // Zeitstempel -- ergibt ein negatives Alter. Sonst bliebe die Datei
+        // fuer immer liegen.
+        var alter = DateTime.UtcNow - info.LastWriteTimeUtc;
+        if (alter >= TimeSpan.Zero && alter < Ruhefrist) return Done(name);
+
         // Nach einem gewonnenen Konflikt muss die Datei hinaus, obwohl sich an
         // ihr nichts geaendert hat. Geaendert hat sich, was die Gegenstelle
         // von ihr weiss.
@@ -2252,6 +2279,16 @@ public sealed partial class ShareHost
         => text => { if (_warned.TryAdd(name, 0)) _log(text); };
 
     /// <summary>Nichts zu tun: Fehlversuche vergessen und <c>null</c> liefern.</summary>
+    /// <summary>
+    /// Wie lange eine Datei unveraendert sein muss, bevor sie gehasht wird.
+    /// </summary>
+    /// <remarks>
+    /// Zehn Sekunden sind lang genug, um das Schreiben einer Datenbank nicht
+    /// mitten hinein zu treffen, und kurz genug, dass eine gespeicherte Datei
+    /// noch in derselben Minute hinausgeht.
+    /// </remarks>
+    private static readonly TimeSpan Ruhefrist = TimeSpan.FromSeconds(10);
+
     private BepFileInfo? Done(string name)
     {
         _attempts.TryRemove(name, out _);
