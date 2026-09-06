@@ -43,7 +43,7 @@ public static class Datenbank
     /// <summary>
     /// Gehört dieser Name zu einer Datenbank, ohne die Datenbank zu sein?
     /// </summary>
-    public static bool IstBeifahrer(string name)
+    public static bool IstBegleitdatei(string name)
     {
         foreach (var endung in Endungen)
             if (name.EndsWith(endung, StringComparison.OrdinalIgnoreCase))
@@ -67,10 +67,10 @@ public static class Datenbank
         {
             foreach (var endung in (string[])["-wal", "-journal"])
             {
-                var beifahrer = pfad + endung;
+                var begleit = pfad + endung;
 
                 // Length auf einer fehlenden Datei wirft; Exists zuerst.
-                if (File.Exists(beifahrer) && new FileInfo(beifahrer).Length > 0) return true;
+                if (File.Exists(begleit) && new FileInfo(begleit).Length > 0) return true;
             }
         }
         catch (Exception)
