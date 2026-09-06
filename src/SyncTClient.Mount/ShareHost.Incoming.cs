@@ -310,7 +310,7 @@ public sealed partial class ShareHost
         //
         // Solange also das Journal neben unserer Datei nicht leer ist, wird
         // hier nichts angefasst. Der naechste Durchgang sieht wieder nach.
-        if (_app.SmartDatabaseMode && (Datenbank.IstBeifahrer(name) || Datenbank.Beschaeftigt(path)))
+        if (_app.SmartDatabaseMode && (Datenbank.IstBegleitdatei(name) || Datenbank.Beschaeftigt(path)))
             return;
 
         // Solange hier geschrieben wird, ist jede Meldung darueber unsere

@@ -307,6 +307,21 @@ public sealed partial class ShareHost
         // Was wir selbst gerade schreiben, ist keine Aenderung von aussen.
         if (IsHydrating(name)) return;
 
+        // Smart-Datenbankmodus: die Begleitdateien einer Datenbank gehen nie
+        // hinaus, also braucht dieser Weg sie gar nicht erst zu vermerken.
+        //
+        // Das ist keine Abkuerzung, sondern die Stelle, an der es gehoert.
+        // SQLite legt -wal und -shm beim Oeffnen an und raeumt sie beim
+        // Schliessen der letzten Verbindung wieder weg. Ein Programm, das
+        // kurz hintereinander oeffnet und schliesst, erzeugt damit hunderte
+        // Rueckrufe je Sekunde -- gemessen an einer einzigen Datenbank rund
+        // sechzig Anlegen und Loeschen in der Sekunde, ueber Minuten.
+        //
+        // Weiter unten abgewiesen kostete jeder davon eine Protokollzeile und
+        // einen Namen im Rueckstand, der dort nie kleiner wurde. Das Protokoll
+        // war damit nicht mehr lesbar.
+        if (_app.SmartDatabaseMode && Datenbank.IstBegleitdatei(name)) return;
+
         // Die Datei ist wieder da, also ist sie nicht geloescht. Das ist
         // richtig -- aber wenn hier eine vorgemerkte Loeschung stirbt, muss
         // man es sehen koennen.
@@ -315,8 +330,14 @@ public sealed partial class ShareHost
         // die Loeschung vor, ein anderer Weg legte die Datei sofort wieder an,
         // und die Loeschung war fort, ohne dass eine Zeile davon zeugte. Aus
         // dem Protokoll sah es aus, als waere sie nie erkannt worden.
+        //
+        // Je Name einmal. Wiederholt sich das, sagt die zweite Zeile nichts,
+        // was die erste nicht schon gesagt hat -- und wer eine Datei im
+        // Sekundentakt anlegt und loescht, bekaeme sonst das Protokoll als
+        // Endlosband. Genau das ist passiert, bevor die Abweisung oben stand.
         if (_removed.TryRemove(name, out _))
-            _log($"[{FolderId}] \"{name}\" ist wieder da -- die vorgemerkte Loeschung entfaellt.");
+            Einmal("wiederda:" + name)(
+                $"[{FolderId}] \"{name}\" ist wieder da -- die vorgemerkte Loeschung entfaellt.");
 
         _dirty[name] = 0;
         Wake();
@@ -360,6 +381,13 @@ public sealed partial class ShareHost
         if (!_config.Includes(name) && MayEvict(name)) return;
 
         if (IsHydrating(name)) return;
+
+        // Dieselbe Abweisung wie beim Vermerk, mit einer Ausnahme: haben wir
+        // den Namen frueher einmal angekuendigt -- weil der Modus damals aus
+        // war --, dann muss die Loeschung hinaus. Sonst fuehrte die
+        // Gegenstelle eine Datei weiter, die es hier nicht mehr gibt.
+        if (_app.SmartDatabaseMode && Datenbank.IstBegleitdatei(name)
+            && LocalCopy(name) is null) return;
 
         _dirty.TryRemove(name, out _);
         _removed[name] = 0;
@@ -1021,6 +1049,13 @@ public sealed partial class ShareHost
         var wartend = 0;
         long wartendBytes = 0;
 
+        // Die Begleitdateien der Datenbanken. Sie gehen im Smart-
+        // Datenbankmodus nie hinaus, also waeren sie als Rueckstand falsch
+        // gezaehlt: ein Balken, der nie voll wird, und eine Zahl, die nie
+        // Null erreicht. Sie zu verschweigen waere aber genauso falsch --
+        // deshalb stehen sie mit eigener Zahl in der Zeile.
+        var begleitend = 0;
+
         // Die ersten paar Namen. Eine Zahl allein laesst raten, welche Dateien
         // gemeint sind -- und bei zwei Ordnern mit derselben Groesse raet man
         // falsch.
@@ -1212,6 +1247,17 @@ public sealed partial class ShareHost
 
                     if (angekuendigt) continue;
 
+                    // Smart-Datenbankmodus: eine Begleitdatei wird nie
+                    // angekuendigt. Sie hier als offen zu zaehlen hiesse, eine
+                    // Uebertragung anzuzeigen, die nie stattfindet -- und der
+                    // Vermerk darunter schickte sie jede Minute erneut durch
+                    // die Bewertung.
+                    if (_app.SmartDatabaseMode && Datenbank.IstBegleitdatei(name))
+                    {
+                        begleitend++;
+                        continue;
+                    }
+
                     // Und zur Bewertung vormerken. Der Durchgang ueber den
                     // Ordner uebergeht Platzhalter -- sie halten keinen Inhalt,
                     // also gibt es normalerweise nichts anzukuendigen. Ein
@@ -1223,11 +1269,29 @@ public sealed partial class ShareHost
 
                     offen++;
                     bytes += eintrag.Size;
-                    const string nochNicht = "hier vorhanden, noch nicht angekündigt";
+
+                    var platz = offeneNamen.Count < 5 || offeneListe.Count < ListenGrenze;
+                    if (!platz) continue;
+
+                    // Eine Datenbank, die gerade ein volles Journal neben sich
+                    // hat, ist offen -- aber nicht, weil die Uebertragung
+                    // haengt, sondern weil sie zurueckgestellt ist. Der
+                    // Unterschied gehoert in die Zeile, sonst steht dort ein
+                    // Rueckstand, der nach einem Fehler aussieht.
+                    //
+                    // Nachgesehen wird nur fuer die wenigen Namen, die
+                    // ueberhaupt angezeigt werden. Zwei Dateiabfragen je
+                    // Datei und Minute waeren ueber Tausende von Dateien
+                    // sonst nicht zu rechtfertigen.
+                    var grundHier = _app.SmartDatabaseMode
+                                    && Datenbank.Beschaeftigt(LocalPathOf(name))
+                        ? "Datenbank in Benutzung, zurueckgestellt"
+                        : "hier vorhanden, noch nicht angekündigt";
+
                     if (offeneNamen.Count < 5)
-                        offeneNamen.Add($"{name} ({Format.Bytes(eintrag.Size)}, {nochNicht})");
+                        offeneNamen.Add($"{name} ({Format.Bytes(eintrag.Size)}, {grundHier})");
                     if (offeneListe.Count < ListenGrenze)
-                        offeneListe.Add(new OutstandingItem(name, eintrag.Size, nochNicht));
+                        offeneListe.Add(new OutstandingItem(name, eintrag.Size, grundHier));
                 }
             }
         }
@@ -1247,7 +1311,8 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] Rueckstand: {offen} von {vereint} Dateien, " +
                  $"{bytes / (1024.0 * 1024.0):0.0} von {vereintBytes / (1024.0 * 1024.0):0.0} MB " +
                  $"(Gegenstelle {gesamt}, hier {vorhanden.Count}" +
-                 (wartend > 0 ? $", {wartend} haelt die Gegenstelle selbst nicht" : "") + ")." +
+                 (wartend > 0 ? $", {wartend} haelt die Gegenstelle selbst nicht" : "") +
+                 (begleitend > 0 ? $", {begleitend} Begleitdateien von Datenbanken bleiben hier" : "") + ")." +
                  (offeneNamen.Count > 0 ? " Offen: " + string.Join(", ", offeneNamen) +
                      (offen > offeneNamen.Count ? $" und {offen - offeneNamen.Count} weitere" : "") + "." : ""));
 
@@ -1987,7 +2052,7 @@ public sealed partial class ShareHost
 
         // Smart-Datenbankmodus: eine Datenbank geht erst hinaus, wenn sie
         // alles eingearbeitet hat. Warum, steht bei Datenbank.
-        if (_app.SmartDatabaseMode && (Datenbank.IstBeifahrer(name) || Datenbank.Beschaeftigt(path)))
+        if (_app.SmartDatabaseMode && (Datenbank.IstBegleitdatei(name) || Datenbank.Beschaeftigt(path)))
             return Done(name);
 
         // Nach einem gewonnenen Konflikt muss die Datei hinaus, obwohl sich an
