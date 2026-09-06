@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Google.Protobuf;
 using SyncTClient.Bep;
@@ -157,7 +157,14 @@ internal static class AnnounceCommand
         byte[] blocksHash;
         try
         {
-            using var content = File.OpenRead(localPath);
+            // Nicht File.OpenRead: das teilt nur zum Lesen, und wer die
+            // Datei danach schreiben will, bekommt eine Absage. Waehrend hier
+            // ueber eine grosse Datei gehasht wird, stuende ein fremdes
+            // Programm still -- ein Abgleich hat kein anderes Programm
+            // aufzuhalten. Die uebrigen Lesewege des Clients tun es laengst so.
+            using var content = new FileStream(
+                localPath, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete, 0, FileOptions.SequentialScan);
             (blockSize, blocks, blocksHash) = BlockList.For(content, local.Length);
         }
         catch (Exception ex)
