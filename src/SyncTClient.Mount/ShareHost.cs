@@ -3856,7 +3856,23 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // unser Hash ab, ist unsere Kopie eine andere und darf nicht als der
         // angeforderte Block ausgeliefert werden.
         if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(data), request.Hash.Span))
-            return Deny(request, ErrorCode.InvalidFile, "unsere Bytes ergeben einen anderen Hash");
+        {
+            // Die Gegenstelle fragt nach einer Fassung, die hier nicht mehr
+            // liegt. Nicht sie irrt sich, sondern unsere Ankuendigung ist
+            // veraltet: die Datei hat sich geaendert, nachdem wir sie
+            // gerechnet haben.
+            //
+            // Der Block wird abgelehnt -- falsche Bytes auszuliefern waere
+            // schlimmer. Aber die neue Fassung gehoert sofort hinaus, sonst
+            // fragt die Gegenstelle im naechsten Durchgang dasselbe noch
+            // einmal, und die Ablehnungen wiederholen sich Datei fuer Datei.
+            _dirty[request.Name] = 0;
+            _wartend.TryRemove(request.Name, out _);
+            Wake();
+
+            return Deny(request, ErrorCode.InvalidFile,
+                "die Datei hat sich seit der Ankuendigung geaendert");
+        }
 
         NoteSent(data.Length);
         NoteServed(request.Name, info.Length, data.Length);
@@ -4003,10 +4019,62 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         TransferFinished?.Invoke(transfer);
     }
 
+    /// <summary>
+    /// Abgelehnte Blockanfragen, je Datei gezaehlt.
+    /// </summary>
+    /// <remarks>
+    /// Eine Gegenstelle fordert eine Datei Block fuer Block an, bei
+    /// fuenfundzwanzig Megabyte sind das zweihundert Anfragen. Passt der
+    /// Inhalt nicht mehr zur Ankuendigung, wird jede einzelne abgelehnt --
+    /// und stand frueher als eigene Zeile im Protokoll. Bei einem Ordner, in
+    /// dem ein Programm gerade Aufnahmedaten in die Bilder schreibt, waren
+    /// das tausende Zeilen in Minuten; das Protokoll war nicht mehr lesbar.
+    ///
+    /// Gemeldet wird deshalb die erste Ablehnung je Datei und Grund, und am
+    /// Ende des Schwungs die Zahl.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, (int Zahl, string Grund, long Ticks)> _abgelehnt =
+        new(StringComparer.Ordinal);
+
+    /// <summary>So lange nach der letzten Ablehnung gilt ein Schwung als laufend.</summary>
+    private const long AblehnungStillMs = 3_000;
+
     private (ErrorCode Code, byte[] Data) Deny(BepRequest request, ErrorCode code, string reason)
     {
-        _log($"[{FolderId}] Anfrage nach \"{request.Name}\" Block {request.BlockNo} abgelehnt: {reason}.");
+        var jetzt = Environment.TickCount64;
+
+        var eintrag = _abgelehnt.AddOrUpdate(
+            request.Name,
+            (1, reason, jetzt),
+            (_, alt) => alt.Grund == reason
+                ? (alt.Zahl + 1, reason, jetzt)
+                : (1, reason, jetzt));
+
+        if (eintrag.Zahl == 1)
+            _log($"[{FolderId}] Anfrage nach \"{request.Name}\" abgelehnt: {reason}. " +
+                 "Weitere Bloecke derselben Datei werden nicht einzeln gemeldet.");
+
         return (code, []);
+    }
+
+    /// <summary>
+    /// Meldet die Zahl der Ablehnungen, sobald ein Schwung vorbei ist.
+    /// </summary>
+    private void AbgelehnteMelden()
+    {
+        if (_abgelehnt.IsEmpty) return;
+
+        var jetzt = Environment.TickCount64;
+
+        foreach (var (name, eintrag) in _abgelehnt)
+        {
+            if (jetzt - eintrag.Ticks < AblehnungStillMs) continue;
+            if (!_abgelehnt.TryRemove(name, out var fertig)) continue;
+
+            if (fertig.Zahl > 1)
+                _log($"[{FolderId}] \"{name}\": {fertig.Zahl} Blockanfragen abgelehnt " +
+                     $"({fertig.Grund}).");
+        }
     }
 
     /// <summary>

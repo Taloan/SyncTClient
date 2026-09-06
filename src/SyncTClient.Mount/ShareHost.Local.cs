@@ -1898,6 +1898,7 @@ public sealed partial class ShareHost
                 // Bewertung. Vor der Abfrage darunter, sonst schliefe der Lauf
                 // weiter, obwohl gerade etwas faellig geworden ist.
                 Faellige();
+                AbgelehnteMelden();
 
                 if (_dirty.IsEmpty && _removed.IsEmpty) continue;
 
