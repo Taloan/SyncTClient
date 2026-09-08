@@ -8,6 +8,30 @@ and are therefore in German.*
 
 <!-- Neue Fassungen fügt tools/Veroeffentlichen.ps1 unter dieser Zeile ein. -->
 
+## 0.9.3 -- 2026-09-08
+
+- Wer sich wiederholt aendert, bekommt eine laengere Frist
+- Eine Ablehnung je Block war eine Zeile je Block
+- Eine zurueckgestellte Datei wartete bis zum naechsten Durchgang, also bis zu einer Stunde
+- Eine eben geschriebene Datei wurde zur Konfliktkopie, ohne dass die Gegenstelle etwas geaendert hatte
+- Was der Test kann und was nicht, nachgemessen statt behauptet
+- Eine Datenbank, die sich staendig oeffnet, machte das Protokoll unlesbar
+- Smart-Datenbankmodus: erst uebertragen, wenn alles eingearbeitet ist
+- Eine Datei, an der geschrieben wird, bleibt liegen
+- Drei Lesewege sperrten fremde Programme aus
+- Der Installer hiess 0.9.2 und trug eine 0.9.1 in sich
+- Bilder mit Massen, damit die Seite nicht springt
+- Fassung 0.9.2
+- "Die Ursache des Fehlers konnte nicht ermittelt werden"
+- Nachsehen auch bei jedem Programmstart
+- Ein Blick nach einer neueren Fassung, und sonst nichts
+- Die Grenzen des Datentraegers stehen jetzt bei den Platzhaltern
+- Die Platzhalter-Schwelle, ausfuehrlich
+- Die Wahl des Installationsortes, und ein Doppelklick zum Veroeffentlichen
+- Was SmartScreen meldet, und warum
+- Die Einstellungen sagen jetzt, welche Fassung hier laeuft
+
+
 ## 0.9.2 -- 2026-09-05
 
 - "Die Ursache des Fehlers konnte nicht ermittelt werden"
