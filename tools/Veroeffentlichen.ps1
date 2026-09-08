@@ -31,8 +31,10 @@
     Visual Studio sie schon traegt.
 
 .PARAMETER Hinweise
-    Was in der Freigabe steht. Ohne Angabe entstehen sie aus den Commits seit
-    dem letzten Etikett.
+    Was in der Freigabe steht. Ohne Angabe gilt der Abschnitt zu dieser
+    Fassung aus CHANGELOG.md. Fehlt er dort, bricht der Lauf ab: die
+    Hinweise werden von Hand geschrieben, nicht aus Commit-Betreffen
+    zusammengesetzt.
 
 .PARAMETER Repo
     Das Verzeichnis auf GitHub, etwa "dirkmertens/SyncTClient".
@@ -267,26 +269,94 @@ Write-Host "    $Repo"
 
 # ---------------------------------------------------------------- Aenderungen
 
-Schritt 'Aenderungen zusammenstellen'
+Schritt 'Aenderungshinweise lesen'
 
+# Die Hinweise werden gelesen, nicht erzeugt.
+#
+# Bis 0.9.3 setzte dieses Werkzeug die Commit-Betreffe seit dem letzten
+# Etikett als Liste in den Changelog und in den Text der Freigabe. Ein
+# Commit-Betreff ist aber eine Ueberschrift fuer den, der den Quelltext vor
+# sich hat: "Wer sich wiederholt aendert, bekommt eine laengere Frist" nennt
+# weder das Programm noch die Aenderung noch den Anlass. Zwanzig solcher
+# Zeilen sind keine Aenderungshinweise, und sie standen so auf der
+# Freigabeseite.
+#
+# Der Abschnitt wird deshalb von Hand geschrieben, bevor veroeffentlicht
+# wird. Fehlt er, bricht der Lauf ab und nennt die Betreffe als Anhalt.
+#
 # Von welchem Etikett bis wohin. Beim ersten Lauf gibt es das neue Etikett noch
 # nicht, dann zaehlt HEAD; beim zweiten Lauf nach einem Abbruch steht es schon.
 $bisRef = if ($schonFestgeschrieben) { $etikett } else { 'HEAD' }
 $vonRef = if ($schonFestgeschrieben) { "$etikett^" } else { 'HEAD' }
 
 # Vor dem ersten Etikett gibt es kein vorheriges; git meldet das nach stderr.
+#
+# Erst in ein Feld, dann auswaehlen: "git describe | Select-Object -First 1"
+# haelt die Pipeline an, sobald die erste Zeile da ist, und in Windows
+# PowerShell steht danach ein Rueckgabewert ungleich null -- auch wenn das
+# Etikett gefunden wurde. Genau daran griff frueher der Notweg ueber die
+# letzten zwanzig Commits, und der Abschnitt 0.9.3 trug saemtliche Eintraege
+# von 0.9.2 ein zweites Mal.
 $vorher = $ErrorActionPreference
 $ErrorActionPreference = 'Continue'
-$letztes = git describe --tags --abbrev=0 $vonRef 2>$null | Select-Object -First 1
-if ($LASTEXITCODE -ne 0) { $letztes = $null }
+$beschrieben = @(git describe --tags --abbrev=0 $vonRef 2>$null)
+$gefunden    = ($LASTEXITCODE -eq 0)
 $ErrorActionPreference = $vorher
 
-$aenderungen = if ($letztes) { git log --pretty=format:'- %s' "$letztes..$bisRef" }
-               else          { git log --pretty=format:'- %s' -20 $bisRef }
-$aenderungen = ($aenderungen -join "`n")
+$letztes = if ($gefunden -and $beschrieben.Count) { $beschrieben[0].Trim() } else { $null }
+
+# Gibt es noch kein Etikett, ist es die erste Freigabe. Dann waeren es alle
+# Commits ueberhaupt; vierzig genuegen als Anhalt.
+$betreffe = if ($letztes) { git log --pretty=format:'- %s' "$letztes..$bisRef" }
+            else          { git log --pretty=format:'- %s' -40 $bisRef }
+$betreffe = ($betreffe -join "`n")
+
+$aenderungen = $null
+
+# Der Abschnitt zu dieser Fassung: von "## <Fassung>" bis zur naechsten
+# Ueberschrift derselben Ebene. Was hinter der Fassung steht -- ein Datum,
+# ein Gedankenstrich -- ist gleichgueltig.
+$changelog = [System.IO.File]::ReadAllText($ChangeDatei, $ohneVorzeichen)
+$zeilen    = $changelog -split "`r?`n"
+$kopfMuster = '^##\s+' + [regex]::Escape($Fassung) + '(\s|$)'
+
+$anfang = -1
+for ($i = 0; $i -lt $zeilen.Count; $i++) {
+    if ($zeilen[$i] -match $kopfMuster) { $anfang = $i; break }
+}
+
+if ($anfang -ge 0) {
+    $ende = $zeilen.Count
+    for ($i = $anfang + 1; $i -lt $zeilen.Count; $i++) {
+        if ($zeilen[$i] -match '^##\s') { $ende = $i; break }
+    }
+
+    $aenderungen = (($zeilen[($anfang + 1)..($ende - 1)]) -join "`n").Trim()
+}
+
+if (-not $aenderungen) {
+    Abbruch @"
+In $ChangeDatei fehlt der Abschnitt fuer $Fassung.
+
+Die Aenderungshinweise stehen dort und werden von Hand geschrieben. Sie
+gehen unveraendert als Text der Freigabe nach GitHub, also lesen sie
+Fremde. Aus Commit-Betreffen entstehen keine, die jemand versteht, der den
+Quelltext nicht vor sich hat.
+
+Einzutragen ist eine Ueberschrift
+
+    ## $Fassung -- $(Get-Date -Format 'yyyy-MM-dd')
+
+unter der Marke am Kopf der Datei, darunter die Hinweise. Danach erneut.
+
+Die Betreffe seit $(if ($letztes) { $letztes } else { 'dem Anfang' }) als Anhalt:
+
+$betreffe
+"@
+}
 
 if ($letztes) { Write-Host "    $letztes -> $etikett" }
-Write-Host ("    {0} Eintraege" -f ($aenderungen -split "`n").Count)
+Write-Host ("    {0} Zeilen aus {1}" -f ($aenderungen -split "`n").Count, (Split-Path -Leaf $ChangeDatei))
 
 # ---------------------------------------------------------------- Fassung festschreiben
 
@@ -297,26 +367,16 @@ if ($schonFestgeschrieben) {
 }
 else {
     # Die Fassungsdatei steht bereits auf $Fassung -- genau daraus wurde die
-    # Anwendung uebersetzt. Festzuschreiben ist nur der Changelog-Abschnitt.
+    # Anwendung uebersetzt. Der Changelog-Abschnitt steht ebenfalls schon in
+    # der Datei; festzuschreiben ist er nur, falls das noch niemand getan hat.
+    $offen = @(git status --porcelain -- $ChangeDatei)
 
-    # Der neue Abschnitt ganz oben, unter der Marke. Ohne Umweg ueber einen
-    # regulaeren Ausdruck: in Commit-Betreffen steht "$" und "$1" durchaus,
-    # und -replace wuerde das als Rueckverweis lesen.
-    $changelog = [System.IO.File]::ReadAllText($ChangeDatei, $ohneVorzeichen)
-    $marke = '<!-- Neue Fassungen fügt tools/Veroeffentlichen.ps1 unter dieser Zeile ein. -->'
+    if ($offen.Count) {
+        git add $ChangeDatei
+        git commit -m "Fassung $Fassung" | Out-Null
+        Write-Host "    $(Split-Path -Leaf $ChangeDatei) festgeschrieben."
+    }
 
-    if (-not $changelog.Contains($marke)) { Abbruch "In $ChangeDatei fehlt die Marke fuer neue Fassungen." }
-
-    $zeilenende = if ($changelog.Contains("`r`n")) { "`r`n" } else { "`n" }
-    $abschnitt  = "## $Fassung -- $(Get-Date -Format 'yyyy-MM-dd')" +
-                  $zeilenende + $zeilenende +
-                  ($aenderungen -replace "`n", $zeilenende) + $zeilenende
-
-    $changelog = $changelog.Replace($marke, $marke + $zeilenende + $zeilenende + $abschnitt)
-    [System.IO.File]::WriteAllText($ChangeDatei, $changelog, $ohneVorzeichen)
-
-    git add $ChangeDatei
-    git commit -m "Fassung $Fassung" | Out-Null
     git tag -a $etikett -m "SyncTClient $Fassung"
 }
 
@@ -374,8 +434,8 @@ if ((Stumm gh release view $etikett --repo $Repo) -eq 0) {
     Abbruch "Auf GitHub gibt es die Freigabe $etikett schon. Loeschen mit: gh release delete $etikett --repo $Repo"
 }
 
-# Derselbe Text, der im Changelog steht. Zwei Quellen fuer dieselbe Liste
-# waeren zwei Gelegenheiten, auseinanderzulaufen.
+# Derselbe Text, der im Changelog steht -- von dort kommt er auch her. Zwei
+# Quellen fuer dieselbe Liste waeren zwei Gelegenheiten, auseinanderzulaufen.
 if (-not $Hinweise) { $Hinweise = $aenderungen }
 
 $text = @"
