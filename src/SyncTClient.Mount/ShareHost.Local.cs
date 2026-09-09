@@ -233,8 +233,37 @@ public sealed partial class ShareHost
     /// </remarks>
     private readonly ConcurrentDictionary<string, DateTime> _wartend = new(StringComparer.Ordinal);
 
-    /// <summary>Namen, zu denen eine Loeschung gemeldet wurde.</summary>
-    private readonly ConcurrentDictionary<string, byte> _removed = new(StringComparer.Ordinal);
+    /// <summary>
+    /// Namen, zu denen eine Loeschung gemeldet wurde, mit dem Zeitpunkt, ab
+    /// dem sie angekuendigt werden darf.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, DateTime> _removed = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Wie lange eine gemeldete Loeschung liegen bleibt, bevor sie hinausgeht.
+    /// </summary>
+    /// <remarks>
+    /// Sechzig Sekunden, und zwar dieselben sechzig wie im Original:
+    /// Syncthing wartet nach einer Loeschung genau so lange, bevor es sie
+    /// weitersagt.
+    ///
+    /// Der Grund ist die Unumkehrbarkeit. Eine Aenderung, die zu frueh
+    /// hinausgeht, wird von der naechsten ueberholt. Eine Loeschung, die zu
+    /// frueh hinausgeht, nimmt der Gegenstelle die Datei -- und viele
+    /// Vorgaenge sehen im Dateisystem fuer einen Augenblick wie eine
+    /// Loeschung aus: ein Umbenennen, ein Verschieben, ein Programm, das
+    /// seine Datei neu schreibt statt sie zu aendern.
+    ///
+    /// Genau das ist hier vorgekommen: der CameraImporter benennt beim
+    /// Beenden seine settings.json um und legt eine neue an. Zwischen beiden
+    /// Schritten liegt der Name kurz nicht vor.
+    ///
+    /// Taucht der Name innerhalb der Frist wieder auf, faellt die Loeschung
+    /// fort -- das steht in NoteLocalChange und war schon vorher so. Neu ist
+    /// nur, dass die Frist ihr dafuer Zeit laesst. Vorher ging die Loeschung
+    /// im naechsten Durchgang hinaus, also binnen Sekunden.
+    /// </remarks>
+    private static readonly TimeSpan Loeschfrist = TimeSpan.FromSeconds(60);
 
     /// <summary>Dateien, in die dieser Client gerade selbst schreibt.</summary>
     private readonly ConcurrentDictionary<string, Hydration> _hydrating = new(StringComparer.Ordinal);
@@ -404,7 +433,7 @@ public sealed partial class ShareHost
 
         _dirty.TryRemove(name, out _);
         _wartend.TryRemove(name, out _);
-        _removed[name] = 0;
+        _removed[name] = DateTime.UtcNow + Loeschfrist;
         Wake();
     }
 
@@ -1027,17 +1056,19 @@ public sealed partial class ShareHost
     /// ohnehin neu gemacht wird, ist das kein Verlust -- fuer die Bedienbarkeit
     /// des Programms ist es der Unterschied.
     /// </remarks>
-    private IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> Seitenweise()
+    private IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory,
+                         bool HasContent, bool OwnMatches)> Seitenweise()
     {
         var nach = "";
 
         while (true)
         {
-            IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory, bool HasContent)> seite;
+            IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory,
+                           bool HasContent, bool OwnMatches)> seite;
             lock (_indexGate)
             {
                 if (_index is null) yield break;
-                seite = _index.EnumerateLight(nach, Seitengroesse);
+                seite = _index.EnumerateLightWithOwn(nach, Seitengroesse);
             }
 
             if (seite.Count == 0) yield break;
@@ -1118,7 +1149,8 @@ public sealed partial class ShareHost
                 // Datenbank kam -- auch der Schreiber nicht, der gerade den
                 // Index aufnimmt. Und die vollstaendige Liste war ein
                 // einziger grosser Brocken im Speicher.
-                foreach (var (name, size, modifiedS, isDirectory, hatInhalt) in Seitenweise())
+                foreach (var (name, size, modifiedS, isDirectory, hatInhalt, eigeneGleich)
+                         in Seitenweise())
                 {
                     if (isDirectory) continue;
 
@@ -1127,6 +1159,24 @@ public sealed partial class ShareHost
                     // Durchgang aufgeraeumt hat, zaehlt er hier jedenfalls
                     // nicht mit.
                     if (_config.IsIgnored(name)) continue;
+
+                    // Eine Begleitdatei einer Datenbank geht nie hinaus und
+                    // wird nie entgegengenommen. Sie als offen zu zaehlen
+                    // hiesse, eine Uebertragung anzuzeigen, die nicht
+                    // stattfinden wird.
+                    //
+                    // Fuer die andere Richtung galt das schon; hier fehlte es.
+                    // Gemessen an einer Lightroom-Freigabe: vier Eintraege --
+                    // zwei -shm und zwei -wal des Sync-Zwischenspeichers --
+                    // hielten die Freigabe dauerhaft unter hundert Prozent,
+                    // obwohl an ihnen nichts zu tun war. Genannt werden sie
+                    // weiterhin, mit eigener Zahl: verschweigen waere die
+                    // andere Haelfte desselben Fehlers.
+                    if (_app.SmartDatabaseMode && Datenbank.IstBegleitdatei(name))
+                    {
+                        begleitend++;
+                        continue;
+                    }
 
                     // Abgewaehltes zaehlt gar nicht -- weder als Rueckstand
                     // noch im Nenner.
@@ -1169,8 +1219,31 @@ public sealed partial class ShareHost
 
                     // Zwei Gruende, dass etwas aussteht. Der erste ist unser
                     // eigener: der Eintrag steht hier noch nicht so da.
-                    var fehlt = !vorhanden.TryGetValue(name, out var da)
-                                || da.Size != size || da.ModifiedS != modifiedS;
+                    var hier = vorhanden.TryGetValue(name, out var da);
+                    var fehlt = !hier || da.Size != size || da.ModifiedS != modifiedS;
+
+                    // Eine Zeit, die sich verschoben hat, ohne dass ein Byte
+                    // anders waere, ist kein Rueckstand.
+                    //
+                    // Der Rueckstand misst ueber Groesse und Zeit, die
+                    // Ankuendigung ueber den Inhalt: gleiche Blockliste heisst
+                    // keine neue Fassung, und das ist richtig so -- sonst
+                    // loeste jedes Anfassen eine Runde aus. Wer eine Datei
+                    // aber anfasst, ohne sie zu aendern -- Windows an einer
+                    // desktop.ini, ein Programm an seiner Sperrdatei --, fiel
+                    // damit in die Luecke zwischen beiden Massen und stand
+                    // fuer immer offen. Gemessen an einer Lightroom-Freigabe:
+                    // sechs Dateien seit dem 07.09., darunter fuenf
+                    // desktop.ini mit 58 Byte und eine Sperrdatei mit null.
+                    //
+                    // Stimmt die Groesse und traegt unser Eintrag dieselbe
+                    // Version wie die Gegenstelle, halten beide Seiten
+                    // dieselbe Fassung. Weicht der Inhalt auf der Platte
+                    // wirklich ab, hat der Durchgang den Namen ohnehin
+                    // vorgemerkt; die Bewertung hasht ihn und kuendigt an,
+                    // die Version geht auseinander, und im naechsten
+                    // Durchgang zaehlt er wieder mit.
+                    if (fehlt && hier && da.Size == size && eigeneGleich) fehlt = false;
 
                     // Der zweite gehoert der Gegenstelle: sie kennt die Datei,
                     // haelt sie aber nicht. Der Platzhalter steht dann zwar
@@ -2093,8 +2166,36 @@ public sealed partial class ShareHost
 
         // Smart-Datenbankmodus: eine Datenbank geht erst hinaus, wenn sie
         // alles eingearbeitet hat. Warum, steht bei Datenbank.
-        if (_app.SmartDatabaseMode && (Datenbank.IstBegleitdatei(name) || Datenbank.Beschaeftigt(path)))
-            return Zurueckstellen(name, DateTime.UtcNow + Ruhefrist);
+        if (_app.SmartDatabaseMode)
+        {
+            if (Datenbank.IstBegleitdatei(name) || Datenbank.Beschaeftigt(path))
+                return Zurueckstellen(name, DateTime.UtcNow + Ruhefrist);
+
+            // Ein Rollback-Journal mit Inhalt bleibt liegen, auch wenn sich
+            // nichts mehr bewegt.
+            //
+            // Beim -wal stehen die neueren Daten im Journal; die .db allein
+            // ist ein aelterer, aber in sich gueltiger Stand, und den zu
+            // uebertragen ist richtig. Im Rollback-Modus ist es umgekehrt:
+            // die .db traegt schon Seiten einer Transaktion, die nie
+            // abgeschlossen wurde, und der Weg zurueck steht im Journal. Sie
+            // allein waere kein aelterer Stand, sondern ein halber.
+            //
+            // Das loest sich von selbst, sobald irgendein Programm die
+            // Datenbank wieder oeffnet: SQLite arbeitet ein solches Journal
+            // beim Oeffnen ab und raeumt es fort. Bis dahin wird gewartet --
+            // seltener nachgesehen, denn es aendert sich nichts daran, bis
+            // das geschieht.
+            if (Datenbank.RollbackOffen(path))
+            {
+                Einmal("rollback:" + name)(
+                    $"[{FolderId}] \"{name}\": daneben liegt ein nicht abgeschlossenes " +
+                    "Journal. Die Datei wird uebertragen, sobald ein Programm sie " +
+                    "wieder geoeffnet hat.");
+
+                return Zurueckstellen(name, DateTime.UtcNow + RuhefristGrenze);
+            }
+        }
 
         // Nach einem gewonnenen Konflikt muss die Datei hinaus, obwohl sich an
         // ihr nichts geaendert hat. Geaendert hat sich, was die Gegenstelle
@@ -2371,7 +2472,7 @@ public sealed partial class ShareHost
         // geschehenen Verschieben. Sie geht im selben Durchgang hinaus, aber
         // nach der Ankuendigung: PublishAsync bewertet zuerst die Vermerke und
         // sammelt danach die Loeschungen ein.
-        if (geradeEben) _removed[alt] = 0;
+        if (geradeEben) _removed[alt] = DateTime.UtcNow + Loeschfrist;
 
         _log($"[{FolderId}] \"{alt}\" liegt jetzt unter \"{announced}\" -- " +
              "angekuendigt mit den bekannten Bloecken, ohne Uebertragung.");
@@ -2628,8 +2729,16 @@ public sealed partial class ShareHost
 
         var candidates = new List<(string Name, Vector? Version)>();
 
+        var jetzt = DateTime.UtcNow;
+
         foreach (var name in _removed.Keys.OrderBy(n => n, StringComparer.Ordinal))
         {
+            // Die Frist. Wer noch wartet, bleibt stehen und wird im naechsten
+            // Durchlauf wieder angesehen -- im Leerlauf alle fuenf Sekunden.
+            // Taucht der Name bis dahin wieder auf, nimmt NoteLocalChange ihn
+            // hier heraus, und die Loeschung hat nie stattgefunden.
+            if (!_removed.TryGetValue(name, out var faellig) || faellig > jetzt) continue;
+
             _removed.TryRemove(name, out _);
 
             // Dritte Sicherung: was wir ausserhalb der Auswahl selbst
@@ -2875,7 +2984,7 @@ public sealed partial class ShareHost
                 {
                     if (eintrag.Deleted)
                     {
-                        _removed[eintrag.Name] = 0;
+                        _removed[eintrag.Name] = DateTime.UtcNow + Loeschfrist;
                         continue;
                     }
 

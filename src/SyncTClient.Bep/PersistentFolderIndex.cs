@@ -661,6 +661,70 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
+    /// Dieselbe Seite, dazu die Auskunft, ob unser eigener Eintrag dieselbe
+    /// Fassung traegt wie die Gegenstelle.
+    /// </summary>
+    /// <remarks>
+    /// Fuer den Rueckstand. Er vergleicht, was auf der Platte liegt, mit dem,
+    /// was die Gegenstelle fuehrt -- ueber Groesse und Zeit. Die Ankuendigung
+    /// entscheidet dagegen ueber den Inhalt: gleiche Blockliste heisst keine
+    /// neue Fassung.
+    ///
+    /// Beides auseinanderzuhalten hat eine Luecke gelassen. Wer eine Datei
+    /// anfasst, ohne ein Byte zu aendern -- Windows an einer
+    /// <c>desktop.ini</c>, ein Programm an seiner Sperrdatei --, verschiebt
+    /// nur die Zeit. Angekuendigt wird dann zu Recht nichts, gezaehlt wurde
+    /// die Datei aber weiter, und zwar fuer immer: gemessen an einer
+    /// Lightroom-Freigabe sechs Dateien, die seit dem 07.09. offen standen und
+    /// es ohne diese Aenderung geblieben waeren.
+    ///
+    /// Verglichen werden die Versionsvektoren. Tragen unser Eintrag und der
+    /// der Gegenstelle denselben, halten beide Seiten dieselbe Fassung -- was
+    /// auf der Platte davon abweicht, hat der Durchgang ohnehin vorgemerkt,
+    /// und die Bewertung entscheidet dort ueber den Inhalt.
+    ///
+    /// <c>MAX</c> ueber die Gegenstellen: es genuegt, dass <em>eine</em> von
+    /// ihnen dieselbe Fassung fuehrt.
+    /// </remarks>
+    public IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory,
+                          bool HasContent, bool OwnMatches)>
+        EnumerateLightWithOwn(string nach, int hoechstens)
+    {
+        using var gate = _gate.EnterScope();
+        var eintraege = new List<(string, long, long, bool, bool, bool)>();
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            SELECT f.name, MAX(f.size), MAX(f.modified), MAX(f.kind), MAX(f.has_blocks),
+                   MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0
+                                 AND l.version IS NOT NULL AND f.version IS NOT NULL
+                                 AND l.version = f.version
+                            THEN 1 ELSE 0 END)
+            FROM files f LEFT JOIN local_files l ON l.name = f.name
+            WHERE f.deleted = 0 AND f.name <> '' AND f.name > $nach
+            GROUP BY f.name
+            ORDER BY f.name
+            LIMIT $hoechstens
+            """;
+
+        command.Parameters.AddWithValue("$nach", nach);
+        command.Parameters.AddWithValue("$hoechstens", hoechstens);
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            eintraege.Add((
+                reader.GetString(0),
+                reader.GetInt64(1),
+                reader.GetInt64(2),
+                (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
+                reader.GetInt32(4) != 0,
+                reader.GetInt32(5) != 0));
+        }
+
+        return eintraege;
+    }
+
+    /// <summary>
     /// Verwirft alles. Noetig, wenn der Peer seinen Index neu aufgebaut hat.
     /// </summary>
     public void Clear(string device)

@@ -2860,7 +2860,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             return;
         }
 
-        foreach (var name in fehlend) _removed[name] = 0;
+        foreach (var name in fehlend) _removed[name] = DateTime.UtcNow + Loeschfrist;
 
         _log($"[{FolderId}] {fehlend.Count} Dateien fehlen im Ordner, ohne dass der Beobachter " +
              "es gemeldet hat. Die Loeschung wird weitergegeben.");
@@ -2959,7 +2959,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             return;
         }
 
-        foreach (var name in fehlend) _removed[name] = 0;
+        foreach (var name in fehlend) _removed[name] = DateTime.UtcNow + Loeschfrist;
 
         _log($"[{FolderId}] {fehlend.Count} Dateien wurden entfernt, waehrend das Programm nicht lief. " +
              "Die Loeschung wird weitergegeben.");
