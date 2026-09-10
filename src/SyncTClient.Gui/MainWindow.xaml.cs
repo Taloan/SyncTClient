@@ -2185,9 +2185,36 @@ public partial class MainWindow : Window
             .Where(s => !ReferenceEquals(s, ausser))
             .Select(s => s.LocalPath)];
 
+    /// <summary>
+    /// Die Konfiguration der ausgewaehlten Freigabe -- auch wenn sie gerade
+    /// nicht laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Uebernommen und laufend sind zweierlei, und ShareRow haelt beides
+    /// auseinander: "Accepted" heisst, es laeuft ein Ordner, "Configured"
+    /// heisst, er steht in der Konfiguration. Angehalten laeuft keiner, und
+    /// ohne Verbindung entsteht keiner -- seine Einstellungen gibt es
+    /// trotzdem.
+    ///
+    /// Genau dann will man sie oft aendern: eine Freigabe, die nicht
+    /// verbunden ist, bekommt eine zweite Gegenstelle eingetragen, damit sie
+    /// es wieder wird. Die beiden Eintraege im Menue sind ueber "Configured"
+    /// freigeschaltet, holten die Konfiguration aber am laufenden Ordner --
+    /// und der ist dann null. Der Dialog erschien nicht, das Verzeichnis
+    /// oeffnete sich nicht, und keine Meldung sagte warum.
+    /// </remarks>
+    private ShareConfig? RowConfig()
+    {
+        if (_row is null) return null;
+        if (_row.Share?.Config is { } laufend) return laufend;
+
+        return _config.Shares.FirstOrDefault(
+            s => string.Equals(s.FolderId, _row.FolderId, StringComparison.Ordinal));
+    }
+
     private void OnShowSettings(object sender, RoutedEventArgs e)
     {
-        var share = _row?.Share?.Config;
+        var share = RowConfig();
         if (share is null) { Status(App.S("M.NoShareSelected")); return; }
 
         var dialog = new ShareSettingsWindow(
@@ -2265,7 +2292,7 @@ public partial class MainWindow : Window
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e)
-        => OpenFolder(_row?.Share?.Config.LocalPath);
+        => OpenFolder(RowConfig()?.LocalPath);
 
     private void OpenFolder(string? path)
     {
