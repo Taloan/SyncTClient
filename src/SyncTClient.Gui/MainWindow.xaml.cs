@@ -800,16 +800,21 @@ public partial class MainWindow : Window
 
     // ------------------------------------------------------------ Wiederverbinden
 
-    /// <summary>Wann zuletzt ein Verbindungsversuch lief.</summary>
-    private DateTime _letzterVersuch = DateTime.MinValue;
-
-    /// <summary>Der Abstand bis zum naechsten Versuch.</summary>
+    /// <summary>
+    /// Je Gegenstelle: wann zuletzt versucht wurde und wie lange bis zum
+    /// naechsten Mal.
+    /// </summary>
     /// <remarks>
-    /// Er verdoppelt sich mit jedem Fehlschlag. Ein Netz, das seit einer
-    /// Stunde fort ist, kommt nicht dadurch zurueck, dass man alle fuenfzehn
-    /// Sekunden danach fragt -- es fuellt nur das Protokoll.
+    /// Je Gegenstelle, nicht fuer alle zusammen.
+    ///
+    /// Vorher gab es einen Abstand fuer das ganze Programm. Er verdoppelte
+    /// sich, solange irgendeine Gegenstelle getrennt war -- ein Telefon, das
+    /// abends aus ist, setzte ihn damit dauerhaft auf fuenf Minuten, und so
+    /// lange dauerte es dann auch, bis ein Server nach einem kurzen
+    /// Netzausfall wieder aufgenommen wurde. Der eine hielt den anderen auf.
     /// </remarks>
-    private TimeSpan _abstand = ErsterAbstand;
+    private readonly Dictionary<string, (DateTime Zuletzt, TimeSpan Abstand)> _wiederholung =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly TimeSpan ErsterAbstand = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan GroessterAbstand = TimeSpan.FromMinutes(5);
@@ -828,44 +833,65 @@ public partial class MainWindow : Window
     /// angehalten" umzuschalten war der einzige Weg, der es nebenbei tat.
     ///
     /// Angehalten heisst angehalten: dann wird nicht verbunden.
+    ///
+    /// <para>Auch ein Fehlschlag wird wiederholt</para>
+    ///
+    /// Ein gescheiterter Verbindungsversuch setzt die Gegenstelle auf
+    /// "Fehler", nicht auf "getrennt". Aufgenommen wurde bisher nur, was auf
+    /// "getrennt" stand -- eine Gegenstelle, bei der ein Versuch schiefging,
+    /// wurde damit nie wieder versucht. Sie stand auf "nicht erreichbar", bis
+    /// jemand von Hand verband oder das Programm neu startete.
+    ///
+    /// Gemessen an einem Telefon: es veroeffentlichte drei Relay-Adressen,
+    /// von denen zwei veraltet waren. Der eine Versuch fiel in einen
+    /// Augenblick, in dem keine davon trug; danach blieb es zwanzig Minuten
+    /// unerreichbar, obwohl eine der drei Adressen die ganze Zeit ueber
+    /// funktionierte -- von Hand geprueft, verbunden in 596 ms.
+    ///
+    /// Ein Fehlschlag ist genau der Zustand, den man wiederholt.
     /// </remarks>
     private void VersucheWiederzuverbinden()
     {
         if (_config.Paused) return;
-        if (DateTime.UtcNow - _letzterVersuch < _abstand) return;
 
-        var offen = _peers
-            .Where(p => p.Config.AutoConnect && p.Host.State == PeerState.Getrennt)
+        var jetzt = DateTime.UtcNow;
+
+        var faellig = _peers
+            .Where(p => p.Config.AutoConnect
+                        && p.Host.State is PeerState.Getrennt or PeerState.Fehler)
+            .Where(p => !_wiederholung.TryGetValue(p.Config.DeviceId, out var w)
+                        || jetzt - w.Zuletzt >= w.Abstand)
             .ToList();
 
-        if (offen.Count == 0)
-        {
-            // Alles steht. Der naechste Ausfall soll nicht erst in fuenf
-            // Minuten bemerkt werden.
-            _abstand = ErsterAbstand;
-            return;
-        }
+        if (faellig.Count == 0) return;
 
         // Ein Versuch dauert, bis eine Verbindung steht oder scheitert. Der
         // Takt laeuft weiter; ohne diese Sperre lagen bald zehn Versuche
         // uebereinander.
         if (Interlocked.Exchange(ref _versuchLaeuft, 1) == 1) return;
 
-        _letzterVersuch = DateTime.UtcNow;
-
         _ = Dispatcher.InvokeAsync(async () =>
         {
             try
             {
-                foreach (var item in offen)
+                foreach (var item in faellig)
                 {
+                    var kennung = item.Config.DeviceId;
+
+                    var bisher = _wiederholung.TryGetValue(kennung, out var w)
+                        ? w.Abstand
+                        : ErsterAbstand;
+
                     Status(App.S("M.Reconnecting", item.Display));
                     await ConnectAsync(item);
-                }
 
-                _abstand = _peers.Any(p => p.Config.AutoConnect && p.Host.State == PeerState.Getrennt)
-                    ? Verdoppeln(_abstand)
-                    : ErsterAbstand;
+                    // Steht sie, ist der Abstand erledigt. Der naechste
+                    // Ausfall soll nicht erst in fuenf Minuten bemerkt werden.
+                    if (item.Host.State == PeerState.Verbunden)
+                        _wiederholung.Remove(kennung);
+                    else
+                        _wiederholung[kennung] = (DateTime.UtcNow, Verdoppeln(bisher));
+                }
             }
             finally
             {
@@ -891,10 +917,11 @@ public partial class MainWindow : Window
     /// </remarks>
     private void HorcheAufNetz()
         => System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (_, _) =>
-        {
-            _abstand = ErsterAbstand;
-            _letzterVersuch = DateTime.MinValue;
-        };
+            // Ueber den Verteiler, nicht von hier: die Tabelle der Abstaende
+            // wird vom Takt gelesen und geschrieben, und ein Dictionary
+            // vertraegt das nicht aus zwei Faeden zugleich. Geleert heisst
+            // hier: jede Gegenstelle ist sofort wieder faellig.
+            _ = Dispatcher.BeginInvoke(() => _wiederholung.Clear());
 
     /// <summary>
     /// Zieht die Grenzen der Datentraeger nach.
