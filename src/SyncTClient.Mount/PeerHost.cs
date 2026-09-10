@@ -328,6 +328,27 @@ public sealed class PeerHost : IAsyncDisposable
                     : await BepConnection.ConnectOverAsync(
                         leitung.Strom, _identity, expected, _app.DeviceName, frist.Token);
             }
+            catch (Exception ex) when (leitung is not null && ex is EndOfStreamException or IOException)
+            {
+                // Die Leitung stand, und mitten im Handschlag war Schluss.
+                //
+                // Gemessen an einer Gegenstelle mit Syncthing v2.1.3: gleich
+                // nach dem Beenden dieses Clients scheiterten drei Versuche
+                // hintereinander genau so; nach neunzig Sekunden Wartezeit
+                // kamen zwei Versuche in unter zwei Sekunden durch. Die
+                // Gegenstelle fuehrt nach einem Abriss noch die alte
+                // Verbindung und weist eine zweite ab, bis ihre eigene Frist
+                // greift.
+                //
+                // "Unable to read beyond the end of the stream" sagt das
+                // nicht, und wer es liest, sucht den Fehler bei sich.
+                leitung.Dispose();
+
+                throw new IOException(
+                    "die vermittelte Leitung stand, die Gegenstelle hat den Handschlag aber " +
+                    "geschlossen -- meist fuehrt sie noch die vorige Verbindung und bemerkt " +
+                    "erst nach ein bis zwei Minuten, dass sie fort ist", ex);
+            }
             catch
             {
                 leitung?.Dispose();
@@ -374,16 +395,48 @@ public sealed class PeerHost : IAsyncDisposable
     }
 
     /// <summary>Der Grund eines Fehlschlags, kurz genug zum Zaehlen.</summary>
+    /// <remarks>
+    /// Gezaehlt wird nach diesem Text, gleiche Gruende landen also in einer
+    /// Zahl. Deshalb steht bei einer Zeitueberschreitung ein fester Text --
+    /// die Meldungen der drei Wege lauten verschieden und meinen dasselbe.
+    ///
+    /// Ueberall sonst gilt die Meldung selbst, und das ist der Punkt.
+    /// Vorher stand hier der Name der Ausnahme, und im Protokoll erschien
+    /// "keine der 1 Adressen fuehrte zum Ziel (IOException)". Was der Relay
+    /// tatsaechlich geantwortet hatte -- "die Sitzung wurde abgelehnt: der
+    /// Relay fuehrt bereits eine Sitzung zwischen diesen beiden Geraeten" --
+    /// war damit fort, und der Fehlschlag sagte nichts.
+    ///
+    /// Ein Name ohne Meldung ist keine Auskunft. Er nennt die Bauart des
+    /// Fehlers und verschweigt den Fehler.
+    /// </remarks>
     private static string Kurzgrund(Exception ex) => ex switch
     {
         OperationCanceledException or TimeoutException => "Zeitueberschreitung",
         System.Net.Quic.QuicException q
             when q.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)
             => "Zeitueberschreitung",
-        NotSupportedException => ex.Message,
+
+        // Der Fehlercode ist hier die Auskunft; die Meldung dazu ist der
+        // ausformulierte Text des Betriebssystems und in jeder Sprache anders.
         System.Net.Sockets.SocketException s => s.SocketErrorCode.ToString(),
-        _ => ex.GetType().Name
+
+        _ => Gekuerzt(ex.Message)
     };
+
+    /// <summary>
+    /// Eine Meldung, die in eine Protokollzeile passt.
+    /// </summary>
+    /// <remarks>
+    /// Manche Meldungen tragen einen zweiten Satz mit dem Rat, es spaeter
+    /// erneut zu versuchen. In einer Zeile, die schon mehrere Gruende
+    /// aufzaehlt, ist das Fuellung.
+    /// </remarks>
+    private static string Gekuerzt(string meldung)
+    {
+        var text = meldung.Trim();
+        return text.Length <= 120 ? text : text[..117] + "...";
+    }
 
     /// <summary>Alle Adressen, unter denen die Gegenstelle zu versuchen ist.</summary>
     private async Task<IReadOnlyList<string>> CandidatesAsync(Bep.DeviceId expected, CancellationToken ct)
@@ -550,6 +603,24 @@ public sealed class PeerHost : IAsyncDisposable
             // Teilnehmer findet einen fertigen vor, der schon in der Tabelle
             // steht.
             if (frisch) ShareAdded?.Invoke(host2);
+
+            // Und der findet ihn nicht nur vor, er muss ihm auch seine
+            // Verbindung geben.
+            //
+            // Ein Ordner, den eine andere Gegenstelle schon gestartet hat, ist
+            // fuer diese Verbindung neu, fuer die Registratur aber nicht. Er
+            // steht damit weder in der Schlange darunter -- die nimmt nur
+            // gestoppte -- noch ist er hier gebunden worden. Ohne die Bindung
+            // kennt er unsere Verbindung nicht: er kuendigt ihr nichts an und
+            // nimmt von ihr nichts entgegen.
+            //
+            // Gemessen an einem Ordner mit zwei Gegenstellen: die zuerst
+            // verbundene startete ihn, die zweite wurde nie eingetragen. Ihr
+            // Index kam nie an, sie zaehlte nie als Halter, und jede
+            // Blockanfrage ging an die erste -- auch dann, wenn die zweite
+            // dieselben Dateien hielt.
+            if (!frisch && host2.State != ShareState.Gestoppt)
+                host2.Rebind(DeviceId, connection);
         }
 
         await NegotiateAsync(token);
@@ -590,6 +661,43 @@ public sealed class PeerHost : IAsyncDisposable
     /// </remarks>
     public Task RenegotiateAsync(CancellationToken ct = default)
         => _connection is null ? Task.CompletedTask : NegotiateAsync(ct);
+
+    /// <summary>
+    /// Reicht eine Freigabe an eine Verbindung nach, die schon steht.
+    /// </summary>
+    /// <remarks>
+    /// Welche Ordner eine Gegenstelle bekommt, steht beim Verbinden fest: die
+    /// Liste geht als Parameter in die Sitzung. Wer danach eine Freigabe um
+    /// eine Gegenstelle erweitert, aendert die Konfiguration -- und die
+    /// laufende Sitzung weiss davon nichts. Die Gegenstelle erfaehrt den
+    /// Ordner erst beim naechsten Verbinden, also nach einem Neustart.
+    ///
+    /// Das ist genau der Handgriff, mit dem jemand eine zweite Quelle
+    /// eintraegt, und genau dann will er nicht neu starten muessen.
+    /// </remarks>
+    public async Task ShareNachreichenAsync(ShareConfig share, CancellationToken ct = default)
+    {
+        if (_connection is not { } verbindung) return;
+        if (State != PeerState.Verbunden) return;
+        if (_shares.ContainsKey(share.FolderId)) return;
+
+        var host = _registry.GetOrAdd(share, out var frisch);
+        Uebernehmen(host);
+        if (frisch) ShareAdded?.Invoke(host);
+
+        if (host.State != ShareState.Gestoppt) host.Rebind(DeviceId, verbindung);
+
+        _log($"[{Display}] Ordner \"{share.FolderId}\" nachgereicht, wird angekuendigt.");
+
+        // Erst ankuendigen, dann starten -- der Indexstand des Ordners geht in
+        // die Ankuendigung ein, so wie beim Verbinden auch.
+        await NegotiateAsync(ct);
+
+        if (host.State != ShareState.Gestoppt) return;
+
+        try { await host.StartAsync(DeviceId, verbindung, ct); }
+        catch (Exception ex) { _log($"[{host.FolderId}] {ex.Message}"); }
+    }
 
     private async Task NegotiateAsync(CancellationToken ct)
     {

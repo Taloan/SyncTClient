@@ -2212,7 +2212,7 @@ public partial class MainWindow : Window
             s => string.Equals(s.FolderId, _row.FolderId, StringComparison.Ordinal));
     }
 
-    private void OnShowSettings(object sender, RoutedEventArgs e)
+    private async void OnShowSettings(object sender, RoutedEventArgs e)
     {
         var share = RowConfig();
         if (share is null) { Status(App.S("M.NoShareSelected")); return; }
@@ -2231,6 +2231,28 @@ public partial class MainWindow : Window
 
         Status(App.S("M.SavedScope", scope));
         RefreshRows();
+
+        // Eine Gegenstelle, die eben dazugekommen ist, weiss von diesem Ordner
+        // noch nichts.
+        //
+        // Welche Ordner eine Verbindung fuehrt, steht beim Verbinden fest --
+        // die Liste geht als Parameter in die Sitzung. Wer danach eine
+        // Freigabe um eine Gegenstelle erweitert, aendert die Konfiguration,
+        // und die laufende Sitzung erfaehrt davon nichts. Ohne das
+        // Nachreichen wirkt der Haken erst nach einem Neustart, und bis dahin
+        // sieht es aus, als haette er gar nichts bewirkt.
+        foreach (var teilnehmer in _peers.Where(p => share.PeerDeviceIds
+                     .Contains(p.Config.DeviceId, StringComparer.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                await teilnehmer.Host.ShareNachreichenAsync(share, _cts?.Token ?? default);
+            }
+            catch (Exception ex)
+            {
+                AppendLog($"[{teilnehmer.Display}] {share.FolderId}: {ex.Message}");
+            }
+        }
 
         // Bisher wurde die Auswahl nur aufgeschrieben. Sie galt fuer alles,
         // was danach kam, und liess liegen, was schon dastand -- auch nach

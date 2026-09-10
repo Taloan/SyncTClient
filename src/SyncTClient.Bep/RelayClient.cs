@@ -178,9 +178,7 @@ public static class RelayClient
                     $"Auf den Beitritt zur Sitzung kam {nachricht.Art} statt einer Antwort.");
 
             var antwort = RelayProtocol.AntwortLesen(nachricht.Rumpf);
-            if (antwort.Code != 0)
-                throw new IOException(
-                    $"Die Sitzung wurde abgelehnt: {antwort.Meldung} (Code {antwort.Code}).");
+            if (antwort.Code != 0) throw new IOException(Abgelehnt(antwort));
 
             return new Leitung(new TcpLeitung(tcp), einladung.AlsServer);
         }
@@ -189,6 +187,32 @@ public static class RelayClient
             tcp.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    /// Was eine Absage des Relays bedeutet, auf Deutsch.
+    /// </summary>
+    /// <remarks>
+    /// Der Relay antwortet englisch und knapp. Ein Fall lohnt die
+    /// Übersetzung, weil er kein Fehler ist, sondern ein Zustand: zwischen
+    /// zwei Geräten führt ein Relay genau eine Sitzung. Wer eine zweite
+    /// aufbaut — weil die erste eben abgerissen ist und der Relay es noch
+    /// nicht bemerkt hat —, bekommt diese Absage und muss warten, nicht
+    /// suchen.
+    ///
+    /// Gemessen: derselbe Versuch dreimal hintereinander, während eine
+    /// Sitzung bestand, ergab drei verschiedene Bilder — einmal einen
+    /// abgelehnten TLS-Handschlag, einmal ein Ende des Stroms mitten im
+    /// Handschlag, einmal diese Absage im Klartext. Nur die dritte sagt,
+    /// was los ist; die beiden anderen sind dieselbe Ursache, nur früher
+    /// bemerkt.
+    /// </remarks>
+    private static string Abgelehnt(RelayProtocol.Antwort antwort)
+    {
+        if (antwort.Meldung.Contains("already connected", StringComparison.OrdinalIgnoreCase))
+            return "der Relay fuehrt bereits eine Sitzung zwischen diesen beiden Geraeten";
+
+        return $"die Sitzung wurde abgelehnt: {antwort.Meldung} (Code {antwort.Code})";
     }
 
     /// <summary>
