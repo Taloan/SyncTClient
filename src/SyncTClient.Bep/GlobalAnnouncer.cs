@@ -1,4 +1,4 @@
-namespace SyncTClient.Bep;
+﻿namespace SyncTClient.Bep;
 
 /// <summary>
 /// Meldet dem Erkennungsserver in Abständen, wo dieses Gerät zu erreichen ist.
@@ -43,6 +43,18 @@ public sealed class GlobalAnnouncer : IAsyncDisposable
         _log = log;
     }
 
+    /// <summary>
+    /// Liefert weitere Adressen, unter denen dieses Gerät zu erreichen ist —
+    /// QUIC und der Relay.
+    /// </summary>
+    /// <remarks>
+    /// Als Rückruf und nicht als Liste: die Anmeldung bei einem Relay kommt
+    /// und geht, und was hier gemeldet wird, muss der Stand im Augenblick des
+    /// Meldens sein. Eine Adresse, unter der nichts mehr wartet, ist
+    /// schlechter als keine.
+    /// </remarks>
+    public Func<IEnumerable<string>>? WeitereAdressen { get; set; }
+
     public void Start() => _loop = Task.Run(() => LoopAsync(_cts.Token));
 
     private async Task LoopAsync(CancellationToken ct)
@@ -63,8 +75,17 @@ public sealed class GlobalAnnouncer : IAsyncDisposable
                     // Adresse ohne Host: der Server setzt die Adresse ein, von
                     // der die Anmeldung kam. Dieser Rechner kennt seine
                     // Adresse von aussen nicht.
+                    var adressen = new List<string> { $"tcp://0.0.0.0:{_listenPort}" };
+
+                    // Die Reihenfolge ist ein Vorschlag an die Gegenstelle:
+                    // TCP, dann QUIC, dann der Relay. Ein direkter Weg ist
+                    // jedem vermittelten vorzuziehen.
+                    if (WeitereAdressen?.Invoke() is { } weitere)
+                        foreach (var adresse in weitere)
+                            if (!string.IsNullOrWhiteSpace(adresse)) adressen.Add(adresse);
+
                     var next = await discovery
-                        .AnnounceAsync([$"tcp://0.0.0.0:{_listenPort}"], ct)
+                        .AnnounceAsync(adressen, ct)
                         .ConfigureAwait(false);
 
                     // Es gilt die kuerzeste von allen Servern genannte Frist.

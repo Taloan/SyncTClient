@@ -180,7 +180,16 @@ public sealed class PeerHost : IAsyncDisposable
 
         Exception? last = null;
 
-        foreach (var candidate in candidates)
+        // Ein Relay reicht die Bytes ueber einen fremden Rechner und ist
+        // langsamer als jeder direkte Weg. Die Oberflaeche sagt zu, dass er
+        // nur zum Zug kommt, wenn keine direkte Verbindung zustande kommt --
+        // also stehen die direkten Adressen vorn, in ihrer eigenen
+        // Reihenfolge.
+        var geordnet = candidates
+            .OrderBy(a => a.StartsWith("relay://", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ToList();
+
+        foreach (var candidate in geordnet)
         {
             if (candidate.StartsWith("relay://", StringComparison.OrdinalIgnoreCase))
             {
@@ -192,15 +201,63 @@ public sealed class PeerHost : IAsyncDisposable
                     continue;
                 }
 
-                _log($"[{Display}] {candidate}");
-                last ??= new NotSupportedException(
-                    "die Gegenstelle ist nur ueber einen Relay zu erreichen -- das kann dieser Client noch nicht.");
+                // Zuletzt, nicht zuerst. Ein Relay reicht die Bytes ueber
+                // einen fremden Rechner, und das ist langsamer als jeder
+                // direkte Weg. Die Reihenfolge stellt CandidatesAsync her.
+                // Kein "using": gelingt der Handschlag, gehoert der Strom der
+                // Verbindung und darf hier nicht geschlossen werden.
+                RelayClient.Leitung? leitung = null;
+
+                try
+                {
+                    _log($"[{Display}] verbinde ueber Relay {RelayClient.Zerlegen(candidate).Host} ...");
+
+                    leitung = await RelayClient.VerbindenAsync(
+                        candidate, _identity, expected, t => _log($"[{Display}] {t}"), ct);
+
+                    // Wer den Handschlag annimmt, bestimmt der Relay. Beide
+                    // Seiten muessen sich daran halten.
+                    var verbindung = leitung.AlsServer
+                        ? await BepConnection.AcceptOverAsync(
+                            leitung.Strom, _identity, _app.DeviceName, ct)
+                        : await BepConnection.ConnectOverAsync(
+                            leitung.Strom, _identity, expected, _app.DeviceName, ct);
+
+                    _log($"[{Display}] ueber Relay verbunden.");
+                    return verbindung;
+                }
+                catch (Exception ex)
+                {
+                    leitung?.Dispose();
+                    last = ex;
+                    _log($"[{Display}] {candidate} fuehrt nicht zum Ziel: {ex.Message}");
+                }
+
                 continue;
             }
 
             if (candidate.StartsWith("quic://", StringComparison.OrdinalIgnoreCase))
             {
-                last ??= new NotSupportedException("die Gegenstelle bietet nur QUIC an.");
+                if (!BepQuic.Moeglich)
+                {
+                    last ??= new NotSupportedException("dieser Rechner bringt kein QUIC mit.");
+                    continue;
+                }
+
+                try
+                {
+                    var (qhost, qport) = SplitHostPort(Bare(candidate));
+                    _log($"[{Display}] verbinde ueber QUIC mit {qhost}:{qport} ...");
+
+                    return await BepQuic.ConnectAsync(
+                        qhost, qport, _identity, expected, _app.DeviceName, ct);
+                }
+                catch (Exception ex)
+                {
+                    last = ex;
+                    _log($"[{Display}] {candidate} fuehrt nicht zum Ziel: {ex.Message}");
+                }
+
                 continue;
             }
 

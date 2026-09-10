@@ -47,6 +47,8 @@ public partial class MainWindow : Window
     private ShareRegistry? _registry;
     private LocalDiscovery? _local;
     private GlobalAnnouncer? _announcer;
+    private RelayListener? _relay;
+    private BepQuic.Lauscher? _quic;
     private TrayIcon? _tray;
     private double _peak;
 
@@ -1668,11 +1670,82 @@ public partial class MainWindow : Window
             }
         }
 
+        // QUIC auf demselben Port, nur ueber UDP. Ein zusaetzlicher Weg:
+        // laeuft er nicht, bleibt TCP unberuehrt.
+        if (BepQuic.AnnehmenMoeglich)
+        {
+            var quic = new BepQuic.Lauscher(_identity, _config.DeviceName, AppendLog);
+            quic.Eingehend += OnIncoming;
+
+            if (await quic.StartAsync(listener.Port))
+            {
+                _quic = quic;
+                AppendLog($"Nehme Verbindungen auch ueber QUIC entgegen (UDP {quic.Port}).");
+            }
+            else
+            {
+                await quic.DisposeAsync();
+            }
+        }
+
+        // Der Relay: eine ausgehende Leitung, die offen bleibt, damit uns
+        // eine Gegenstelle erreichen kann, die keinen Weg zu uns hat. Er
+        // haengt am Lauscher wie alles andere -- wer keine Verbindungen
+        // annimmt, will auch keine vermittelt bekommen.
+        if (_config.Relays)
+        {
+            var relay = new RelayListener(_identity, AppendLog);
+            relay.Eingehend += OnRelayIncoming;
+            relay.Start();
+            _relay = relay;
+        }
+
         if (_config.Announce)
         {
             _announcer = new GlobalAnnouncer(
                 _config.AnnounceServers, _identity, listener.Port, AppendLog);
+
+            // QUIC und der Relay gehoeren in die Anmeldung. Ohne sie weiss
+            // niemand, dass dieses Geraet darueber zu erreichen ist.
+            _announcer.WeitereAdressen = () =>
+            {
+                var weitere = new List<string>();
+
+                if (_quic is { Port: > 0 } q) weitere.Add($"quic://0.0.0.0:{q.Port}");
+                if (_relay?.Adresse is { Length: > 0 } r) weitere.Add(r);
+
+                return weitere;
+            };
             _announcer.Start();
+        }
+    }
+
+    /// <summary>
+    /// Ein Geraet hat uns ueber einen Relay erreicht.
+    /// </summary>
+    /// <remarks>
+    /// Der Handschlag steht hier noch aus: die vermittelte Leitung ist bis
+    /// hierher ein blankes Rohr. Wer dabei den Server gibt, hat der Relay
+    /// entschieden.
+    /// </remarks>
+    private async void OnRelayIncoming(Stream leitung, bool alsServer)
+    {
+        if (_identity is null) { leitung.Dispose(); return; }
+
+        try
+        {
+            var connection = alsServer
+                ? await BepConnection.AcceptOverAsync(leitung, _identity, _config.DeviceName)
+                : await BepConnection.ConnectOverAsync(
+                    leitung, _identity, Bep.DeviceId.Empty, _config.DeviceName);
+
+            Dispatcher.Invoke(() => HandleIncoming(connection, null));
+        }
+        catch (Exception ex)
+        {
+            leitung.Dispose();
+            Dispatcher.Invoke(() => AppendLog(
+                $"Eine ueber einen Relay vermittelte Verbindung kam nicht zustande: {ex.Message}"));
         }
     }
 
@@ -1683,13 +1756,19 @@ public partial class MainWindow : Window
         var listener = _listener;
         var local = _local;
         var announcer = _announcer;
+        var relay = _relay;
+        var quic = _quic;
 
         _listener = null;
         _local = null;
         _announcer = null;
+        _relay = null;
+        _quic = null;
         _runtime.Local = null;
 
         if (announcer is not null) await announcer.DisposeAsync();
+        if (relay is not null) await relay.DisposeAsync();
+        if (quic is not null) await quic.DisposeAsync();
         if (local is not null) await local.DisposeAsync();
         if (listener is not null) await listener.DisposeAsync();
     }

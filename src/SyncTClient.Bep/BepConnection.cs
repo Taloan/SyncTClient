@@ -29,7 +29,15 @@ public sealed class BepConnection : IAsyncDisposable
     /// </remarks>
     private const int ConcurrentServes = 4;
 
-    private readonly TcpClient _tcp;
+    /// <summary>
+    /// Was unter dem TLS-Strom liegt und mit ihm geschlossen werden muss.
+    /// </summary>
+    /// <remarks>
+    /// Meist ein <c>TcpClient</c>. Bei einer ueber ein Relay vermittelten
+    /// Leitung ist es der Strom der Vermittlung -- ab dem Handschlag ist das
+    /// kein Unterschied mehr, geschlossen werden muss beides.
+    /// </remarks>
+    private readonly IDisposable? _unterbau;
     private readonly Stream _tls;
 
     /// <summary>Zaehlt die Bytes, die ueber diese Verbindung laufen.</summary>
@@ -39,9 +47,9 @@ public sealed class BepConnection : IAsyncDisposable
     private readonly SemaphoreSlim _serveGate = new(ConcurrentServes);
     private int _nextRequestId;
 
-    private BepConnection(TcpClient tcp, Stream tls, DeviceId peerId, Hello peerHello)
+    private BepConnection(IDisposable? unterbau, Stream tls, DeviceId peerId, Hello peerHello)
     {
-        _tcp = tcp;
+        _unterbau = unterbau;
         _tls = tls;
         _wire = new CountingStream(tls);
         PeerId = peerId;
@@ -107,6 +115,115 @@ public sealed class BepConnection : IAsyncDisposable
         catch
         {
             tcp.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Baut die Sitzung ueber eine Leitung auf, die schon steht.
+    /// </summary>
+    /// <remarks>
+    /// Fuer eine ueber ein Relay vermittelte Leitung. Ab hier ist sie
+    /// dasselbe wie ein Socket: TLS darueber, Hello, fertig. Dass ein
+    /// fremder Rechner die Bytes durchreicht, spielt keine Rolle -- er sieht
+    /// nur den verschluesselten Strom.
+    /// </remarks>
+    public static async Task<BepConnection> ConnectOverAsync(
+        Stream transport, DeviceIdentity identity, DeviceId expectedPeer,
+        string deviceName = "SyncTClient", CancellationToken ct = default)
+    {
+        try
+        {
+            var tls = await BepTls.ConnectAsync(transport, identity, ct).ConfigureAwait(false);
+            var peerId = DeviceId.FromCertificate(tls.PeerCertificate);
+
+            if (expectedPeer != DeviceId.Empty && peerId != expectedPeer)
+                throw new InvalidDataException(
+                    $"Geraete-ID stimmt nicht. Erwartet: {expectedPeer}, bekommen: {peerId}");
+
+            var peerHello = await HelloExchange
+                .ExchangeAsync(tls.Stream, OwnHello(deviceName), ct).ConfigureAwait(false);
+
+            return new BepConnection(transport, tls.Stream, peerId, peerHello);
+        }
+        catch
+        {
+            transport.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Baut die Sitzung auf einem QUIC-Strom auf.
+    /// </summary>
+    /// <remarks>
+    /// Hier gibt es keinen eigenen TLS-Handschlag mehr: QUIC bringt ihn mit,
+    /// und die Zertifikate sind beim Aufbau der Verbindung schon getauscht.
+    /// Uebrig bleibt der Hello-Austausch, und der ist derselbe wie ueber TCP.
+    /// </remarks>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    public static async Task<BepConnection> UeberQuicAsync(
+        System.Net.Quic.QuicConnection verbindung, System.Net.Quic.QuicStream strom,
+        DeviceId peerId, string deviceName, CancellationToken ct)
+    {
+        var peerHello = await HelloExchange
+            .ExchangeAsync(strom, OwnHello(deviceName), ct).ConfigureAwait(false);
+
+        return new BepConnection(new QuicUnterbau(verbindung, strom), strom, peerId, peerHello);
+    }
+
+    /// <summary>
+    /// Haelt die QUIC-Verbindung unter dem Strom fest.
+    /// </summary>
+    /// <remarks>
+    /// Der Strom allein zu schliessen liesse die Verbindung stehen, und mit
+    /// ihr den UDP-Zustand auf beiden Seiten. <c>QuicConnection</c> kennt nur
+    /// den asynchronen Weg; hier wird er mit einer Frist abgewartet, damit
+    /// ein haengendes Schliessen nicht den Aufrufer aufhaelt.
+    /// </remarks>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+    private sealed class QuicUnterbau(
+        System.Net.Quic.QuicConnection verbindung, System.Net.Quic.QuicStream strom) : IDisposable
+    {
+        public void Dispose()
+        {
+            try { strom.Dispose(); }
+            catch (Exception) { /* schon fort */ }
+
+            try { verbindung.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5)); }
+            catch (Exception) { /* schon fort, oder es dauert zu lange */ }
+        }
+    }
+
+    /// <summary>
+    /// Nimmt die Sitzung ueber eine Leitung an, die schon steht.
+    /// </summary>
+    /// <remarks>
+    /// Welche der beiden Seiten annimmt, entscheidet bei einer vermittelten
+    /// Leitung der Relay. Hielten sich beide nicht daran, warteten zwei
+    /// Clients aufeinander.
+    /// </remarks>
+    public static async Task<BepConnection> AcceptOverAsync(
+        Stream transport, DeviceIdentity identity,
+        string deviceName = "SyncTClient", CancellationToken ct = default)
+    {
+        try
+        {
+            var tls = await BepTls.AcceptAsync(transport, identity, ct).ConfigureAwait(false);
+            var peerId = DeviceId.FromCertificate(tls.PeerCertificate);
+
+            var peerHello = await HelloExchange
+                .ExchangeAsync(tls.Stream, OwnHello(deviceName), ct).ConfigureAwait(false);
+
+            return new BepConnection(transport, tls.Stream, peerId, peerHello);
+        }
+        catch
+        {
+            transport.Dispose();
             throw;
         }
     }
@@ -578,7 +695,7 @@ public sealed class BepConnection : IAsyncDisposable
         }
 
         await _tls.DisposeAsync().ConfigureAwait(false);
-        _tcp.Dispose();
+        _unterbau?.Dispose();
         _writeLock.Dispose();
         _serveGate.Dispose();
     }

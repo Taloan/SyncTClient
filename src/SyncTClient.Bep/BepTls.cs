@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Security;
@@ -35,6 +35,17 @@ public static class BepTls
 {
     private const string BepProtocolName = "bep/1.0";
 
+    /// <summary>
+    /// Der Name, unter dem ein Relay seine eigene Leitung fuehrt.
+    /// </summary>
+    /// <remarks>
+    /// Die Verbindung zum Relay ist keine BEP-Verbindung: darueber laeuft
+    /// zuerst das Relay-Protokoll, und erst die vermittelte Leitung dahinter
+    /// traegt BEP. Beide brauchen deshalb verschiedene Namen, sonst weist die
+    /// Gegenseite den Handschlag ab.
+    /// </remarks>
+    public const string RelayProtocolName = "bep-relay";
+
     /// <summary>So lange darf der Handschlag dauern.</summary>
     private static readonly TimeSpan Frist = TimeSpan.FromSeconds(15);
 
@@ -53,11 +64,12 @@ public static class BepTls
 
     /// <summary>Baut die Verbindung als Client auf.</summary>
     public static Task<Verbindung> ConnectAsync(
-        Stream transport, DeviceIdentity identity, CancellationToken ct)
-        => Aushandeln(transport, ct, () =>
+        Stream transport, DeviceIdentity identity, CancellationToken ct,
+        string anwendungsprotokoll = BepProtocolName)
+        => Aushandeln(transport, ct, anwendungsprotokoll, () =>
         {
             var crypto = new BcTlsCrypto(new SecureRandom());
-            var client = new BepClient(crypto, identity);
+            var client = new BepClient(crypto, identity, anwendungsprotokoll);
             var protokoll = new TlsClientProtocol(transport);
 
             protokoll.Connect(client);
@@ -66,11 +78,12 @@ public static class BepTls
 
     /// <summary>Nimmt die Verbindung als Server an.</summary>
     public static Task<Verbindung> AcceptAsync(
-        Stream transport, DeviceIdentity identity, CancellationToken ct)
-        => Aushandeln(transport, ct, () =>
+        Stream transport, DeviceIdentity identity, CancellationToken ct,
+        string anwendungsprotokoll = BepProtocolName)
+        => Aushandeln(transport, ct, anwendungsprotokoll, () =>
         {
             var crypto = new BcTlsCrypto(new SecureRandom());
-            var server = new BepServer(crypto, identity);
+            var server = new BepServer(crypto, identity, anwendungsprotokoll);
             var protokoll = new TlsServerProtocol(transport);
 
             protokoll.Accept(server);
@@ -86,7 +99,7 @@ public static class BepTls
     /// ueber das Kennzeichen allein erreicht ein blockierendes Lesen nicht.
     /// </remarks>
     private static async Task<Verbindung> Aushandeln(
-        Stream transport, CancellationToken ct,
+        Stream transport, CancellationToken ct, string erwartet,
         Func<(TlsProtocol Protokoll, byte[]? PeerCertificate, TlsContext Kontext)> handschlag)
     {
         var vorherLesen = Lesefrist(transport);
@@ -107,9 +120,9 @@ public static class BepTls
             var beschreibung =
                 $"[{kennwerte.NegotiatedVersion}, Verfahren 0x{kennwerte.CipherSuite:X4}, ALPN \"{alpn}\"]";
 
-            if (alpn != BepProtocolName)
+            if (alpn != erwartet)
                 throw new InvalidDataException(
-                    $"Die Gegenstelle hat \"{alpn}\" statt \"{BepProtocolName}\" ausgehandelt.");
+                    $"Die Gegenstelle hat \"{alpn}\" statt \"{erwartet}\" ausgehandelt.");
 
             // Ohne Zertifikat gibt es keine Geraete-ID. Bei einer eigenen
             // TLS-Umsetzung ist das kein zu erwartender Fall mehr, aber ein
@@ -206,18 +219,18 @@ public static class BepTls
             "Zum eigenen Zertifikat liegt kein verwendbarer privater Schluessel vor.");
     }
 
-    private static IList<ProtocolName> Anwendungsprotokolle()
-        => [ProtocolName.AsUtf8Encoding(BepProtocolName)];
+    private static IList<ProtocolName> Anwendungsprotokolle(string name)
+        => [ProtocolName.AsUtf8Encoding(name)];
 
     /// <summary>Wir bauen die Verbindung auf.</summary>
-    private sealed class BepClient(BcTlsCrypto crypto, DeviceIdentity identity)
+    private sealed class BepClient(BcTlsCrypto crypto, DeviceIdentity identity, string anwendungsprotokoll)
         : DefaultTlsClient(crypto)
     {
         public byte[]? PeerCertificate { get; private set; }
 
         protected override ProtocolVersion[] GetSupportedVersions() => ProtocolVersion.TLSv13.Only();
 
-        protected override IList<ProtocolName> GetProtocolNames() => Anwendungsprotokolle();
+        protected override IList<ProtocolName> GetProtocolNames() => Anwendungsprotokolle(anwendungsprotokoll);
 
         public override TlsAuthentication GetAuthentication() => new Pruefung(this, identity);
 
@@ -246,14 +259,14 @@ public static class BepTls
     }
 
     /// <summary>Die Gegenstelle baut die Verbindung auf.</summary>
-    private sealed class BepServer(BcTlsCrypto crypto, DeviceIdentity identity)
+    private sealed class BepServer(BcTlsCrypto crypto, DeviceIdentity identity, string anwendungsprotokoll)
         : DefaultTlsServer(crypto)
     {
         public byte[]? PeerCertificate { get; private set; }
 
         protected override ProtocolVersion[] GetSupportedVersions() => ProtocolVersion.TLSv13.Only();
 
-        protected override IList<ProtocolName> GetProtocolNames() => Anwendungsprotokolle();
+        protected override IList<ProtocolName> GetProtocolNames() => Anwendungsprotokolle(anwendungsprotokoll);
 
         public override TlsCredentials GetCredentials()
             => EigeneKennung(m_context, (BcTlsCrypto)Crypto, identity, TlsUtilities.EmptyBytes);
