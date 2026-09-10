@@ -658,7 +658,7 @@ public sealed partial class ShareHost
 
                 if (gefuehrt is not null && !gefuehrt.Deleted)
                 {
-                    if (gefuehrt.Sequence == 0 && Nachtragen(gefuehrt, ref nachgetragen))
+                    if (gefuehrt.Sequence == 0 && Nachtragen(name, ref nachgetragen))
                         nachtragsbedarf++;
 
                     continue;
@@ -710,11 +710,11 @@ public sealed partial class ShareHost
                     known.Size == info.Length &&
                     known.ModifiedS == new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds())
                 {
-                    // Hier steht fest, dass wir die Datei halten: der
-                    // Platzhalter waere oben ausgestiegen, und Groesse und
-                    // Zeit stimmen mit dem Eintrag ueberein. Nur angekuendigt
-                    // wurde sie nie.
-                    if (known.Sequence == 0 && Nachtragen(known, ref nachgetragen))
+                    // Ohne eigene Sequenznummer steht der Eintrag in keiner
+                    // Ankuendigung. Er wird deshalb vorgemerkt -- nicht
+                    // angekuendigt: das entscheidet die Bewertung, und die
+                    // rechnet vorher die Blockliste.
+                    if (known.Sequence == 0 && Nachtragen(name, ref nachgetragen))
                         nachtragsbedarf++;
 
                     continue;
@@ -736,8 +736,8 @@ public sealed partial class ShareHost
 
         if (nachgetragen > 0)
         {
-            _log($"[{FolderId}] {nachgetragen} Eintraege nachgetragen, die bisher in " +
-                 "keiner Ankuendigung standen" +
+            _log($"[{FolderId}] {nachgetragen} Eintraege werden geprueft und nachgetragen, " +
+                 "die bisher in keiner Ankuendigung standen" +
                  (nachtragsbedarf > nachgetragen
                      ? $", {nachtragsbedarf - nachgetragen} folgen im naechsten Durchgang."
                      : "."));
@@ -2326,7 +2326,17 @@ public sealed partial class ShareHost
         // Gegenstelle, nicht damit, dass die Datei sich seither nicht
         // geaendert hat.
         if (known is not null && !known.Deleted && known.BlocksHash.Span.SequenceEqual(blocksHash))
+        {
+            // Gleicher Inhalt -- und jetzt nachgerechnet, nicht vermutet.
+            //
+            // Fehlt dem Eintrag die eigene Sequenznummer, steht er in keiner
+            // Ankuendigung. Hier ist der Augenblick, in dem sich das ohne
+            // Behauptung beheben laesst: die Blockliste ist eben entstanden
+            // und stimmt mit der ueberein, die wir fuehren.
+            if (known.Sequence == 0) UebernehmenUndWeitergeben(known);
+
             return Done(name);
+        }
 
         // Zum ersten Mal gesehen, und der Inhalt ist genau der, den die
         // Gegenstelle angekuendigt hat: die Datei ist von dort gekommen. Sie
@@ -2418,7 +2428,14 @@ public sealed partial class ShareHost
         // Information. Was darin liegt, wird fuer sich abgeglichen; das
         // Verzeichnis selbst ist nur die Aussage, dass es da ist.
         if (known is not null && !known.Deleted && known.Type == FileInfoType.Directory)
+        {
+            // Ein Verzeichnis traegt keinen Inhalt; dass es dasteht, ist
+            // alles, was es zu sagen gibt. Fehlt die eigene Sequenznummer,
+            // bekommt es sie hier.
+            if (known.Sequence == 0) UebernehmenUndWeitergeben(known);
+
             return Done(name);
+        }
 
         // Die Gegenstelle fuehrt es bereits. Dann ist es von dort gekommen und
         // wird nur in den eigenen Bestand uebernommen.
@@ -2959,7 +2976,7 @@ public sealed partial class ShareHost
     private const int NachtragJeDurchgang = 2000;
 
     /// <summary>
-    /// Traegt einem Eintrag ohne eigene Sequenznummer eine nach.
+    /// Merkt einen Eintrag ohne eigene Sequenznummer zur Bewertung vor.
     /// </summary>
     /// <returns><c>true</c>, wenn ein Nachtrag noetig war -- auch wenn er
     /// diesmal nicht mehr an die Reihe kam.</returns>
@@ -2974,15 +2991,27 @@ public sealed partial class ShareHost
     /// 1428,7 MB. Das Telefon zeigte uns daraufhin mit einem Prozent an --
     /// 16,3 MB von 1445, genau der eine Eintrag, der eine Nummer hatte.
     ///
-    /// Der Aufrufer hat vorher festgestellt, dass die Datei hier liegt und
-    /// zum Eintrag passt. Angekuendigt wird damit nur, was wir wirklich
-    /// halten.
+    /// <para>Vorgemerkt, nicht angekuendigt</para>
+    ///
+    /// Hier wird nichts angekuendigt. Der Durchgang weiss nur, dass Groesse
+    /// und Zeit zum Eintrag passen, und das ist eine Heuristik: wer Groesse
+    /// und Sekunde beibehaelt und den Inhalt aendert, wird dabei uebersehen.
+    ///
+    /// Fuer eine Ankuendigung reicht das nicht. An ihr haengt die
+    /// Platzhalter-Schwelle: ein anderer Knoten gibt seine Kopie frei, wenn
+    /// genug Gegenstellen die Datei fuehren. Wer dort mitzaehlt, ohne
+    /// nachgerechnet zu haben, kann die letzte echte Kopie kosten.
+    ///
+    /// Also uebernimmt die Bewertung. Sie rechnet die Blockliste und
+    /// vergleicht sie mit dem Eintrag; erst wenn sie uebereinstimmt, bekommt
+    /// er seine Nummer. Das kostet einmal Lesen je Datei -- denselben Preis
+    /// wie die Aufnahme eines uebernommenen Ordners.
     /// </remarks>
-    private bool Nachtragen(BepFileInfo eintrag, ref int nachgetragen)
+    private bool Nachtragen(string name, ref int nachgetragen)
     {
         if (nachgetragen >= NachtragJeDurchgang) return true;
 
-        UebernehmenUndWeitergeben(eintrag);
+        _dirty[name] = 0;
         nachgetragen++;
         return true;
     }
