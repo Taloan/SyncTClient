@@ -2276,9 +2276,24 @@ public sealed partial class ShareHost
         // beibehaelt und den Inhalt aendert, wird hier uebersehen -- der
         // Durchgang beim Start faende es ebenfalls nicht. Der Beweis waere
         // ein Hash ueber alles, und den kostet er nicht.
+        // Fehlt dem Eintrag die eigene Sequenznummer, greift die Abkuerzung
+        // nicht.
+        //
+        // Sie sagt "an der Datei hat sich nichts geaendert", und das stimmt --
+        // nur steht der Eintrag ohne Nummer in keiner Ankuendigung, und
+        // dagegen hilft es nicht, ihn zu uebergehen. Gemessen an einer
+        // Freigabe mit 82 Nachtraegen: die drei Verzeichnisse bekamen ihre
+        // Nummer, die 79 Dateien nicht, und der Durchgang meldete dieselben
+        // 79 danach wieder und wieder.
+        //
+        // Ohne die Abkuerzung wird die Blockliste gerechnet, und genau die
+        // braucht es: erst wenn sie zu der passt, die wir fuehren, darf der
+        // Eintrag angekuendigt werden. Das kostet einmal Lesen je Datei --
+        // einmal, denn danach hat sie ihre Nummer.
         if (!erzwungen
             && _index!.TryGetLocal(name, out var previous)
             && !previous.Deleted
+            && previous.Sequence > 0
             && previous.Size == length
             && previous.ModifiedS == modified)
         {

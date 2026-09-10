@@ -619,8 +619,14 @@ public sealed class PeerHost : IAsyncDisposable
             // Index kam nie an, sie zaehlte nie als Halter, und jede
             // Blockanfrage ging an die erste -- auch dann, wenn die zweite
             // dieselben Dateien hielt.
-            if (!frisch && host2.State != ShareState.Gestoppt)
-                host2.Rebind(DeviceId, connection);
+            //
+            // Ohne Bedingung auf den Zustand. Ein Ordner, der gerade erst
+            // startet, steht noch auf "gestoppt", und die zweite Gegenstelle
+            // faellt genau in dieses Fenster: sie wuerde weder gebunden noch
+            // gestartet, weil der Start der ersten schon laeuft. Rebind
+            // selbst kennt den Zustand und laesst ihn in Ruhe -- es traegt
+            // nur die Verbindung ein, und genau darum geht es.
+            if (!frisch) host2.Rebind(DeviceId, connection);
         }
 
         await NegotiateAsync(token);
