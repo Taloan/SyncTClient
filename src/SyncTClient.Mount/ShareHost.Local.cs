@@ -234,6 +234,22 @@ public sealed partial class ShareHost
     private readonly ConcurrentDictionary<string, DateTime> _wartend = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Was wir von einer Gegenstelle uebernommen haben und den uebrigen noch
+    /// ankuendigen muessen.
+    /// </summary>
+    /// <remarks>
+    /// Ein Ordner kann mehr als zwei Teilnehmer haben, und sie sind nicht
+    /// alle untereinander verbunden. Kommt eine Datei von A und ist B mit A
+    /// nicht verbunden -- angehalten, hinter einem Router, ausgeschaltet --,
+    /// dann erfaehrt B von ihr nur ueber uns.
+    ///
+    /// Das ist keine Zutat, sondern die Aufgabe: wer an einem Ordner
+    /// teilnimmt, gibt weiter, was er hat.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, BepFileInfo> _weiterzugeben =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Namen, zu denen eine Loeschung gemeldet wurde, mit dem Zeitpunkt, ab
     /// dem sie angekuendigt werden darf.
     /// </summary>
@@ -1989,7 +2005,7 @@ public sealed partial class ShareHost
                 Faellige();
                 AbgelehnteMelden();
 
-                if (_dirty.IsEmpty && _removed.IsEmpty) continue;
+                if (_dirty.IsEmpty && _removed.IsEmpty && _weiterzugeben.IsEmpty) continue;
 
                 await Task.Delay(SettleDelay, ct).ConfigureAwait(false);
 
@@ -2046,6 +2062,22 @@ public sealed partial class ShareHost
 
             batch.Add(file);
             bytes += file.CalculateSize();
+
+            if (batch.Count < BatchFiles && bytes < BatchBytes) continue;
+
+            await FlushAsync(batch, ct).ConfigureAwait(false);
+            bytes = 0;
+        }
+
+        // Was von einer Gegenstelle kam, geht an die uebrigen weiter. Ohne
+        // Bewertung: die Datei ist nicht hier entstanden, ihre Fassung steht
+        // fest, und gerechnet ist sie schon.
+        foreach (var name in _weiterzugeben.Keys.OrderBy(n => n, StringComparer.Ordinal))
+        {
+            if (!_weiterzugeben.TryRemove(name, out var weiter)) continue;
+
+            batch.Add(weiter);
+            bytes += weiter.CalculateSize();
 
             if (batch.Count < BatchFiles && bytes < BatchBytes) continue;
 
@@ -2269,12 +2301,7 @@ public sealed partial class ShareHost
         if (known is null && PeerCopy(announced) is { } peer &&
             !peer.Deleted && peer.Size == length && peer.BlocksHash.Span.SequenceEqual(blocksHash))
         {
-            var adopted = peer.Clone();
-
-            // Die Sequenznummer der Gegenstelle gehoert nicht in die eigene
-            // Zaehlung. Angekuendigt haben wir diese Version nie.
-            adopted.Sequence = 0;
-            Store(adopted, StateClean);
+            UebernehmenUndWeitergeben(peer);
             return Done(name);
         }
 
@@ -2364,9 +2391,7 @@ public sealed partial class ShareHost
         // wird nur in den eigenen Bestand uebernommen.
         if (known is null && PeerCopy(announced) is { Deleted: false, Type: FileInfoType.Directory } peer)
         {
-            var adopted = peer.Clone();
-            adopted.Sequence = 0;
-            Store(adopted, StateClean);
+            UebernehmenUndWeitergeben(peer);
             return Done(name);
         }
 
@@ -2848,6 +2873,42 @@ public sealed partial class ShareHost
     /// wird sich nicht darauf: eine Datei zweimal im Index waere eine
     /// widerspruechliche Aussage, eine fehlende ein Verlust.
     /// </remarks>
+    /// <summary>
+    /// Nimmt die Fassung einer Gegenstelle in den eigenen Bestand und reicht
+    /// sie an die uebrigen weiter.
+    /// </summary>
+    /// <remarks>
+    /// Die Fassung bleibt ihre: derselbe Versionsvektor, dasselbe
+    /// <c>modified_by</c>. Wir haben die Datei nicht geaendert, wir halten sie
+    /// nur auch. Eine eigene Version daraus zu machen waere eine Behauptung
+    /// und erzeugte bei jedem Weiterreichen eine neue.
+    ///
+    /// Was wechselt, ist allein die Sequenznummer. Sie ist keine Aussage ueber
+    /// die Datei, sondern die Zaehlung dieses Geraets: sie sagt der
+    /// Gegenstelle, in welcher Reihenfolge unsere Meldungen kommen und ab wo
+    /// sie fortsetzen kann.
+    ///
+    /// Vorher stand hier eine Null, und das hatte einen richtigen Grund --
+    /// mehrere Nullen in einer Nachricht sind ein Formfehler, den Syncthing
+    /// mit "duplicate remote sequence number 0" und dem Schliessen der
+    /// Verbindung beantwortet. Nur wurde damit auch der Eintrag aus dem Index
+    /// gehalten, denn dort steht nur, was eine eigene Nummer hat. Die Folge:
+    /// eine Datei, die von A kam, erfuhr B nie.
+    ///
+    /// Mit einer eigenen Nummer ist beides erfuellt -- sie ist eindeutig und
+    /// aufsteigend, und der Eintrag steht im Index.
+    /// </remarks>
+    private void UebernehmenUndWeitergeben(BepFileInfo fremd)
+    {
+        var eigen = fremd.Clone();
+        eigen.Sequence = NextSequence();
+
+        Store(eigen, StateClean);
+
+        _weiterzugeben[eigen.Name] = eigen;
+        Wake();
+    }
+
     private List<BepFileInfo> Bestand(List<BepFileInfo> batch)
     {
         List<BepFileInfo> gespeichert;
@@ -2899,7 +2960,21 @@ public sealed partial class ShareHost
     {
         if (batch.Count == 0) return;
 
-        var last = batch.Max(f => f.Sequence);
+        // Aufsteigend, und zwar bevor irgendetwas hinausgeht.
+        //
+        // Die Sequenznummer sagt der Gegenstelle, ab wo sie fortsetzen kann;
+        // eine Nachricht, in der sie zurueckspringt, ist ein Formfehler.
+        // Solange ein Stapel allein aus der Bewertung kam, stimmte die
+        // Reihenfolge von selbst -- die Nummern entstehen dort der Reihe nach.
+        //
+        // Seit auch Uebernommenes mitgeht, gilt das nicht mehr: dessen Nummer
+        // stammt aus dem Augenblick des Empfangs und ist damit aelter als die
+        // einer Datei, die eben erst bewertet wurde. Sortiert kostet es
+        // nichts und nimmt der Reihenfolge jede Abhaengigkeit davon, wer den
+        // Stapel gefuellt hat.
+        batch.Sort(static (a, b) => a.Sequence.CompareTo(b.Sequence));
+
+        var last = batch[^1].Sequence;
         var erreicht = 0;
 
         // Vor dem Senden aufschreiben, nicht danach. Bricht die Verbindung

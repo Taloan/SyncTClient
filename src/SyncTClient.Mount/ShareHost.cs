@@ -1872,9 +1872,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             _cache?.NoteContent(name, 0);
             _cache?.MarkInSync(name);
 
-            var uebernommen = file.Clone();
-            uebernommen.Sequence = 0;
-            Store(uebernommen, StateClean);
+            UebernehmenUndWeitergeben(file);
         }
         catch (Exception)
         {
@@ -2041,11 +2039,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // sind das 335 MB, die noch einmal von der Platte gelesen werden,
             // nur um festzustellen, was wir gerade selbst geschrieben haben.
             //
-            // Die Sequenznummer bleibt null: angekuendigt haben wir diese
-            // Fassung nie, und im Index darf die Null nicht stehen.
-            var uebernommen = file.Clone();
-            uebernommen.Sequence = 0;
-            Store(uebernommen, StateClean);
+            // Und den uebrigen Gegenstellen weitersagen, dass wir sie jetzt
+            // halten. Warum die Fassung dabei ihre bleibt und nur die
+            // Sequenznummer unsere wird, steht bei UebernehmenUndWeitergeben.
+            UebernehmenUndWeitergeben(file);
 
             transfer.State = TransferState.Fertig;
         }
