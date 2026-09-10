@@ -613,6 +613,13 @@ public sealed partial class ShareHost
         };
 
         var found = 0;
+
+        // Was ohne eigene Sequenznummer im Bestand steht und deshalb in
+        // keiner Ankuendigung vorkommt: wie viele es sind, und wie viele
+        // davon dieser Durchgang genommen hat. Siehe NachtragJeDurchgang.
+        var nachgetragen = 0;
+        var nachtragsbedarf = 0;
+
         var uhr = System.Diagnostics.Stopwatch.StartNew();
 
         // Was im Ordner steht, mit Groesse und Zeit. Platzhalter gehoeren
@@ -648,7 +655,14 @@ public sealed partial class ShareHost
                 if (NameOf(dir.FullName) is not { } name) continue;
 
                 var gefuehrt = LocalCopy(name);
-                if (gefuehrt is not null && !gefuehrt.Deleted) continue;
+
+                if (gefuehrt is not null && !gefuehrt.Deleted)
+                {
+                    if (gefuehrt.Sequence == 0 && Nachtragen(gefuehrt, ref nachgetragen))
+                        nachtragsbedarf++;
+
+                    continue;
+                }
 
                 _dirty[name] = 0;
                 found++;
@@ -691,10 +705,20 @@ public sealed partial class ShareHost
                 mitInhalt[name] = (info.Length, new DateTimeOffset(info.LastAccessTimeUtc));
 
                 var known = LocalCopy(name);
+
                 if (known is not null && !known.Deleted &&
                     known.Size == info.Length &&
                     known.ModifiedS == new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds())
+                {
+                    // Hier steht fest, dass wir die Datei halten: der
+                    // Platzhalter waere oben ausgestiegen, und Groesse und
+                    // Zeit stimmen mit dem Eintrag ueberein. Nur angekuendigt
+                    // wurde sie nie.
+                    if (known.Sequence == 0 && Nachtragen(known, ref nachgetragen))
+                        nachtragsbedarf++;
+
                     continue;
+                }
 
                 _dirty[name] = 0;
                 found++;
@@ -708,6 +732,15 @@ public sealed partial class ShareHost
             // und damit auch das Ausliefern von Dateien zu beenden.
             _log($"[{FolderId}] der Durchgang ueber \"{root}\" brach ab: {Herkunft(ex)}");
             return;
+        }
+
+        if (nachgetragen > 0)
+        {
+            _log($"[{FolderId}] {nachgetragen} Eintraege nachgetragen, die bisher in " +
+                 "keiner Ankuendigung standen" +
+                 (nachtragsbedarf > nachgetragen
+                     ? $", {nachtragsbedarf - nachgetragen} folgen im naechsten Durchgang."
+                     : "."));
         }
 
         if (zuUebernehmen.Count > 0)
@@ -2907,6 +2940,51 @@ public sealed partial class ShareHost
 
         _weiterzugeben[eigen.Name] = eigen;
         Wake();
+    }
+
+    /// <summary>
+    /// Wie viele Nachtraege ein Durchgang hoechstens aufnimmt.
+    /// </summary>
+    /// <remarks>
+    /// Der Altbestand kann gross sein: gemessen an dieser Installation
+    /// standen ueber alle Freigaben hinweg rund 160 GB im eigenen Bestand,
+    /// die in keiner Ankuendigung vorkamen -- allein bei einer Freigabe
+    /// 114653 Eintraege. Sie in einem Zug nachzutragen hiesse, den Durchgang
+    /// dafuer anzuhalten und die Blocklisten aller auf einmal im Speicher zu
+    /// halten.
+    ///
+    /// Also stapelweise. Bleibt die Zahl ueber die Durchgaenge hinweg gleich,
+    /// gelingt das Nachtragen nicht, und das ist im Protokoll zu sehen.
+    /// </remarks>
+    private const int NachtragJeDurchgang = 2000;
+
+    /// <summary>
+    /// Traegt einem Eintrag ohne eigene Sequenznummer eine nach.
+    /// </summary>
+    /// <returns><c>true</c>, wenn ein Nachtrag noetig war -- auch wenn er
+    /// diesmal nicht mehr an die Reihe kam.</returns>
+    /// <remarks>
+    /// Eine Datei, die wir von einer Gegenstelle uebernommen haben, trug
+    /// bisher die Sequenznummer null, und was keine eigene Nummer hat, steht
+    /// in keiner Ankuendigung. Fuer alles, was vor dieser Aenderung
+    /// uebernommen wurde, gilt das weiterhin -- die Gegenstellen halten uns
+    /// deshalb fuer einen Knoten, der fast nichts hat.
+    ///
+    /// Gemessen an einer Freigabe mit 84 Eintraegen: 83 davon ohne Nummer,
+    /// 1428,7 MB. Das Telefon zeigte uns daraufhin mit einem Prozent an --
+    /// 16,3 MB von 1445, genau der eine Eintrag, der eine Nummer hatte.
+    ///
+    /// Der Aufrufer hat vorher festgestellt, dass die Datei hier liegt und
+    /// zum Eintrag passt. Angekuendigt wird damit nur, was wir wirklich
+    /// halten.
+    /// </remarks>
+    private bool Nachtragen(BepFileInfo eintrag, ref int nachgetragen)
+    {
+        if (nachgetragen >= NachtragJeDurchgang) return true;
+
+        UebernehmenUndWeitergeben(eintrag);
+        nachgetragen++;
+        return true;
     }
 
     private List<BepFileInfo> Bestand(List<BepFileInfo> batch)
