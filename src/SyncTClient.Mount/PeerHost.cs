@@ -169,6 +169,23 @@ public sealed class PeerHost : IAsyncDisposable
     /// Adresse, seine oeffentliche und die seines Relays. Verwendet wird die
     /// erste, ueber die eine Verbindung zustande kommt.
     /// </remarks>
+    /// <summary>So lange darf ein einzelner Versuch dauern.</summary>
+    /// <remarks>
+    /// Ohne eigene Frist entscheidet das Betriebssystem, und das laesst einen
+    /// Verbindungsversuch an eine tote Adresse gut zwanzig Sekunden laufen.
+    /// </remarks>
+    private static readonly TimeSpan Versuchsfrist = TimeSpan.FromSeconds(10);
+
+    /// <summary>Dasselbe für einen Weg über einen Relay.</summary>
+    /// <remarks>
+    /// Mehr, weil mehr geschieht: eine Verbindung zum Relay mit TLS, die
+    /// Anfrage, die Einladung, eine zweite Verbindung zur vermittelten
+    /// Leitung, und darauf noch einmal der Handschlag zwischen den beiden
+    /// Geräten. Zwei Handschläge und drei Wege hin und zurück — mit zehn
+    /// Sekunden bräche ein Weg ab, der nur langsam ist.
+    /// </remarks>
+    private static readonly TimeSpan Relayfrist = TimeSpan.FromSeconds(25);
+
     private async Task<BepConnection> DialAsync(CancellationToken ct)
     {
         var expected = DeviceId.Length > 0 ? Bep.DeviceId.Parse(DeviceId) : Bep.DeviceId.Empty;
@@ -178,105 +195,195 @@ public sealed class PeerHost : IAsyncDisposable
             throw new InvalidOperationException(
                 "keine Adresse bekannt -- weder eingetragen noch von der Erkennung genannt.");
 
-        Exception? last = null;
-
+        // Zwei Gruppen, nacheinander. Innerhalb einer Gruppe gleichzeitig.
+        //
         // Ein Relay reicht die Bytes ueber einen fremden Rechner und ist
         // langsamer als jeder direkte Weg. Die Oberflaeche sagt zu, dass er
-        // nur zum Zug kommt, wenn keine direkte Verbindung zustande kommt --
-        // also stehen die direkten Adressen vorn, in ihrer eigenen
-        // Reihenfolge.
-        var geordnet = candidates
-            .OrderBy(a => a.StartsWith("relay://", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+        // nur verwendet wird, wenn keine direkte Verbindung zustande kommt --
+        // deshalb kommt er erst dran, wenn alle direkten gescheitert sind.
+        //
+        // Gleichzeitig innerhalb der Gruppe, weil es sonst dauert: die
+        // Erkennung nannte fuer ein Telefon neunzehn Adressen, davon die
+        // meisten tot. Nacheinander vergehen so Minuten, bevor der letzte Weg
+        // an der Reihe ist -- gemessen, nicht geschaetzt.
+        var direkt = new List<string>();
+        var vermittelt = new List<string>();
+
+        foreach (var adresse in candidates)
+            (IstRelay(adresse) ? vermittelt : direkt).Add(adresse);
+
+        Exception? letzter = null;
+
+        if (direkt.Count > 0)
+        {
+            var (verbindung, fehler) = await WettlaufAsync(direkt, expected, "direkt", ct);
+            if (verbindung is not null) return verbindung;
+            letzter = fehler;
+        }
+
+        if (vermittelt.Count == 0)
+            throw letzter ?? new IOException("keine der Adressen fuehrte zu einer Verbindung.");
+
+        if (!_app.Relays || !_config.Relays)
+        {
+            _log($"[{Display}] Relay uebergangen -- fuer diese Gegenstelle abgeschaltet.");
+            throw letzter ?? new NotSupportedException(
+                "nur ueber einen Relay zu erreichen, und Relays sind abgeschaltet.");
+        }
+
+        var (ueberRelay, relayFehler) = await WettlaufAsync(vermittelt, expected, "ueber Relay", ct);
+        if (ueberRelay is not null) return ueberRelay;
+
+        throw relayFehler ?? letzter
+            ?? new IOException("keine der Adressen fuehrte zu einer Verbindung.");
+    }
+
+    private static bool IstRelay(string adresse)
+        => adresse.StartsWith("relay://", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Versucht alle Adressen einer Gruppe gleichzeitig. Die erste
+    /// Verbindung, die zustande kommt, gewinnt.
+    /// </summary>
+    /// <remarks>
+    /// Was danach noch zustande kommt, wird geschlossen. Zwei Verbindungen zu
+    /// derselben Gegenstelle waeren eine zuviel.
+    ///
+    /// Die Fehlschlaege werden gezaehlt und in einer Zeile genannt, nicht
+    /// einzeln. Sechzehn tote Adressen sind sonst sechzehn Zeilen, die alle
+    /// dasselbe sagen.
+    /// </remarks>
+    private async Task<(BepConnection? Verbindung, Exception? Fehler)> WettlaufAsync(
+        IReadOnlyList<string> adressen, Bep.DeviceId expected, string was, CancellationToken ct)
+    {
+        _log(adressen.Count == 1
+            ? $"[{Display}] verbinde {was}: {adressen[0]}"
+            : $"[{Display}] verbinde {was}: {adressen.Count} Adressen gleichzeitig.");
+
+        using var abbruch = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        var laeuft = adressen
+            .Select(adresse => (Adresse: adresse, Aufgabe: VersuchAsync(adresse, expected, abbruch.Token)))
             .ToList();
 
-        foreach (var candidate in geordnet)
+        Exception? letzter = null;
+        var gruende = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        while (laeuft.Count > 0)
         {
-            if (candidate.StartsWith("relay://", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!_app.Relays || !_config.Relays)
-                {
-                    _log($"[{Display}] Relay uebergangen -- fuer diese Gegenstelle abgeschaltet.");
-                    last ??= new NotSupportedException(
-                        "nur ueber einen Relay zu erreichen, und Relays sind abgeschaltet.");
-                    continue;
-                }
+            var fertig = await Task.WhenAny(laeuft.Select(e => e.Aufgabe)).ConfigureAwait(false);
+            var eintrag = laeuft.First(e => e.Aufgabe == fertig);
+            laeuft.Remove(eintrag);
 
-                // Zuletzt, nicht zuerst. Ein Relay reicht die Bytes ueber
-                // einen fremden Rechner, und das ist langsamer als jeder
-                // direkte Weg. Die Reihenfolge stellt CandidatesAsync her.
-                // Kein "using": gelingt der Handschlag, gehoert der Strom der
-                // Verbindung und darf hier nicht geschlossen werden.
-                RelayClient.Leitung? leitung = null;
-
-                try
-                {
-                    _log($"[{Display}] verbinde ueber Relay {RelayClient.Zerlegen(candidate).Host} ...");
-
-                    leitung = await RelayClient.VerbindenAsync(
-                        candidate, _identity, expected, t => _log($"[{Display}] {t}"), ct);
-
-                    // Wer den Handschlag annimmt, bestimmt der Relay. Beide
-                    // Seiten muessen sich daran halten.
-                    var verbindung = leitung.AlsServer
-                        ? await BepConnection.AcceptOverAsync(
-                            leitung.Strom, _identity, _app.DeviceName, ct)
-                        : await BepConnection.ConnectOverAsync(
-                            leitung.Strom, _identity, expected, _app.DeviceName, ct);
-
-                    _log($"[{Display}] ueber Relay verbunden.");
-                    return verbindung;
-                }
-                catch (Exception ex)
-                {
-                    leitung?.Dispose();
-                    last = ex;
-                    _log($"[{Display}] {candidate} fuehrt nicht zum Ziel: {ex.Message}");
-                }
-
-                continue;
-            }
-
-            if (candidate.StartsWith("quic://", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!BepQuic.Moeglich)
-                {
-                    last ??= new NotSupportedException("dieser Rechner bringt kein QUIC mit.");
-                    continue;
-                }
-
-                try
-                {
-                    var (qhost, qport) = SplitHostPort(Bare(candidate));
-                    _log($"[{Display}] verbinde ueber QUIC mit {qhost}:{qport} ...");
-
-                    return await BepQuic.ConnectAsync(
-                        qhost, qport, _identity, expected, _app.DeviceName, ct);
-                }
-                catch (Exception ex)
-                {
-                    last = ex;
-                    _log($"[{Display}] {candidate} fuehrt nicht zum Ziel: {ex.Message}");
-                }
-
-                continue;
-            }
+            BepConnection verbindung;
 
             try
             {
-                var (host, port) = SplitHostPort(Bare(candidate));
-                _log($"[{Display}] verbinde mit {host}:{port} ...");
-                return await BepConnection.ConnectAsync(
-                    host, port, _identity, expected, _app.DeviceName, ct);
+                verbindung = await fertig.ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                last = ex;
-                _log($"[{Display}] {candidate} fuehrt nicht zum Ziel: {ex.Message}");
+                letzter = ex;
+                var grund = Kurzgrund(ex);
+                gruende[grund] = gruende.GetValueOrDefault(grund) + 1;
+                continue;
+            }
+
+            await abbruch.CancelAsync().ConfigureAwait(false);
+            Aufraeumen(laeuft.Select(e => e.Aufgabe));
+
+            _log($"[{Display}] verbunden ueber {eintrag.Adresse}.");
+            return (verbindung, null);
+        }
+
+        _log($"[{Display}] keine der {adressen.Count} Adressen fuehrte zum Ziel " +
+             $"({string.Join(", ", gruende.Select(g => g.Value == 1 ? g.Key : $"{g.Value}x {g.Key}"))}).");
+
+        return (null, letzter);
+    }
+
+    /// <summary>Ein einzelner Versuch, mit eigener Frist.</summary>
+    private async Task<BepConnection> VersuchAsync(
+        string adresse, Bep.DeviceId expected, CancellationToken ct)
+    {
+        using var frist = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        frist.CancelAfter(IstRelay(adresse) ? Relayfrist : Versuchsfrist);
+
+        if (IstRelay(adresse))
+        {
+            // Kein "using": gelingt der Handschlag, gehoert der Strom der
+            // Verbindung und darf hier nicht geschlossen werden.
+            RelayClient.Leitung? leitung = null;
+
+            try
+            {
+                leitung = await RelayClient.VerbindenAsync(
+                    adresse, _identity, expected, t => _log($"[{Display}] {t}"), frist.Token);
+
+                // Wer den Handschlag annimmt, bestimmt der Relay. Beide
+                // Seiten muessen sich daran halten.
+                return leitung.AlsServer
+                    ? await BepConnection.AcceptOverAsync(
+                        leitung.Strom, _identity, _app.DeviceName, frist.Token)
+                    : await BepConnection.ConnectOverAsync(
+                        leitung.Strom, _identity, expected, _app.DeviceName, frist.Token);
+            }
+            catch
+            {
+                leitung?.Dispose();
+                throw;
             }
         }
 
-        throw last ?? new IOException("keine der Adressen fuehrte zu einer Verbindung.");
+        var (host, port) = SplitHostPort(Bare(adresse));
+
+        if (adresse.StartsWith("quic://", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!BepQuic.Moeglich)
+                throw new NotSupportedException("dieser Rechner bringt kein QUIC mit.");
+
+            return await BepQuic.ConnectAsync(
+                host, port, _identity, expected, _app.DeviceName, frist.Token);
+        }
+
+        return await BepConnection.ConnectAsync(
+            host, port, _identity, expected, _app.DeviceName, frist.Token);
     }
+
+    /// <summary>
+    /// Schliesst, was nach dem Gewinner noch zustande kommt.
+    /// </summary>
+    /// <remarks>
+    /// Nebenher und ohne darauf zu warten: der Aufrufer hat seine Verbindung,
+    /// und ein Versuch, der noch in seiner Frist haengt, soll ihn nicht
+    /// aufhalten.
+    /// </remarks>
+    private static void Aufraeumen(IEnumerable<Task<BepConnection>> uebrige)
+    {
+        foreach (var aufgabe in uebrige)
+        {
+            _ = aufgabe.ContinueWith(
+                static fertig =>
+                {
+                    if (fertig.IsCompletedSuccessfully)
+                        _ = fertig.Result.DisposeAsync(
+                            "nicht gebraucht, eine andere Adresse war schneller");
+                },
+                TaskScheduler.Default);
+        }
+    }
+
+    /// <summary>Der Grund eines Fehlschlags, kurz genug zum Zaehlen.</summary>
+    private static string Kurzgrund(Exception ex) => ex switch
+    {
+        OperationCanceledException or TimeoutException => "Zeitueberschreitung",
+        System.Net.Quic.QuicException q
+            when q.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+            => "Zeitueberschreitung",
+        NotSupportedException => ex.Message,
+        System.Net.Sockets.SocketException s => s.SocketErrorCode.ToString(),
+        _ => ex.GetType().Name
+    };
 
     /// <summary>Alle Adressen, unter denen die Gegenstelle zu versuchen ist.</summary>
     private async Task<IReadOnlyList<string>> CandidatesAsync(Bep.DeviceId expected, CancellationToken ct)
