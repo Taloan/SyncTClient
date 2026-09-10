@@ -687,17 +687,19 @@ public sealed class PersistentFolderIndex : IDisposable
     /// ihnen dieselbe Fassung fuehrt.
     /// </remarks>
     public IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory,
-                          bool HasContent, bool OwnMatches)>
+                          bool HasContent, bool OwnMatches, bool OwnAnnounced)>
         EnumerateLightWithOwn(string nach, int hoechstens)
     {
         using var gate = _gate.EnterScope();
-        var eintraege = new List<(string, long, long, bool, bool, bool)>();
+        var eintraege = new List<(string, long, long, bool, bool, bool, bool)>();
         using var command = _db.CreateCommand();
         command.CommandText = """
             SELECT f.name, MAX(f.size), MAX(f.modified), MAX(f.kind), MAX(f.has_blocks),
                    MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0
                                  AND l.version IS NOT NULL AND f.version IS NOT NULL
                                  AND l.version = f.version
+                            THEN 1 ELSE 0 END),
+                   MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0 AND l.sequence > 0
                             THEN 1 ELSE 0 END)
             FROM files f LEFT JOIN local_files l ON l.name = f.name
             WHERE f.deleted = 0 AND f.name <> '' AND f.name > $nach
@@ -718,7 +720,8 @@ public sealed class PersistentFolderIndex : IDisposable
                 reader.GetInt64(2),
                 (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
                 reader.GetInt32(4) != 0,
-                reader.GetInt32(5) != 0));
+                reader.GetInt32(5) != 0,
+                reader.GetInt32(6) != 0));
         }
 
         return eintraege;

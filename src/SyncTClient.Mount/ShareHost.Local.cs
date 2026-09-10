@@ -1106,14 +1106,14 @@ public sealed partial class ShareHost
     /// des Programms ist es der Unterschied.
     /// </remarks>
     private IEnumerable<(string Name, long Size, long ModifiedS, bool IsDirectory,
-                         bool HasContent, bool OwnMatches)> Seitenweise()
+                         bool HasContent, bool OwnMatches, bool OwnAnnounced)> Seitenweise()
     {
         var nach = "";
 
         while (true)
         {
             IReadOnlyList<(string Name, long Size, long ModifiedS, bool IsDirectory,
-                           bool HasContent, bool OwnMatches)> seite;
+                           bool HasContent, bool OwnMatches, bool OwnAnnounced)> seite;
             lock (_indexGate)
             {
                 if (_index is null) yield break;
@@ -1176,6 +1176,11 @@ public sealed partial class ShareHost
         // Durchgang stellt sie ohnehin fest; ein zweiter Lauf ueber den Index
         // waere dieselbe Auskunft zum doppelten Preis.
         var ohneInhalt = new List<string>();
+
+        // Und die Namen, die unsere Auswahl ausschliesst und die wir der
+        // Gegenstelle noch nicht als "wird hier nicht liegen" gemeldet haben.
+        var abzuwaehlen = new List<string>();
+
         var gesamt = 0;
         long gesamtBytes = 0;
         var vereint = 0;
@@ -1198,8 +1203,8 @@ public sealed partial class ShareHost
                 // Datenbank kam -- auch der Schreiber nicht, der gerade den
                 // Index aufnimmt. Und die vollstaendige Liste war ein
                 // einziger grosser Brocken im Speicher.
-                foreach (var (name, size, modifiedS, isDirectory, hatInhalt, eigeneGleich)
-                         in Seitenweise())
+                foreach (var (name, size, modifiedS, isDirectory, hatInhalt, eigeneGleich,
+                              eigenAngekuendigt) in Seitenweise())
                 {
                     if (isDirectory) continue;
 
@@ -1250,7 +1255,15 @@ public sealed partial class ShareHost
                     // Entfernen von selbst.
                     if (!_config.Includes(name))
                     {
-                        if (!_mitInhalt.ContainsKey(name)) continue;
+                        if (!_mitInhalt.ContainsKey(name))
+                        {
+                            // Abgewaehlt und nicht hier -- und das soll die
+                            // Gegenstelle erfahren. Siehe AbwahlMelden.
+                            if (!eigenAngekuendigt && abzuwaehlen.Count < AbwahlJeDurchgang)
+                                abzuwaehlen.Add(name);
+
+                            continue;
+                        }
 
                         offen++;
                         bytes += size;
@@ -1352,6 +1365,15 @@ public sealed partial class ShareHost
                     if (offeneListe.Count < ListenGrenze)
                         offeneListe.Add(new OutstandingItem(name, size, grund));
                 }
+
+                // Was die Auswahl ausschliesst, geht als solches hinaus.
+                // Nicht in der Schleife: dort wird gemessen, nicht
+                // geschrieben.
+                foreach (var name in abzuwaehlen) AbwahlMelden(name);
+
+                if (abzuwaehlen.Count > 0)
+                    _log($"[{FolderId}] {abzuwaehlen.Count} abgewaehlte Eintraege werden der " +
+                         "Gegenstelle als hier nicht vorhanden gemeldet.");
 
                 // Die andere Richtung: was hier liegt und noch nicht
                 // angekuendigt ist.
@@ -3029,6 +3051,52 @@ public sealed partial class ShareHost
         _dirty[name] = 0;
         nachgetragen++;
         return true;
+    }
+
+    /// <summary>Wie viele Abwahlmeldungen ein Durchgang hoechstens aufnimmt.</summary>
+    private const int AbwahlJeDurchgang = 2000;
+
+    /// <summary>
+    /// Meldet der Gegenstelle, dass ein Name hier nicht liegen wird.
+    /// </summary>
+    /// <remarks>
+    /// Wer einen Zweig abwaehlt, erwartet, dass er nicht mehr offen steht --
+    /// und auf dieser Seite tut er das auch: der Rueckstand laesst
+    /// Abgewaehltes aus. Die Gegenstelle weiss davon aber nichts. Sie sieht
+    /// Dateien, die sie fuehrt und wir nicht, und rechnet uns folgerichtig
+    /// als unvollstaendig. Gemessen an einer Freigabe mit einem abgewaehlten
+    /// Ordner: acht Dateien, 373,0 KB, und das Telefon zeigte uns dauerhaft
+    /// mit 99 Prozent.
+    ///
+    /// Das Protokoll hat dafuer ein Feld. <c>invalid</c> heisst "ich kenne
+    /// diese Datei, ich werde sie nicht haben"; anders als
+    /// <c>local_flags</c> geht es ueber die Leitung. Die Gegenstelle fordert
+    /// einen solchen Eintrag nicht bei uns an und zaehlt uns seinetwegen
+    /// nicht als unvollstaendig.
+    ///
+    /// Gemeldet wird die Fassung der Gegenstelle -- derselbe Versionsvektor,
+    /// dieselbe Groesse und Zeit --, nur ohne Blockliste und mit gesetztem
+    /// <c>invalid</c>. Ohne Blockliste zaehlen wir fuer diesen Namen auch
+    /// nicht als Halter, und das ist richtig: wir halten ihn nicht.
+    ///
+    /// Waehlt jemand den Zweig wieder an, holt der gewohnte Weg die Dateien,
+    /// und die Bewertung kuendigt sie mit Blockliste an. Der Eintrag hier ist
+    /// keine Sackgasse.
+    /// </remarks>
+    private void AbwahlMelden(string name)
+    {
+        if (PeerCopy(name) is not { } fremd || fremd.Deleted) return;
+
+        var eigen = fremd.Clone();
+        eigen.Blocks.Clear();
+        eigen.BlocksHash = Google.Protobuf.ByteString.Empty;
+        eigen.Invalid = true;
+        eigen.Sequence = NextSequence();
+
+        Store(eigen, StateClean);
+
+        _weiterzugeben[eigen.Name] = eigen;
+        Wake();
     }
 
     private List<BepFileInfo> Bestand(List<BepFileInfo> batch)
