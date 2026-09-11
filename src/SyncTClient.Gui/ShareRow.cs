@@ -305,10 +305,23 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     // keine Verzeichnisse, und nur was zur Auswahl gehoert. Der rohe Index
     // zaehlt anders, und zwei Zaehlweisen im selben Fenster laden zu einem
     // Vergleich ein, der nicht aufgeht.
-    public string SizeText => Share is null ? "—" : Format.Bytes(Share.IndexTotalBytes);
-    public string LocalSizeText => Share is null ? "—" : Format.Bytes(Share.CacheUsedBytes);
-    public string FilesText => Share is null ? "—" : Format.Count(Share.IndexFiles);
-    public string LocalFilesText => Share is null ? "—" : Format.Count(Share.CacheFileCount);
+    /// <summary>
+    /// Ob die Kennzahlen schon etwas aussagen.
+    /// </summary>
+    /// <remarks>
+    /// Solange der Index der Gegenstelle noch eintrifft, ist keine der vier
+    /// Zahlen bekannt: nicht, was die Gegenstelle fuehrt, und nicht, was
+    /// davon hier liegt -- das wird erst nach dem Index gezaehlt. Eine Null
+    /// an dieser Stelle ist keine Zahl, sondern eine falsche Aussage: sie
+    /// las sich als "die Gegenstelle hat nichts", waehrend gerade 22 043
+    /// Eintraege hereinkamen.
+    /// </remarks>
+    private bool Gezaehlt => Share is not null && Share.Phase != SyncPhase.Index;
+
+    public string SizeText => Gezaehlt ? Format.Bytes(Share!.IndexTotalBytes) : "—";
+    public string LocalSizeText => Gezaehlt ? Format.Bytes(Share!.CacheUsedBytes) : "—";
+    public string FilesText => Gezaehlt ? Format.Count(Share!.IndexFiles) : "—";
+    public string LocalFilesText => Gezaehlt ? Format.Count(Share!.CacheFileCount) : "—";
     public string ThumbsText => Share is null ? "—" : Format.Count(Share.ThumbnailUsage().Count);
     public string PathText => Share?.Config.LocalPath ?? "";
     public string ModeText => Share?.Config.Mode == ShareMode.AlwaysLocal ? App.S("R.ModeAlways") : App.S("R.ModeOnDemand");
