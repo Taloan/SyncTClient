@@ -9,6 +9,133 @@ commit-by-commit history.*
 
 <!-- Neue Fassungen kommen von Hand unter diese Zeile, vor die vorige. -->
 
+## 0.9.4 — 2026-09-11
+
+Diese Fassung macht den Client außerhalb des eigenen Netzes brauchbar und
+schließt drei Lücken, durch die Gegenstellen einen falschen Stand von uns
+bekamen — einmal mit gelöschten Dateien, die zurückkamen.
+
+**Verbindungen außerhalb des eigenen Netzes**
+
+- Neu: Verbindungen über einen Relay, in beide Richtungen. Der Schalter in
+  den Einstellungen stand schon da, dahinter lag aber nichts — eine
+  Gegenstelle, die nur über einen Relay zu erreichen war, wurde übergangen.
+  Aus einem fremden Netz blieb von fünf Adressen der Gegenstelle damit keine
+  brauchbare übrig. Jetzt wird ein Relay genommen, sobald kein direkter Weg
+  zustande kommt, und der Client meldet sich selbst an einem öffentlichen
+  Relay an, damit Gegenstellen ihn darüber erreichen. Die Adresse steht in
+  der Erkennung.
+- Neu: QUIC (UDP 22000), ausgehend und eingehend. Auch dieser Schalter war
+  bisher ohne Wirkung.
+- Die Adressen einer Gegenstelle wurden nacheinander versucht, jede mit
+  zehn Sekunden Frist. Bei neunzehn Adressen — Telefon mit mehreren Netzen
+  — dauerte das Minuten, und der Relay kam als letzter dran. Jetzt werden
+  alle direkten Adressen gleichzeitig versucht, danach alle Relays.
+- Eine Gegenstelle, bei der ein Versuch mit einem Fehler endete, wurde nie
+  wieder versucht; nur "getrennt" kam in den Wiederverbinder. Beide Zustände
+  werden jetzt wieder aufgenommen, je Gegenstelle mit wachsendem Abstand
+  von fünfzehn Sekunden bis fünf Minuten. Ein Netzwechsel setzt die Abstände
+  zurück.
+- Eine Verbindung galt nach drei Minuten ohne Empfang als tot. Syncthing
+  setzt fünf Minuten an, und ein Telefon im Hintergrund schweigt länger als
+  drei: die Verbindung zum Telefon riss alle fünf bis sechs Minuten ab, und
+  das Protokoll schrieb es der Gegenstelle zu. Jetzt fünf Minuten, die
+  Leitung wird dann sofort geschlossen, und die Zeile nennt den Grund.
+- Führt die Gegenstelle nach einem Abriss noch die vorige Verbindung, gilt
+  eine neue für sie zunächst als Zweitleitung: sie schickt eine Ordnerliste
+  ohne Ordner. Die wurde wörtlich genommen — "bietet nichts mehr an" für
+  jede Freigabe, und eine eigene Ordnerliste ohne Kenntnis, worauf die
+  Gegenstelle ihren ganzen Index von vorn schickte. Eine Zweitleitung wird
+  jetzt als solche erkannt, und ohne Ordnerliste gilt, was von der
+  Gegenstelle gespeichert ist. In diesem Zustand wird außerdem alle dreißig
+  Sekunden nachgefasst statt mit wachsendem Abstand.
+- Der Wiederverbinder nahm sich eine Gegenstelle nach der anderen vor und
+  wartete dabei, bis deren Freigaben angelaufen waren — über einen Relay
+  zehn Minuten. So lange blieb jede andere Gegenstelle getrennt. Jetzt
+  laufen die Versuche nebeneinander.
+- Drei Verzeichnisse wurden bei jedem Verbinden als Konflikt gemeldet, weil
+  der eigene Eintrag nach "die Version der Gegenstelle gilt" seine alte
+  Fassung behielt. Er übernimmt sie jetzt.
+- Solange der Index einer Freigabe noch eintrifft, stehen in den Spalten
+  rechts Striche statt Nullen. Eine Null war dort keine Zahl, sondern eine
+  falsche Aussage.
+
+**Mehrere Gegenstellen an einem Ordner**
+
+- Ein Ordner mit zwei Gegenstellen sprach nur mit der ersten. Die zweite
+  bekam weder Index noch Anfragen, obwohl sie verbunden war.
+- Was von einer Gegenstelle kam, erfuhr die andere nie. Sind zwei
+  Gegenstellen untereinander nicht verbunden — pausiert, ausgeschaltet —,
+  laufen ihre Dateien nur über uns, und wir gaben sie nicht weiter. Jetzt
+  wird jede übernommene Datei mit ihrer Fassung an die übrigen Gegenstellen
+  angekündigt, und dasselbe gilt für Löschungen.
+- Die Einstellungen einer Freigabe und "Ordner öffnen" waren ohne
+  Verbindung anklickbar und taten nichts. Beide arbeiten jetzt auf der
+  Konfiguration, auch wenn kein Ordner läuft.
+- Die Ansicht "Nur verbundene" zeigt jetzt die Freigaben mit mindestens
+  einer Gegenstelle, unabhängig davon, ob die gerade erreichbar ist; "Nur
+  nicht verbundene" die ohne Gegenstelle. Bisher hing die Ansicht an der
+  Leitung: riss sie ab, war die Liste leer.
+
+**Was die Gegenstelle von uns weiß**
+
+- Dateien, die von einer Gegenstelle übernommen wurden, standen in keiner
+  eigenen Ankündigung — über alle Freigaben hinweg rund 160 GB. Für die
+  Gegenstellen sah der Client damit aus wie ein Gerät, das fast nichts hat:
+  das Telefon zeigte ihn mit einem Prozent an. Diese Einträge werden jetzt
+  nachgetragen, stapelweise zweitausend je Durchgang und erst, nachdem die
+  Blockliste nachgerechnet ist und zum Eintrag passt. Bei großen Freigaben
+  dauert das nach der Aktualisierung eine Weile; im Protokoll steht, wie
+  viele noch folgen.
+- Ein abgewählter Zweig zählte hier nicht als Rückstand, bei der Gegenstelle
+  aber schon: sie sah Dateien, die sie führt und wir nicht, und zeigte uns
+  dauerhaft mit 99 Prozent. Abgewähltes wird der Gegenstelle jetzt als
+  "wird hier nicht liegen" gemeldet, so wie Syncthing es vorsieht.
+- Eine Freigabe wurde nie fertig, obwohl nichts zu übertragen war. Eine
+  Datei, deren Zeit sich verschoben hatte, deren Inhalt aber gleich war,
+  zählte als offen; Begleitdateien von Datenbanken zählten in der
+  eingehenden Richtung weiter; und eine Datenbank, die niemand mehr
+  öffnete, blieb auf Dauer liegen, weil ihr Journal Inhalt hatte. Eine
+  Datenbank gilt jetzt als beschäftigt, wenn sich in den letzten dreißig
+  Sekunden etwas am Satz aus Datei und Journal bewegt hat — nicht, weil das
+  Journal gefüllt ist. Das Journal wird nicht eingearbeitet: fremde Dateien
+  werden nicht verändert.
+- Eine Löschung ging sofort hinaus. Syncthing wartet sechzig Sekunden, weil
+  viele Vorgänge für einen Augenblick wie eine Löschung aussehen. Jetzt
+  ebenfalls sechzig Sekunden; taucht der Name in der Frist wieder auf,
+  entfällt sie.
+
+**Löschungen kamen zurück**
+
+- Wurden Dateien aus einem Ordner herausgenommen, während ihn zwei
+  Gegenstellen führen, kamen sie als Platzhalter zurück und wurden neu
+  heruntergeladen. Die geltende Fassung eines Namens wurde nach "vorhanden
+  vor gelöscht" gewählt, ohne den Versionsvektor zu vergleichen: sobald die
+  eine Gegenstelle die Löschung bestätigt hatte und die andere noch nicht,
+  gewann deren ältere Ankündigung. Und die eigene Löschung wurde beim
+  Abgleich gar nicht erst verglichen. Es gilt jetzt, was den neuesten
+  Versionsvektor trägt — bei Gleichstand nach denselben Regeln wie
+  Syncthing —, und die eigene Löschung zählt dabei mit.
+- Die Meldungen des Dateisystems kommen nicht immer in der Reihenfolge, in
+  der die Dinge geschahen; eine Änderungsmeldung nach der Löschmeldung hob
+  die vorgemerkte Löschung auf. Sie tut das nur noch, wenn die Datei auch
+  dasteht.
+- Zwischen dem Löschen einer Datei und ihrem Vermerk beim Beobachter liegen
+  Millisekunden, und in diesem Fenster legte der Abgleich dieselbe Datei aus
+  der Ankündigung der Gegenstelle neu an, oder eine laufende Übertragung
+  schrieb sie fertig — und das galt dann als "wieder da". Von 60 von Hand
+  gelöschten Dateien kamen so 32 binnen einer Sekunde zurück. Was der Client
+  nach einer vorgemerkten Löschung selbst angelegt hat, nimmt er jetzt wieder
+  fort; die Löschung bleibt.
+
+**Durchgang**
+
+- Namen, die die Bewertung mit Frist zurückgestellt hatte — eine offene
+  Datenbank, eine Datei, an der noch geschrieben wird —, merkte der
+  Durchgang jedes Mal neu vor und meldete sie als "neu oder geändert", über
+  Stunden. Sie behalten jetzt ihre Frist.
+
+
 ## 0.9.3 — 2026-09-08
 
 Diese Fassung räumt das Zusammenspiel mit Programmen auf, die auf dieselben
