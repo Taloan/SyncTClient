@@ -15,6 +15,12 @@
     <RootNamespace>SyncTClient.Gui</RootNamespace>
     <AssemblyName>SyncTClient</AssemblyName>
     <ApplicationIcon>SyncTClient.ico</ApplicationIcon>
+
+    <!-- x64 auch ohne RuntimeIdentifier, also in Debug. synctmount ist fest
+         auf win-x64 und damit AMD64; ein Client auf "AnyCPU" bekaeme dafuer
+         bei jedem Uebersetzen die Warnung MSB3270 (Prozessorarchitektur
+         MSIL gegen AMD64). Er laeuft ohnehin nur auf x64. -->
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <!--
