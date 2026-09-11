@@ -2026,6 +2026,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             schritt = "die Datei einsetzen";
             File.Move(temp, path);
 
+            SelbstAngelegt(name);
+
+            // Waehrend der Uebertragung geloescht. Die Datei, die eben
+            // eingesetzt wurde, ist unsere; sie geht wieder fort, und die
+            // Loeschung geht hinaus. Siehe _selbstAngelegt.
+            if (_removed.ContainsKey(name) && EigeneAnlageZuruecknehmen(name, path))
+            {
+                transfer.State = TransferState.Fertig;
+                return;
+            }
+
             schritt = "sie in den Bestand aufnehmen";
             _cache?.NoteContent(name, file.Size);
             _cache?.MarkInSync(name);

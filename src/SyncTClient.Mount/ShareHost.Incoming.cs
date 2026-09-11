@@ -441,7 +441,14 @@ public sealed partial class ShareHost
 
         if (theirs.Type == FileInfoType.Directory)
         {
+            if (Directory.Exists(path)) return;
+
             Directory.CreateDirectory(path);
+            SelbstAngelegt(name);
+
+            // Dasselbe Fenster wie bei einer Datei; siehe PlaceRemoteVersion.
+            if (_removed.ContainsKey(name)) EigeneAnlageZuruecknehmen(name, path);
+
             return;
         }
 
@@ -511,6 +518,13 @@ public sealed partial class ShareHost
             _log($"[{FolderId}] Platzhalter fuer \"{name}\" liess sich nicht anlegen.");
             return;
         }
+
+        SelbstAngelegt(name);
+
+        // Die Sperre am Anfang der Schlange fragt den Vermerk vor dem Anlegen
+        // ab. Kam die Loeschung dazwischen, steht der Platzhalter jetzt an
+        // der Stelle einer Datei, die der Anwender eben entfernt hat.
+        if (_removed.ContainsKey(name) && EigeneAnlageZuruecknehmen(name, path)) return;
 
         if (angeheftet) _mount.SetPinned(path, true);
 

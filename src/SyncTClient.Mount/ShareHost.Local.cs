@@ -256,6 +256,73 @@ public sealed partial class ShareHost
     private readonly ConcurrentDictionary<string, DateTime> _removed = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Was wir selbst eben angelegt haben, mit dem Zeitpunkt.
+    /// </summary>
+    /// <remarks>
+    /// Fuer die Frage, ob eine Datei "wieder da" ist. Der Beobachter meldet
+    /// eine Datei, die nach einer vorgemerkten Loeschung wieder auftaucht,
+    /// und dann entfaellt die Loeschung -- zu Recht, wenn der Anwender sie
+    /// zurueckgeholt hat. Nicht zu Recht, wenn wir selbst sie angelegt haben:
+    /// zwischen der Loeschung und ihrem Vermerk liegen Millisekunden, und in
+    /// diesem Fenster legt der Abgleich dieselbe Datei aus der Ankuendigung
+    /// der Gegenstelle neu an, oder eine laufende Uebertragung schreibt sie
+    /// fertig. Gemessen: 32 von 60 von Hand geloeschten Dateien galten binnen
+    /// einer Sekunde als "wieder da", die Loeschung war fort, das
+    /// Herunterladen lief weiter.
+    ///
+    /// Die Sperren davor -- "erst melden, dann annehmen" -- fragen den
+    /// Vermerk vor dem Anlegen ab und koennen dieses Fenster nicht
+    /// schliessen. Also merken wir, was von uns kam, und eine solche Datei
+    /// geht wieder fort, statt die Loeschung aufzuheben.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, DateTime> _selbstAngelegt = new(StringComparer.Ordinal);
+
+    /// <summary>So lange gilt eine eigene Anlage als eben geschehen.</summary>
+    private static readonly TimeSpan Anlagefrist = TimeSpan.FromSeconds(30);
+
+    /// <summary>Vermerkt, dass wir diese Datei eben selbst angelegt haben.</summary>
+    private void SelbstAngelegt(string name)
+    {
+        _selbstAngelegt[name] = DateTime.UtcNow;
+
+        // Die Liste waechst mit jeder Anlage; was aelter als die Frist ist,
+        // sagt nichts mehr.
+        if (_selbstAngelegt.Count > 4096)
+        {
+            var grenze = DateTime.UtcNow - Anlagefrist;
+            foreach (var (n, wann) in _selbstAngelegt)
+                if (wann < grenze) _selbstAngelegt.TryRemove(n, out _);
+        }
+    }
+
+    /// <summary>
+    /// Nimmt eine Datei wieder fort, die wir nach einer vorgemerkten Loeschung
+    /// selbst angelegt haben.
+    /// </summary>
+    /// <returns><c>true</c>, wenn die Datei von uns stammte und fort ist.</returns>
+    private bool EigeneAnlageZuruecknehmen(string name, string pfad)
+    {
+        if (!_selbstAngelegt.TryGetValue(name, out var wann)) return false;
+        if (DateTime.UtcNow - wann > Anlagefrist) return false;
+
+        try
+        {
+            if (File.Exists(pfad)) File.Delete(pfad);
+            else if (Directory.Exists(pfad)) Directory.Delete(pfad);
+            _cache?.Forget(name);
+        }
+        catch (Exception ex)
+        {
+            _log($"[{FolderId}] \"{name}\" wurde nach der Loeschung von uns neu angelegt und " +
+                 $"laesst sich nicht wieder entfernen: {ex.Message}");
+            return false;
+        }
+
+        _selbstAngelegt.TryRemove(name, out _);
+        return true;
+    }
+
+    /// <summary>
     /// Wie lange eine gemeldete Loeschung liegen bleibt, bevor sie hinausgeht.
     /// </summary>
     /// <remarks>
@@ -401,6 +468,12 @@ public sealed partial class ShareHost
         {
             var pfad = LocalPathOf(name);
             if (!File.Exists(pfad) && !Directory.Exists(pfad)) return;
+
+            // Von uns selbst angelegt, nachdem die Loeschung schon vorgemerkt
+            // war: das ist kein Zurueckholen, sondern das Fenster, das bei
+            // _selbstAngelegt beschrieben ist. Die Datei geht wieder fort,
+            // die Loeschung bleibt.
+            if (EigeneAnlageZuruecknehmen(name, pfad)) return;
 
             if (_removed.TryRemove(name, out _))
                 Einmal("wiederda:" + name)(
