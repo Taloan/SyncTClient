@@ -827,6 +827,20 @@ public sealed class PersistentFolderIndex : IDisposable
         return eintraege;
     }
 
+    /// <summary>Die Gegenstellen, von denen Ankuendigungen gespeichert sind.</summary>
+    public IReadOnlyList<string> Devices()
+    {
+        using var gate = _gate.EnterScope();
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT DISTINCT device FROM files WHERE device <> ''";
+
+        var geraete = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) geraete.Add(reader.GetString(0));
+
+        return geraete;
+    }
+
     /// <summary>
     /// Verwirft alles. Noetig, wenn der Peer seinen Index neu aufgebaut hat.
     /// </summary>

@@ -813,6 +813,70 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     {
         var databasePath = Path.Combine(_app.HomeDirectory, $"index-{FolderId}.db");
         _index ??= new PersistentFolderIndex(databasePath, FolderId);
+        FremdeVerwerfen();
+    }
+
+    /// <summary>
+    /// Verwirft die Ankuendigungen von Gegenstellen, die an diesem Ordner
+    /// nicht mehr beteiligt sind.
+    /// </summary>
+    /// <remarks>
+    /// Wer eine Gegenstelle aus der Freigabe nimmt, nimmt ihr die Verbindung
+    /// -- ihre Ankuendigungen blieben aber in der Datenbank stehen, und dort
+    /// zaehlten sie weiter: im Rueckstand, in der Spalte der Gegenstelle,
+    /// und bei "vollstaendig lokal" als Dateien, die zu holen sind.
+    ///
+    /// Gemessen an einem Ordner, bei dem die Rossibox seit Tagen abgewaehlt
+    /// war: ihre 83 Eintraege standen weiter im Index. Das Telefon fuehrte
+    /// vier Dateien, die Anzeige nannte 1,4 GB, und der Ordner holte
+    /// Dateien nach, die keine beteiligte Gegenstelle mehr hatte -- von der
+    /// abgewaehlten, die noch verbunden war, weil sie andere Ordner teilt.
+    ///
+    /// Also gilt: nur was von einer beteiligten Gegenstelle stammt, steht im
+    /// Index. Beim Oeffnen wird das nachgezogen, beim Abwaehlen sofort
+    /// (siehe Vergessen). Eine Freigabe ohne eingetragene Gegenstellen ist
+    /// ein Altbestand aus der Zeit vor der Bindung; dort bleibt alles.
+    /// </remarks>
+    private void FremdeVerwerfen()
+    {
+        if (_config.PeerDeviceIds.Count == 0) return;
+
+        var gebunden = new HashSet<string>(_config.PeerDeviceIds, StringComparer.OrdinalIgnoreCase);
+
+        lock (_indexGate)
+        {
+            if (_index is null) return;
+
+            foreach (var geraet in _index.Devices())
+            {
+                if (gebunden.Contains(geraet)) continue;
+
+                _index.Clear(geraet);
+                _index.SetPeerIndexId(geraet, 0);
+                _log($"[{FolderId}] die Ankuendigungen von {geraet[..Math.Min(7, geraet.Length)]} werden verworfen: " +
+                     "die Gegenstelle ist an diesem Ordner nicht mehr beteiligt.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Nimmt eine Gegenstelle aus dem Ordner: Verbindung und Ankuendigungen.
+    /// </summary>
+    /// <remarks>Warum beides, steht bei FremdeVerwerfen.</remarks>
+    public void Vergessen(string device)
+    {
+        DropConnection(device);
+
+        lock (_indexGate)
+        {
+            if (_index is null) return;
+            _index.Clear(device);
+            _index.SetPeerIndexId(device, 0);
+        }
+
+        // Der Rueckstand hat sich geaendert, und Platzhalter, die nur diese
+        // Gegenstelle fuellen konnte, sind keine Aufgabe mehr.
+        RequeueAll();
     }
 
     /// <summary>

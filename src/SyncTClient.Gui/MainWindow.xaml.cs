@@ -392,6 +392,20 @@ public partial class MainWindow : Window
                 ? peer.Host.ShareFor(folderId)
                 : null;
 
+        // Ob diese Gegenstelle an einem uebernommenen Ordner beteiligt ist.
+        // Ein Ordner, den sie anbietet, der hier aber ohne sie eingerichtet
+        // ist, ist fuer die Zeile keiner ihrer Ordner: sie zaehlte sonst in
+        // "1 von 2" und stand im Knotendialog, obwohl sie laengst abgewaehlt
+        // war. Ein Ordner ohne eingetragene Gegenstellen ist ein Altbestand;
+        // dort gilt, wer ihn anbietet.
+        bool Beteiligt(PeerItem peer, string folderId)
+        {
+            var eingerichtet = _config.Shares.FirstOrDefault(s => s.FolderId.Equals(folderId, StringComparison.Ordinal));
+            return eingerichtet is null
+                   || eingerichtet.PeerDeviceIds.Count == 0
+                   || eingerichtet.PeerDeviceIds.Contains(peer.Config.DeviceId, StringComparer.OrdinalIgnoreCase);
+        }
+
         foreach (var peer in _peers)
         {
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -399,6 +413,8 @@ public partial class MainWindow : Window
             foreach (var offer in peer.Host.Offered)
             {
                 seen.Add(offer.FolderId);
+                if (!Beteiligt(peer, offer.FolderId)) continue;
+
                 Aufnehmen(peer, offer.FolderId, offer.Label, Uebernommene(peer, offer.FolderId));
             }
 

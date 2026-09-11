@@ -1085,8 +1085,9 @@ public sealed class PeerHost : IAsyncDisposable
     {
         if (!_shares.TryRemove(folderId, out var share)) return;
 
-        // Die eigene Verbindung wird in jedem Fall abgegeben.
-        share.DropConnection(DeviceId);
+        // Die eigene Verbindung wird in jedem Fall abgegeben -- und mit ihr,
+        // was diese Gegenstelle dem Ordner angekuendigt hat.
+        share.Vergessen(DeviceId);
 
         // Aufgeloest wird der Ordner genau einmal. Nehmen mehrere Gegenstellen
         // teil, ruft die Oberflaeche jede von ihnen; wer ihn nicht mehr in der
