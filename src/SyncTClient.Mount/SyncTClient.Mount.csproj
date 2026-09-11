@@ -11,6 +11,17 @@
     <AssemblyName>synctmount</AssemblyName>
     <InvariantGlobalization>true</InvariantGlobalization>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Fest auf win-x64, aus demselben Grund wie beim Client, und aus
+         einem zweiten: dieses Projekt ist eine Exe. Fuer eine Exe unter den
+         Verweisen rechnet das SDK den Ausgabepfad mit der RuntimeIdentifier
+         des verweisenden Projekts aus, uebersetzt sie aber ohne. Beim
+         Veroeffentlichen mit win-x64 verwies der Client damit auf
+         bin\Release\...\win-x64\synctmount.dll, und die war drei Tage alt:
+         zwei Methoden fehlten, die laengst im Quelltext standen. Mit fester
+         RuntimeIdentifier fallen Pfad und Uebersetzung wieder zusammen. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>
