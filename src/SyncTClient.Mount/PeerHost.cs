@@ -86,6 +86,25 @@ public sealed class PeerHost : IAsyncDisposable
 
     public string? LastError { get; private set; }
 
+    /// <summary>Der Kern der Meldung, wenn die Gegenstelle uns noch fuehrt.</summary>
+    public const string HandschlagGeschlossen = "die Gegenstelle hat den Handschlag aber geschlossen";
+
+    /// <summary>
+    /// Der letzte Versuch scheiterte, weil die Gegenstelle die vorige
+    /// Verbindung noch fuehrt.
+    /// </summary>
+    /// <remarks>
+    /// Das ist kein Fehler dieser Seite und keiner, der durch Warten
+    /// schlimmer oder besser wird: die Gegenstelle bemerkt den Abriss nach
+    /// ihrer eigenen Frist, fuenf Minuten bei Syncthing, und nimmt dann den
+    /// naechsten Versuch an. Der Wiederverbinder soll deshalb in kurzem,
+    /// gleichbleibendem Abstand wiederkommen statt seinen Abstand zu
+    /// verdoppeln. Gemessen: fuenf Versuche von 09:35:53 bis 09:40:04, der
+    /// letzte Abstand zwei Minuten -- und der Versuch danach kam durch.
+    /// </remarks>
+    public bool GegenstelleFuehrtNochDieVorige
+        => State == PeerState.Fehler && LastError?.Contains(HandschlagGeschlossen, StringComparison.Ordinal) == true;
+
     /// <summary>Was die Gegenstelle mit uns teilt, auch die noch nicht uebernommenen Ordner.</summary>
     public IReadOnlyList<OfferedFolder> Offered { get; private set; } = [];
 
@@ -345,8 +364,8 @@ public sealed class PeerHost : IAsyncDisposable
                 leitung.Dispose();
 
                 throw new IOException(
-                    "die vermittelte Leitung stand, die Gegenstelle hat den Handschlag aber " +
-                    "geschlossen -- meist fuehrt sie noch die vorige Verbindung und bemerkt " +
+                    "die vermittelte Leitung stand, " + HandschlagGeschlossen +
+                    " -- meist fuehrt sie noch die vorige Verbindung und bemerkt " +
                     "erst nach ein bis zwei Minuten, dass sie fort ist", ex);
             }
             catch
@@ -748,6 +767,21 @@ public sealed class PeerHost : IAsyncDisposable
                 // Gegenstelle fuehrt; alles darunter steht noch aus.
                 share.NoteZielSequenz(DeviceId, peerDevice.MaxSequence);
             }
+            else if (share.PeerIndexIdFor(DeviceId) is var gespeichert && gespeichert != 0)
+            {
+                // Keine Ordnerliste, oder der Ordner steht nicht darin. Dann
+                // gilt, was wir von der Gegenstelle gespeichert haben: ihre
+                // IndexId und die Sequenz, bis zu der wir ihren Index haben.
+                // So macht es Syncthing selbst -- es wartet nicht auf die
+                // Liste der Gegenseite, es sagt, was es weiss.
+                //
+                // Eine Null an dieser Stelle waere die Aussage "wir wissen
+                // nichts", und darauf schickt die Gegenstelle alles von vorn.
+                // Aendert sie ihre IndexId wirklich, schickt sie ohnehin von
+                // vorn, und ResetIndex greift, sobald ihre Liste kommt.
+                peerIndexId = gespeichert;
+                maxSequence = share.MaxSequenceFor(DeviceId);
+            }
 
             if (maxSequence > 0)
                 _log($"[{share.FolderId}] setze bei Sequenz {maxSequence} fort ({share.IndexCount} Eintraege bekannt).");
@@ -783,6 +817,29 @@ public sealed class PeerHost : IAsyncDisposable
 
     private void OnClusterConfig(ClusterConfig config)
     {
+        // Eine Zweitleitung. Syncthing kann mehrere Verbindungen zu einem
+        // Geraet fuehren; die Ordnerliste und der Index laufen nur ueber die
+        // erste, auf jeder weiteren kommt ein ClusterConfig ohne Ordner und
+        // mit gesetztem "secondary". Fuehrt die Gegenstelle nach einem
+        // Abriss noch unsere vorige Verbindung, ist die neue fuer sie
+        // zunaechst eine solche Zweitleitung.
+        //
+        // Als Ordnerliste gelesen hiesse das: null Ordner, also "bietet
+        // nichts mehr an" fuer jede uebernommene Freigabe, und eine eigene
+        // Ordnerliste ohne jede Kenntnis -- worauf die Gegenstelle ihren
+        // ganzen Index von vorn schickte, 176 000 Eintraege fuer einen
+        // einzigen Ordner. Gemessen um 09:40:16.
+        //
+        // Also nicht gelesen. Die Ordnerliste folgt, sobald die Gegenstelle
+        // diese Leitung zur ersten macht; bis dahin gilt, was wir von ihr
+        // gespeichert haben.
+        if (config.Secondary)
+        {
+            _log($"[{Display}] Zweitleitung: die Gegenstelle fuehrt noch eine weitere " +
+                 "Verbindung zu uns. Die Ordnerliste folgt, sobald diese die erste ist.");
+            return;
+        }
+
         _clusterConfig.TrySetResult(config);
         _log($"[{Display}] Ordnerliste: {config.Folders.Count} Ordner angeboten.");
 

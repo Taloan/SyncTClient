@@ -827,6 +827,9 @@ public partial class MainWindow : Window
     private static readonly TimeSpan ErsterAbstand = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan GroessterAbstand = TimeSpan.FromMinutes(5);
 
+    /// <summary>Der Abstand, wenn die Gegenstelle uns noch fuehrt und bald loslaesst.</summary>
+    private static readonly TimeSpan Nachfassen = TimeSpan.FromSeconds(30);
+
     /// <summary>Laeuft gerade ein Versuch?</summary>
     private int _versuchLaeuft;
 
@@ -897,6 +900,12 @@ public partial class MainWindow : Window
                     // Ausfall soll nicht erst in fuenf Minuten bemerkt werden.
                     if (item.Host.State == PeerState.Verbunden)
                         _wiederholung.Remove(kennung);
+                    else if (item.Host.GegenstelleFuehrtNochDieVorige)
+                        // Die Gegenstelle haelt noch die vorige Verbindung und
+                        // laesst uns nach ihrer eigenen Frist wieder herein.
+                        // Ein wachsender Abstand verschenkt hier nur Zeit;
+                        // siehe PeerHost.GegenstelleFuehrtNochDieVorige.
+                        _wiederholung[kennung] = (DateTime.UtcNow, Nachfassen);
                     else
                         _wiederholung[kennung] = (DateTime.UtcNow, Verdoppeln(bisher));
                 }
