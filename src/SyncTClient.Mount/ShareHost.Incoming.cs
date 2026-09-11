@@ -441,6 +441,16 @@ public sealed partial class ShareHost
 
         if (theirs.Type == FileInfoType.Directory)
         {
+            // Ein Verzeichnis traegt keinen Inhalt; die Fassung der
+            // Gegenstelle gilt, sobald sie hier steht. Der eigene Eintrag
+            // muss das auch sagen, sonst ist es beim naechsten Verbinden
+            // wieder ein Konflikt: gemessen an drei Verzeichnissen, die bei
+            // jedem Start als "Konflikt ... die Version der Gegenstelle
+            // gilt" gemeldet wurden, weil der eigene Eintrag seine alte
+            // Fassung behielt.
+            if (mine is null || VersionVectors.Compare(mine.Version, theirs.Version) != VersionOrder.Gleich)
+                UebernehmenUndWeitergeben(theirs);
+
             if (Directory.Exists(path)) return;
 
             Directory.CreateDirectory(path);

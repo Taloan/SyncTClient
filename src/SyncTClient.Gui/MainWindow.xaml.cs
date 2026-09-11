@@ -830,8 +830,16 @@ public partial class MainWindow : Window
     /// <summary>Der Abstand, wenn die Gegenstelle uns noch fuehrt und bald loslaesst.</summary>
     private static readonly TimeSpan Nachfassen = TimeSpan.FromSeconds(30);
 
-    /// <summary>Laeuft gerade ein Versuch?</summary>
-    private int _versuchLaeuft;
+    /// <summary>Die Gegenstellen, zu denen gerade ein Versuch laeuft.</summary>
+    /// <remarks>
+    /// Je Gegenstelle, nicht eine Sperre fuer alle. Ein Versuch dauert, bis
+    /// die Verbindung steht und ihre Freigaben angelaufen sind -- und das
+    /// Anlaufen von zehn Freigaben ueber einen Relay dauerte gemessen zehn
+    /// Minuten. So lange wartete jede andere Gegenstelle: das Telefon
+    /// verlor um 09:41:09 die Verbindung und wurde erst um 09:52:32 wieder
+    /// versucht, weil die Sperre noch bei der Rossibox lag.
+    /// </remarks>
+    private readonly HashSet<string> _imVersuch = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Nimmt getrennte Gegenstellen wieder auf.
@@ -877,18 +885,18 @@ public partial class MainWindow : Window
         if (faellig.Count == 0) return;
 
         // Ein Versuch dauert, bis eine Verbindung steht oder scheitert. Der
-        // Takt laeuft weiter; ohne diese Sperre lagen bald zehn Versuche
-        // uebereinander.
-        if (Interlocked.Exchange(ref _versuchLaeuft, 1) == 1) return;
-
-        _ = Dispatcher.InvokeAsync(async () =>
+        // Takt laeuft weiter; ohne die Sperre je Gegenstelle laegen bald
+        // mehrere Versuche zu derselben uebereinander. Verschiedene
+        // Gegenstellen laufen nebeneinander, wie beim Start auch.
+        foreach (var item in faellig)
         {
-            try
-            {
-                foreach (var item in faellig)
-                {
-                    var kennung = item.Config.DeviceId;
+            var kennung = item.Config.DeviceId;
+            if (!_imVersuch.Add(kennung)) continue;
 
+            _ = Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
                     var bisher = _wiederholung.TryGetValue(kennung, out var w)
                         ? w.Abstand
                         : ErsterAbstand;
@@ -909,12 +917,12 @@ public partial class MainWindow : Window
                     else
                         _wiederholung[kennung] = (DateTime.UtcNow, Verdoppeln(bisher));
                 }
-            }
-            finally
-            {
-                Interlocked.Exchange(ref _versuchLaeuft, 0);
-            }
-        });
+                finally
+                {
+                    _imVersuch.Remove(kennung);
+                }
+            });
+        }
     }
 
     private static TimeSpan Verdoppeln(TimeSpan abstand)
