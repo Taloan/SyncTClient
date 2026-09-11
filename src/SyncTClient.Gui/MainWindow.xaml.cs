@@ -426,15 +426,23 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Gehoert diese Zeile in die gewaehlte Ansicht?</summary>
+    /// <remarks>
+    /// "Verbunden" heisst: die Freigabe hat mindestens eine Gegenstelle --
+    /// unabhaengig davon, ob die gerade erreichbar ist. Ob eine Verbindung
+    /// steht, wechselt im Minutentakt; eine Ansicht, die danach filtert,
+    /// zeigte beim Abriss einer Leitung ploetzlich eine leere Liste, und
+    /// genau dann will man die Freigaben sehen. "Nicht verbunden" sind die
+    /// ohne Gegenstelle: angeboten und nicht uebernommen.
+    /// </remarks>
     private bool PasstZumFilter(ShareRow zeile) => _config.Filter switch
     {
-        // "Verbunden" heisst: es laeuft eine Freigabe dazu. Angeboten, aber
-        // nicht uebernommen zaehlt nicht dazu -- die Zeile sagt genau das
-        // auch in ihrer Spalte "Status".
-        ShareFilter.Verbunden => zeile.Accepted,
-        ShareFilter.Getrennt => !zeile.Accepted,
+        ShareFilter.Verbunden => HatGegenstelle(zeile),
+        ShareFilter.Getrennt => !HatGegenstelle(zeile),
         _ => true
     };
+
+    private bool HatGegenstelle(ShareRow zeile)
+        => _config.Shares.Any(s => s.FolderId == zeile.FolderId && s.PeerDeviceIds.Count > 0);
 
     /// <summary>Wie viele Zeilen zuletzt liefen. Daran merkt der Filter, dass er nachziehen muss.</summary>
     private int _zuletztLaufend = -1;
@@ -454,12 +462,12 @@ public partial class MainWindow : Window
     {
         ApplyPause();
 
-        // Der Filter fragt nach einem Zustand, und der aendert sich waehrend
-        // des Laufs: eine Freigabe wird bereit, eine Verbindung faellt aus.
+        // Der Filter fragt nach der Konfiguration, und die aendert sich
+        // waehrend des Laufs: eine Freigabe wird uebernommen oder getrennt.
         // Nachgezogen wird aber nur, wenn sich die Zahl auch geaendert hat --
         // ein Auffrischen im Sekundentakt setzte Auswahl und Bildlauf jedesmal
         // zurueck.
-        var laufend = _rows.Count(r => r.Accepted);
+        var laufend = _rows.Count(HatGegenstelle);
         if (laufend != _zuletztLaufend)
         {
             _zuletztLaufend = laufend;
