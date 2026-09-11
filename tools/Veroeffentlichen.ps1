@@ -380,8 +380,11 @@ else {
     git tag -a $etikett -m "SyncTClient $Fassung"
 }
 
-# Zuerst auf die eigene Gegenstelle. Sie ist das Original.
-git push
+# Zuerst auf die eigene Gegenstelle. Sie ist das Original. Mit Namen und
+# Zweig: der Zweig hat keinen Upstream, ein blosses "git push" meldet das
+# und schiebt nichts -- und der Lauf ging darueber hinweg.
+$zweig = (git rev-parse --abbrev-ref HEAD).Trim()
+git push origin $zweig
 git push origin $etikett
 
 # Und dann derselbe Stand nach GitHub.
@@ -489,7 +492,7 @@ $neueProps = $props -replace '<Version>[0-9]+\.[0-9]+\.[0-9]+</Version>', "<Vers
 
 git add $PropsDatei
 git commit -m "Naechste Fassung $naechste" | Out-Null
-git push
+git push origin $zweig
 git push github $zweig
 
 Write-Host "    Directory.Build.props steht jetzt auf $naechste."

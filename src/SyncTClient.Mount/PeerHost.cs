@@ -1076,6 +1076,7 @@ public sealed class PeerHost : IAsyncDisposable
 
         try { await lauf.ConfigureAwait(false); }
         catch (OperationCanceledException) { }
+        catch (StilleException ex) { grund = ex.Message; }
         catch (Exception ex) { grund = ShareHost.Herkunft(ex); }
 
         // Wir haben selbst getrennt. Anhalten und Trennen raeumen bereits auf

@@ -529,32 +529,76 @@ public sealed class PersistentFolderIndex : IDisposable
     public int LocalCount => (int)(long)(Scalar("SELECT COUNT(*) FROM local_files") ?? 0L);
 
     /// <summary>
-    /// Die beste Ankuendigung zu diesem Namen.
+    /// Die geltende Fassung zu diesem Namen.
     /// </summary>
     /// <remarks>
     /// Mehrere Gegenstellen koennen denselben Namen fuehren, und nicht alle
-    /// mit Inhalt. Genommen wird die, die am meisten sagt: eine vorhandene vor
-    /// einer geloeschten, eine mit Blockliste vor einer ohne.
+    /// auf demselben Stand. Es gilt die mit dem neuesten Versionsvektor --
+    /// so entscheidet Syncthing, und so muss es hier entschieden werden,
+    /// sonst gelten zwei Fassungen zugleich.
+    ///
+    /// Bis hierher galt "eine vorhandene vor einer geloeschten", ohne auf
+    /// die Version zu sehen. Gemessen an einer Freigabe mit zwei
+    /// Gegenstellen: 92 Dateien wurden hier geloescht und die Loeschung
+    /// angekuendigt. Die erste Gegenstelle bestaetigte sie; die zweite hatte
+    /// sie noch nicht verarbeitet und fuehrte die Dateien weiter. Ihre
+    /// aeltere Ankuendigung gewann, die Dateien wurden als Platzhalter
+    /// wieder angelegt und ihr Inhalt angefordert -- von der ersten
+    /// Gegenstelle, die ihn eben geloescht hatte.
+    ///
+    /// Die eigene Loeschung zaehlt dabei mit. Sie steht nicht bei den
+    /// Ankuendigungen der Gegenstellen, ist aber eine Fassung wie jede
+    /// andere, und solange sie die neueste ist, gilt sie -- auch wenn eine
+    /// Gegenstelle die Datei noch fuehrt.
+    ///
+    /// Bei gleichem oder nebeneinander stehendem Stand entscheidet dieselbe
+    /// Reihe wie bei Syncthing: gueltig vor ungueltig, vorhanden vor
+    /// geloescht, dann die juengere Aenderungszeit, dann die kleinere
+    /// Geraete-ID. Bei gleichem Stand ausserdem eine mit Blockliste vor
+    /// einer ohne: nur sie sagt, wo der Inhalt zu holen ist.
     /// </remarks>
     public bool TryGet(string name, out BepFileInfo file)
     {
         using var gate = _gate.EnterScope();
-        using var command = _db.CreateCommand();
-        command.CommandText = """
-            SELECT info FROM files WHERE name = $name
-            ORDER BY deleted ASC, has_blocks DESC, sequence DESC
-            LIMIT 1
-            """;
-        command.Parameters.AddWithValue("$name", name);
 
-        if (command.ExecuteScalar() is byte[] blob)
+        BepFileInfo? beste = null;
+
+        using (var command = _db.CreateCommand())
         {
-            file = BepFileInfo.Parser.ParseFrom(blob);
-            return true;
+            command.CommandText = """
+                SELECT info FROM files WHERE name = $name
+                UNION ALL
+                SELECT info FROM local_files WHERE name = $name AND deleted = 1
+                """;
+            command.Parameters.AddWithValue("$name", name);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var kandidat = BepFileInfo.Parser.ParseFrom((byte[])reader["info"]);
+                if (beste is null || Schlaegt(kandidat, beste)) beste = kandidat;
+            }
         }
 
-        file = null!;
-        return false;
+        file = beste!;
+        return beste is not null;
+    }
+
+    /// <summary>Ob <paramref name="a"/> vor <paramref name="b"/> gilt.</summary>
+    private static bool Schlaegt(BepFileInfo a, BepFileInfo b)
+    {
+        var stand = VersionVectors.Compare(a.Version, b.Version);
+        if (stand == VersionOrder.Neuer) return true;
+        if (stand == VersionOrder.Aelter) return false;
+
+        if (a.Invalid != b.Invalid) return !a.Invalid;
+        if (a.Deleted != b.Deleted) return !a.Deleted;
+
+        if (stand == VersionOrder.Gleich)
+            return a.Blocks.Count > 0 && b.Blocks.Count == 0;
+
+        if (a.ModifiedS != b.ModifiedS) return a.ModifiedS > b.ModifiedS;
+        return a.ModifiedBy < b.ModifiedBy;
     }
 
     /// <summary>
@@ -632,32 +676,74 @@ public sealed class PersistentFolderIndex : IDisposable
     {
         using var gate = _gate.EnterScope();
         var eintraege = new List<(string, long, long, bool, bool)>();
-        using var command = _db.CreateCommand();
-        // Je Name eine Zeile, auch wenn mehrere Gegenstellen ihn fuehren.
-        // Inhalt hat er, sobald ihn eine von ihnen fuehrt.
-        command.CommandText = """
-            SELECT name, MAX(size), MAX(modified), MAX(kind), MAX(has_blocks) FROM files
-            WHERE deleted = 0 AND name <> '' AND name > $nach
-            GROUP BY name
-            ORDER BY name
-            LIMIT $hoechstens
-            """;
 
-        command.Parameters.AddWithValue("$nach", nach);
-        command.Parameters.AddWithValue("$hoechstens", hoechstens);
+        // Namen, zu denen neben der vorhandenen Fassung eine Loeschung steht
+        // -- bei einer Gegenstelle oder bei uns. Fuer sie entscheidet die
+        // Version, welche gilt; siehe TryGet.
+        var strittig = new List<int>();
 
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        using (var command = _db.CreateCommand())
         {
-            eintraege.Add((
-                reader.GetString(0),
-                reader.GetInt64(1),
-                reader.GetInt64(2),
-                (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
-                reader.GetInt32(4) != 0));
+            // Je Name eine Zeile, auch wenn mehrere Gegenstellen ihn fuehren.
+            // Inhalt hat er, sobald ihn eine von ihnen fuehrt.
+            command.CommandText = """
+                SELECT f.name,
+                       MAX(CASE WHEN f.deleted = 0 THEN f.size END),
+                       MAX(CASE WHEN f.deleted = 0 THEN f.modified END),
+                       MAX(CASE WHEN f.deleted = 0 THEN f.kind END),
+                       MAX(CASE WHEN f.deleted = 0 THEN f.has_blocks END),
+                       MAX(f.deleted),
+                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 1 THEN 1 ELSE 0 END)
+                FROM files f LEFT JOIN local_files l ON l.name = f.name
+                WHERE f.name <> '' AND f.name > $nach
+                GROUP BY f.name
+                HAVING MIN(f.deleted) = 0
+                ORDER BY f.name
+                LIMIT $hoechstens
+                """;
+
+            command.Parameters.AddWithValue("$nach", nach);
+            command.Parameters.AddWithValue("$hoechstens", hoechstens);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                if (reader.GetInt32(5) != 0 || reader.GetInt32(6) != 0) strittig.Add(eintraege.Count);
+
+                eintraege.Add((
+                    reader.GetString(0),
+                    reader.GetInt64(1),
+                    reader.GetInt64(2),
+                    (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
+                    reader.GetInt32(4) != 0));
+            }
         }
 
+        NurGeltende(eintraege, strittig, e => e.Item1);
         return eintraege;
+    }
+
+    /// <summary>
+    /// Nimmt aus einer Seite die Namen heraus, deren geltende Fassung eine
+    /// Loeschung ist.
+    /// </summary>
+    /// <remarks>
+    /// Die Seite fuehrt je Name die vorhandene Fassung, auch wenn daneben
+    /// eine Loeschung steht. Ob die Loeschung die neuere ist, sagt nur der
+    /// Versionsvektor, und den vergleicht keine Abfrage. Also nachgesehen --
+    /// aber nur fuer die Namen, bei denen ueberhaupt eine Loeschung steht.
+    /// Das sind wenige, und eine Seite ohne solche Namen kostet nichts.
+    /// </remarks>
+    private void NurGeltende<T>(List<T> seite, List<int> strittig, Func<T, string> name)
+    {
+        if (strittig.Count == 0) return;
+
+        for (var i = strittig.Count - 1; i >= 0; i--)
+        {
+            var stelle = strittig[i];
+            if (TryGet(name(seite[stelle]), out var geltend) && geltend.Deleted)
+                seite.RemoveAt(stelle);
+        }
     }
 
     /// <summary>
@@ -692,38 +778,52 @@ public sealed class PersistentFolderIndex : IDisposable
     {
         using var gate = _gate.EnterScope();
         var eintraege = new List<(string, long, long, bool, bool, bool, bool)>();
-        using var command = _db.CreateCommand();
-        command.CommandText = """
-            SELECT f.name, MAX(f.size), MAX(f.modified), MAX(f.kind), MAX(f.has_blocks),
-                   MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0
-                                 AND l.version IS NOT NULL AND f.version IS NOT NULL
-                                 AND l.version = f.version
-                            THEN 1 ELSE 0 END),
-                   MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0 AND l.sequence > 0
-                            THEN 1 ELSE 0 END)
-            FROM files f LEFT JOIN local_files l ON l.name = f.name
-            WHERE f.deleted = 0 AND f.name <> '' AND f.name > $nach
-            GROUP BY f.name
-            ORDER BY f.name
-            LIMIT $hoechstens
-            """;
+        var strittig = new List<int>();
 
-        command.Parameters.AddWithValue("$nach", nach);
-        command.Parameters.AddWithValue("$hoechstens", hoechstens);
-
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        using (var command = _db.CreateCommand())
         {
-            eintraege.Add((
-                reader.GetString(0),
-                reader.GetInt64(1),
-                reader.GetInt64(2),
-                (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
-                reader.GetInt32(4) != 0,
-                reader.GetInt32(5) != 0,
-                reader.GetInt32(6) != 0));
+            command.CommandText = """
+                SELECT f.name,
+                       MAX(CASE WHEN f.deleted = 0 THEN f.size END),
+                       MAX(CASE WHEN f.deleted = 0 THEN f.modified END),
+                       MAX(CASE WHEN f.deleted = 0 THEN f.kind END),
+                       MAX(CASE WHEN f.deleted = 0 THEN f.has_blocks END),
+                       MAX(CASE WHEN f.deleted = 0 AND l.name IS NOT NULL AND l.deleted = 0
+                                     AND l.version IS NOT NULL AND f.version IS NOT NULL
+                                     AND l.version = f.version
+                                THEN 1 ELSE 0 END),
+                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0 AND l.sequence > 0
+                                THEN 1 ELSE 0 END),
+                       MAX(f.deleted),
+                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 1 THEN 1 ELSE 0 END)
+                FROM files f LEFT JOIN local_files l ON l.name = f.name
+                WHERE f.name <> '' AND f.name > $nach
+                GROUP BY f.name
+                HAVING MIN(f.deleted) = 0
+                ORDER BY f.name
+                LIMIT $hoechstens
+                """;
+
+            command.Parameters.AddWithValue("$nach", nach);
+            command.Parameters.AddWithValue("$hoechstens", hoechstens);
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                if (reader.GetInt32(7) != 0 || reader.GetInt32(8) != 0) strittig.Add(eintraege.Count);
+
+                eintraege.Add((
+                    reader.GetString(0),
+                    reader.GetInt64(1),
+                    reader.GetInt64(2),
+                    (FileInfoType)reader.GetInt32(3) == FileInfoType.Directory,
+                    reader.GetInt32(4) != 0,
+                    reader.GetInt32(5) != 0,
+                    reader.GetInt32(6) != 0));
+            }
         }
 
+        NurGeltende(eintraege, strittig, e => e.Item1);
         return eintraege;
     }
 

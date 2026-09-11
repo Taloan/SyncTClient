@@ -389,9 +389,23 @@ public sealed partial class ShareHost
         // was die erste nicht schon gesagt hat -- und wer eine Datei im
         // Sekundentakt anlegt und loescht, bekaeme sonst das Protokoll als
         // Endlosband. Genau das ist passiert, bevor die Abweisung oben stand.
-        if (_removed.TryRemove(name, out _))
-            Einmal("wiederda:" + name)(
-                $"[{FolderId}] \"{name}\" ist wieder da -- die vorgemerkte Loeschung entfaellt.");
+        // Aufgehoben wird die Loeschung nur, wenn die Datei auch dasteht. Die
+        // Rueckrufe kommen nicht in der Reihenfolge, in der die Dinge
+        // geschahen: zu einer Datei, die eben gelesen und dann geloescht
+        // wurde, kann die Aenderungsmeldung nach der Loeschmeldung eintreffen.
+        // Gemessen an 92 Dateien, die ein Programm aus dem Ordner
+        // herausgenommen hatte: 90 davon galten daraufhin als "wieder da",
+        // die Loeschung war fort, und der Durchgang musste sie eine Minute
+        // spaeter als unbemerkt fehlend neu feststellen.
+        if (_removed.ContainsKey(name))
+        {
+            var pfad = LocalPathOf(name);
+            if (!File.Exists(pfad) && !Directory.Exists(pfad)) return;
+
+            if (_removed.TryRemove(name, out _))
+                Einmal("wiederda:" + name)(
+                    $"[{FolderId}] \"{name}\" ist wieder da -- die vorgemerkte Loeschung entfaellt.");
+        }
 
         // Ein neuer Vermerk ueberholt eine laufende Frist. Die Bewertung setzt
         // gleich eine neue, gerechnet ab der jetzigen Schreibzeit.
@@ -654,6 +668,9 @@ public sealed partial class ShareHost
             {
                 if (NameOf(dir.FullName) is not { } name) continue;
 
+                // Was mit Frist wartet, behaelt seine Frist. Siehe unten.
+                if (_wartend.ContainsKey(name)) continue;
+
                 var gefuehrt = LocalCopy(name);
 
                 if (gefuehrt is not null && !gefuehrt.Deleted)
@@ -703,6 +720,26 @@ public sealed partial class ShareHost
                 if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0) continue;
 
                 mitInhalt[name] = (info.Length, new DateTimeOffset(info.LastAccessTimeUtc));
+
+                // Die Begleitdatei einer Datenbank wird nicht angekuendigt;
+                // die Bewertung stellte sie nur zurueck, und der naechste
+                // Durchgang faende sie wieder vor. Derselbe Ausschluss wie
+                // beim Beobachter.
+                if (_app.SmartDatabaseMode && Datenbank.IstBegleitdatei(name)) continue;
+
+                // Was mit Frist wartet, behaelt seine Frist. Die Bewertung hat
+                // den Namen gesehen und einen Zeitpunkt genannt, zu dem sie
+                // ihn wieder aufgreift -- eine Datenbank in Benutzung, eine
+                // Datei, an der noch geschrieben wird. Ihn hier erneut
+                // vorzumerken setzte die Frist auf null zurueck und zaehlte
+                // ihn jeden Durchgang als neu.
+                //
+                // Gemessen an einem Katalog, der offen war: zehn Dateien, die
+                // jeder Durchgang als "neu oder geaendert" meldete, ueber
+                // Stunden, und zwei Begleitdateien, die jeder Durchgang
+                // nachtrug -- die Bewertung konnte keiner davon eine Nummer
+                // geben, und der Durchgang wusste es nicht.
+                if (_wartend.ContainsKey(name)) continue;
 
                 var known = LocalCopy(name);
 

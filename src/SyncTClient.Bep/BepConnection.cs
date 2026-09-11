@@ -17,6 +17,13 @@ namespace SyncTClient.Bep;
 /// wir mit Blockliste angekuendigt haben, fordert die Gegenstelle Bloecke an;
 /// diese Anfragen beantwortet <see cref="Serve"/>.
 /// </remarks>
+/// <summary>
+/// Die Gegenstelle hat laenger geschwiegen, als eine Verbindung schweigen
+/// darf; die Leitung wurde von hier aus geschlossen.
+/// </summary>
+public sealed class StilleException(TimeSpan frist)
+    : IOException($"seit {frist.TotalMinutes:0} Minuten nichts von der Gegenstelle empfangen -- die Verbindung gilt als tot.");
+
 public sealed class BepConnection : IAsyncDisposable
 {
     /// <summary>
@@ -288,6 +295,8 @@ public sealed class BepConnection : IAsyncDisposable
         {
             while (!wache.IsCancellationRequested)
             {
+                if (_verstummt) throw new StilleException(Stille);
+
                 var (type, payload) = await BepFraming.ReadMessageAsync(_wire, wache.Token).ConfigureAwait(false);
                 _letzteNachricht = DateTime.UtcNow;
                 MessageReceived?.Invoke(type, payload.Length);
@@ -343,6 +352,15 @@ public sealed class BepConnection : IAsyncDisposable
                 }
             }
         }
+        catch (Exception ex) when (_verstummt)
+        {
+            // Die Wache hat die Leitung geschlossen; was dabei aus dem Lesen
+            // fiel, ist Folge, nicht Ursache. Gemeldet wird die Ursache.
+            var stille = ex as StilleException ?? new StilleException(Stille);
+            FailPending(stille);
+            Closed?.Invoke(stille.Message);
+            throw stille;
+        }
         catch (OperationCanceledException)
         {
             FailPending(new OperationCanceledException("Verbindung abgebrochen."));
@@ -352,6 +370,14 @@ public sealed class BepConnection : IAsyncDisposable
             FailPending(ex);
             Closed?.Invoke(ex.Message);
             throw;
+        }
+        finally
+        {
+            // Die Wache bekommt Bescheid, bevor ihr Abbruchsignal mit dem
+            // "using" oben verschwindet. Ohne das griff sie nach einem
+            // entsorgten Signal und meldete das als nicht zustellbares
+            // Lebenszeichen -- eine Zeile ohne Sinn, mehrmals je Abend.
+            try { await wache.CancelAsync().ConfigureAwait(false); } catch (ObjectDisposedException) { }
         }
     }
 
@@ -528,10 +554,23 @@ public sealed class BepConnection : IAsyncDisposable
     /// Nach dieser Stille gilt die Verbindung als tot.
     /// </summary>
     /// <remarks>
-    /// Syncthing schickt sein Lebenszeichen alle neunzig Sekunden. Wer nach
-    /// drei Minuten nichts gehoert hat, hoert auch nichts mehr.
+    /// Fuenf Minuten -- dieselbe Frist, die Syncthing selbst ansetzt
+    /// (ReceiveTimeout, 300 Sekunden). Syncthing schickt sein Lebenszeichen
+    /// alle neunzig Sekunden, ein Telefon aber nicht zuverlaessig: Android
+    /// haelt Anwendungen im Hintergrund an und laesst ihre Netzwerkarbeit
+    /// gebuendelt nach, in Abstaenden von einigen Minuten. Zwischen zwei
+    /// solchen Fenstern kommt von dort nichts.
+    ///
+    /// Gemessen an einem Abend mit drei Minuten Frist: die Verbindung zum
+    /// Telefon riss alle fuenf bis sechs Minuten ab, vierzehnmal in zwei
+    /// Stunden, und jedes Mal auf unser Betreiben -- die Wache griff drei
+    /// Minuten nach dem Aufbau, das Protokoll schrieb es der Gegenstelle zu.
+    /// Nach jedem Abriss schickte das Telefon seinen Index von vorn.
     /// </remarks>
-    private static readonly TimeSpan Stille = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan Stille = TimeSpan.FromMinutes(5);
+
+    /// <summary>Die Wache hat die Leitung wegen Stille geschlossen.</summary>
+    private volatile bool _verstummt;
 
     /// <summary>
     /// Der Abstand zwischen zwei eigenen Lebenszeichen.
@@ -556,8 +595,16 @@ public sealed class BepConnection : IAsyncDisposable
     ///
     /// Zwei Mittel dagegen. Ein eigenes Lebenszeichen im Minutentakt -- es
     /// schreibt, und ein Schreibvorgang auf eine tote Leitung scheitert,
-    /// meist sofort. Und eine Frist fuer das Gegenteil: kommt drei Minuten
-    /// lang nichts, wird die Leseschleife abgebrochen.
+    /// meist sofort. Und eine Frist fuer das Gegenteil: kommt fuenf Minuten
+    /// lang nichts, wird die Leitung geschlossen.
+    ///
+    /// Geschlossen, nicht nur abgebrochen: das Lesen darunter blockiert und
+    /// kennt kein Abbruchsignal. Es kehrt erst zurueck, wenn Bytes kommen
+    /// oder die Leitung weg ist. Ein blosses Abbruchsignal liess die
+    /// Leseschleife deshalb weiterlaufen, bis die Gegenstelle das naechste
+    /// Mal etwas schickte -- bis zu drei Minuten spaeter --, und die Schleife
+    /// endete dann ohne Fehler, als haette die Gegenstelle geschlossen. So
+    /// stand es auch im Protokoll.
     ///
     /// Das Lebenszeichen entfaellt, solange ohnehin Verkehr laeuft.
     /// </remarks>
@@ -571,7 +618,8 @@ public sealed class BepConnection : IAsyncDisposable
 
                 if (DateTime.UtcNow - _letzteNachricht > Stille)
                 {
-                    Log?.Invoke($"seit {Stille.TotalMinutes:0} Minuten kein Lebenszeichen -- die Verbindung gilt als tot.");
+                    _verstummt = true;
+                    try { _unterbau?.Dispose(); } catch (Exception) { }
                     await wache.CancelAsync().ConfigureAwait(false);
                     return;
                 }
@@ -585,6 +633,10 @@ public sealed class BepConnection : IAsyncDisposable
         catch (OperationCanceledException)
         {
             // Die Verbindung wird geschlossen.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Die Verbindung ist bereits geschlossen.
         }
         catch (Exception ex)
         {

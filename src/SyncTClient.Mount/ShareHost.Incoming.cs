@@ -383,7 +383,37 @@ public sealed partial class ShareHost
             bilanz.Konflikte++;
             if (!ResolveConflict(name, path, mine!, theirs)) return;
         }
-        else if (mine is not null && !mine.Deleted)
+        else if (mine is { Deleted: true })
+        {
+            // Unsere eigene Loeschung ist eine Fassung wie jede andere und
+            // wird genauso verglichen. Ohne diesen Zweig galt sie nichts:
+            // jede Ankuendigung einer Gegenstelle, auch eine aeltere, legte
+            // die eben geloeschte Datei als Platzhalter wieder an.
+            //
+            // Steht die Fassung der Gegenstelle neben unserer Loeschung, gilt
+            // die Regel von Syncthing: eine Aenderung schlaegt eine
+            // Loeschung. Dann wird sie unten gesetzt.
+            switch (VersionVectors.Compare(mine.Version, theirs.Version))
+            {
+                case VersionOrder.Neuer:
+                    return;
+
+                // Derselbe Stand, aber die Gegenstelle fuehrt die Datei noch:
+                // sie hat unsere Loeschung nicht verarbeitet, die Loeschung
+                // bleibt.
+                case VersionOrder.Gleich when !theirs.Deleted:
+                    return;
+
+                // Dieselbe Loeschung. Steht hier trotzdem ein Platzhalter,
+                // stammt er von uns -- angelegt, als eine aeltere
+                // Ankuendigung noch galt -- und geht unten fort. Eine
+                // gewoehnliche Datei dagegen ist eine neue; sie bleibt und
+                // wird vom Durchgang angekuendigt.
+                case VersionOrder.Gleich when File.Exists(path) && !IsPlaceholder(path):
+                    return;
+            }
+        }
+        else if (mine is not null)
         {
             switch (VersionVectors.Compare(mine.Version, theirs.Version))
             {
@@ -405,7 +435,7 @@ public sealed partial class ShareHost
 
         if (theirs.Deleted)
         {
-            RemoveLocally(name, path, bilanz);
+            RemoveLocally(name, path, theirs, bilanz);
             return;
         }
 
@@ -498,7 +528,25 @@ public sealed partial class ShareHost
         catch (Exception) { return false; }
     }
 
-    private void RemoveLocally(string name, string path, Bilanz bilanz)
+    /// <summary>
+    /// Wendet die Loeschung einer Gegenstelle hier an und reicht sie weiter.
+    /// </summary>
+    /// <remarks>
+    /// Weitergereicht, nicht vergessen. Bis hierher wurde der eigene Eintrag
+    /// nach dem Entfernen verworfen; die Loeschung stand danach in keiner
+    /// eigenen Ankuendigung mehr. Eine dritte Gegenstelle, die die loeschende
+    /// nicht selbst erreicht -- weil die Verbindung zwischen den beiden
+    /// pausiert ist --, erfuhr von der Loeschung nie: sie fuehrte die Datei
+    /// weiter, und sobald ihre Ankuendigung hier als die geltende galt, kam
+    /// die Datei zurueck. Fuer Dateien gilt seit dem Weiterreichen dasselbe
+    /// wie fuer Loeschungen: was von einer Gegenstelle kommt, erfahren die
+    /// uebrigen von uns.
+    ///
+    /// Die Fassung bleibt die der Gegenstelle, mit ihrem Versionsvektor;
+    /// siehe UebernehmenUndWeitergeben. Fuehren wir dieselbe oder eine
+    /// neuere Loeschung schon, gibt es nichts weiterzureichen.
+    /// </remarks>
+    private void RemoveLocally(string name, string path, BepFileInfo theirs, Bilanz bilanz)
     {
         if (Directory.Exists(path))
         {
@@ -513,19 +561,24 @@ public sealed partial class ShareHost
             catch (IOException)
             {
                 // Nicht leer.
+                return;
             }
-
-            return;
         }
-
-        if (File.Exists(path))
+        else if (File.Exists(path))
         {
             if (!NimmFort(name, path)) return;
             _cache?.Forget(name);
             bilanz.Entfernt++;
         }
 
-        lock (_indexGate) _index!.ForgetLocal(name);
+        BepFileInfo? mine;
+        lock (_indexGate) mine = _index!.TryGetLocal(name, out var eigene) ? eigene : null;
+
+        if (mine is { Deleted: true }
+            && VersionVectors.Compare(mine.Version, theirs.Version) is VersionOrder.Neuer or VersionOrder.Gleich)
+            return;
+
+        UebernehmenUndWeitergeben(theirs);
     }
 
     // ------------------------------------------------------------ Konflikt
