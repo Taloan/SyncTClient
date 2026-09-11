@@ -9,6 +9,20 @@ commit-by-commit history.*
 
 <!-- Neue Fassungen kommen von Hand unter diese Zeile, vor die vorige. -->
 
+## 0.9.5 — in Arbeit
+
+**Mehrere Gegenstellen an einem Ordner**
+
+- Eine aus der Freigabe genommene Gegenstelle verlor nur ihre Verbindung;
+  ihre Ankündigungen blieben im Index und zählten weiter — im Rückstand, in
+  der Spalte der Gegenstelle, bei "vollständig lokal" als Dateien, die zu
+  holen sind, und in "1 von 2" samt Knotendialog. Gemessen an einem Ordner,
+  bei dem die Rossibox seit Tagen abgewählt war: 83 Einträge von ihr, das
+  Telefon führte vier. Jetzt gilt nur, was von einer beteiligten
+  Gegenstelle stammt; beim Abwählen und beim Öffnen wird verworfen, was
+  nicht dazugehört.
+
+
 ## 0.9.4 — 2026-09-11
 
 Diese Fassung macht den Client außerhalb des eigenen Netzes brauchbar und
