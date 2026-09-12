@@ -1432,10 +1432,10 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             // laeuft, ist nicht schneller fertig, sondern nur gleichzeitig
             // langsam -- und der Rechner steht derweil.
             //
-            // Zwei zur Zeit. Die uebrigen warten hier und zeigen dabei
-            // "wartet"; sie sind gestartet, verbunden und haben ihren Index,
-            // nur der teure Teil steht an.
-            await Anlauf.WaitAsync(ct).ConfigureAwait(false);
+            // Zwei zur Zeit, die kleinen zuerst. Die uebrigen warten hier und
+            // zeigen dabei "wartet"; sie sind gestartet, verbunden und haben
+            // ihren Index, nur der teure Teil steht an. Siehe AnlaufReihe.
+            await AnlaufBetretenAsync(IndexCount, ct).ConfigureAwait(false);
 
             try
             {
@@ -1458,7 +1458,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             }
             finally
             {
-                Anlauf.Release();
+                AnlaufVerlassen();
             }
 
             State = ShareState.Bereit;
@@ -1709,7 +1709,95 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// <remarks>
     /// Programmweit, nicht je Gegenstelle: die Platte ist eine.
     /// </remarks>
-    private static readonly SemaphoreSlim Anlauf = new(2, 2);
+    private const int AnlaufPlaetze = 2;
+
+    /// <summary>
+    /// Die Reihe vor dem Anlauf: wer wartet, und wie gross sein Index ist.
+    /// </summary>
+    /// <remarks>
+    /// Frei wird ein Platz an den kleinsten wartenden Ordner vergeben, nicht
+    /// an den, der zuerst kam. Ein Semaphor gab in Ankunftsreihenfolge, und
+    /// die ist die Reihenfolge der Ordnerliste: Lightroom mit 67 000
+    /// Eintraegen kam als Dritter dran und hielt einen der beiden Plaetze
+    /// drei Minuten; sieben kleine Ordner mit zusammen weniger Eintraegen
+    /// standen derweil auf "wartet". Aufsteigend nach Indexgroesse sind die
+    /// kleinen nach Sekunden fertig, und der grosse braucht dieselbe Zeit
+    /// wie vorher -- nur ohne dass jemand auf ihn wartet.
+    /// </remarks>
+    private static readonly object AnlaufSperre = new();
+    private static int _anlaufLaeuft;
+    private static readonly List<(long Groesse, TaskCompletionSource Platz)> AnlaufReihe = [];
+
+    /// <summary>
+    /// So lange sammelt die Reihe, bevor sie vergibt.
+    /// </summary>
+    /// <remarks>
+    /// Beim Start kommen die Indizes der Ordner binnen weniger Sekunden an,
+    /// aber nicht gleichzeitig. Wer als Erster kaeme, bekaeme ohne diese
+    /// Frist sofort einen Platz -- auch der groesste. Zwei Sekunden Sammeln
+    /// kosten jeden Ordner zwei Sekunden und geben der Reihe die Chance,
+    /// nach Groesse zu vergeben.
+    /// </remarks>
+    private static readonly TimeSpan Sammelfrist = TimeSpan.FromSeconds(2);
+
+    /// <summary>Wartet auf einen Anlaufplatz; kleine Ordner kommen zuerst.</summary>
+    private static Task AnlaufBetretenAsync(long groesse, CancellationToken ct)
+    {
+        var platz = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        lock (AnlaufSperre) AnlaufReihe.Add((groesse, platz));
+
+        // Wer abbricht, verlaesst die Reihe -- aber nur, solange er noch
+        // darin steht. Ist er schon herausgenommen, hat er seinen Platz, und
+        // der geht ueber den gewohnten Weg zurueck; abgebrochen wuerde er
+        // sonst mit Platz, und der Platz bliebe fuer immer besetzt.
+        ct.Register(() =>
+        {
+            bool wartetNoch;
+            lock (AnlaufSperre) wartetNoch = AnlaufReihe.RemoveAll(w => w.Platz == platz) > 0;
+            if (wartetNoch) platz.TrySetCanceled(ct);
+        });
+
+        _ = Task.Delay(Sammelfrist, CancellationToken.None)
+            .ContinueWith(_ => AnlaufZuteilen(), TaskScheduler.Default);
+
+        return platz.Task;
+    }
+
+    /// <summary>Gibt den Platz zurueck; die Reihe vergibt ihn weiter.</summary>
+    private static void AnlaufVerlassen()
+    {
+        lock (AnlaufSperre) _anlaufLaeuft--;
+        AnlaufZuteilen();
+    }
+
+    /// <summary>Besetzt freie Plaetze aus der Reihe, den kleinsten Ordner zuerst.</summary>
+    private static void AnlaufZuteilen()
+    {
+        var vergeben = new List<TaskCompletionSource>();
+
+        lock (AnlaufSperre)
+        {
+            while (_anlaufLaeuft < AnlaufPlaetze && AnlaufReihe.Count > 0)
+            {
+                var kleinster = 0;
+                for (var i = 1; i < AnlaufReihe.Count; i++)
+                    if (AnlaufReihe[i].Groesse < AnlaufReihe[kleinster].Groesse) kleinster = i;
+
+                var (_, platz) = AnlaufReihe[kleinster];
+                AnlaufReihe.RemoveAt(kleinster);
+
+                // Ein abgebrochener Wartender hat seinen Platz nicht mehr
+                // noetig; der naechste bekommt ihn.
+                if (platz.Task.IsCompleted) continue;
+
+                _anlaufLaeuft++;
+                vergeben.Add(platz);
+            }
+        }
+
+        foreach (var platz in vergeben) platz.TrySetResult();
+    }
 
     /// <summary>
     /// Die Fassung der Sync-Wurzel, wie sie in der Registrierung steht.
