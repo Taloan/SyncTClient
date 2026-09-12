@@ -57,9 +57,20 @@ commit-by-commit history.*
 - Der Index geht in einem eigenen Lauf hinaus, nicht im Hintergrundlauf
   des Ordners: der übernimmt derweil Eingehendes und stößt Übertragungen
   an, statt minutenlang hinter dem Senden zu stehen.
+- Kam die Ordnerliste der Gegenstelle erst nach der Wartefrist von fünf
+  Sekunden — über das Relay des Telefons regelmäßig —, blieb die
+  Entscheidung aus, und der Ordner ging beim nächsten Stapel vollständig
+  hinaus. Jetzt fällt sie, sobald die Liste da ist.
 
 **Protokoll**
 
+- "Response musste n ms warten, weil über die Verbindung gerade etwas
+  anderes lief" stand alle fünf Sekunden im Protokoll, solange die Rossibox
+  Blöcke abrief: jede Blockantwort wartete auf ihre Vorgänger. Das ist die
+  ausgelastete Leitung, kein Stau, und die Zeile "Verbindung: n
+  Blockantworten gesendet" sagt es in einer. Gemeldet wird nur noch, was
+  hinter etwas anderem steht oder von der Gegenstelle langsam abgenommen
+  wird.
 - Das Protokoll wird zusätzlich als Datei geschrieben: `protokoll.log`
   neben der Konfiguration, je Start eine neue; die vorige bleibt als
   `protokoll.1.log` stehen.

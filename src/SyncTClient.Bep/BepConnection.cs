@@ -672,15 +672,20 @@ public sealed class BepConnection : IAsyncDisposable
     /// <summary>Wann zuletzt ueber einen langsamen Sendevorgang geklagt wurde.</summary>
     private long _letzteKlage;
 
+    /// <summary>Was gerade ueber die Leitung geht.</summary>
+    private MessageType _aufDerLeitung;
+
     private async Task SendAsync(MessageType type, IMessage message, CancellationToken ct)
     {
         var begonnen = Environment.TickCount64;
+        var vorher = _aufDerLeitung;
 
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         var anDerSperre = Environment.TickCount64 - begonnen;
 
         try
         {
+            _aufDerLeitung = type;
             await BepFraming.WriteMessageAsync(_wire, type, message, ct).ConfigureAwait(false);
             _letzterSchlag = DateTime.UtcNow;
             MessageSent?.Invoke(type, message.CalculateSize());
@@ -697,9 +702,18 @@ public sealed class BepConnection : IAsyncDisposable
             // Antwort die Frist, und dann stehen hunderte gleichlautende
             // Zeilen im Protokoll. Sie sagen zusammen nicht mehr als eine --
             // aber sie machen das Protokoll unbrauchbar.
+            //
+            // Und nicht, wenn eine Blockantwort hinter anderen Blockantworten
+            // stand: das ist die ausgelastete Leitung, kein Stau. Waehrend
+            // die Rossibox 250 MB je Minute abrief, wartete jede Antwort
+            // fuenf bis dreizehn Sekunden auf ihre Vorgaenger, und alle
+            // fuenf Sekunden stand dieselbe Zeile im Protokoll -- die Zeile
+            // "Verbindung: n Blockantworten gesendet" sagt dasselbe in einer.
             var jetzt = Environment.TickCount64;
+            var ausgelastet = type == MessageType.Response && vorher == MessageType.Response
+                              && anDerSperre > uebertragen;
 
-            if (gesamt > SendeFrist.TotalMilliseconds && jetzt - _letzteKlage > 5000)
+            if (gesamt > SendeFrist.TotalMilliseconds && !ausgelastet && jetzt - _letzteKlage > 5000)
             {
                 _letzteKlage = jetzt;
 

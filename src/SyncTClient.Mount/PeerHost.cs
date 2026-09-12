@@ -562,6 +562,7 @@ public sealed class PeerHost : IAsyncDisposable
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _clusterConfig = new TaskCompletionSource<ClusterConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_indexEntschieden) _indexEntschieden.Clear();
         State = PeerState.Verbindet;
         LastError = null;
         return _cts.Token;
@@ -786,41 +787,8 @@ public sealed class PeerHost : IAsyncDisposable
             if (maxSequence > 0)
                 _log($"[{share.FolderId}] setze bei Sequenz {maxSequence} fort ({share.IndexCount} Eintraege bekannt).");
 
-            // Und umgekehrt: was die Gegenstelle von unserem Index hat. Ihr
-            // Eintrag zu unserem Geraet nennt die Kennung unseres Index, wie
-            // sie ihn kennt, und die hoechste Sequenznummer, die sie davon
-            // gespeichert hat. Stimmt die Kennung, bekommt sie nur, was
-            // darueber liegt; sonst alles. So entscheidet Syncthing selbst.
-            if (folder is not null && share.OwnIndexId != 0)
-            {
-                var uns = folder.Devices.FirstOrDefault(
-                    d => Bep.DeviceId.FromBytes(d.Id.Span) == _identity.Id);
-
-                var ab = 0L;
-
-                if (uns is null || uns.IndexId == 0)
-                {
-                    _log($"[{share.FolderId}] die Gegenstelle hat keinen Stand unseres Index; er geht vollstaendig hinaus.");
-                }
-                else if (uns.IndexId != share.OwnIndexId)
-                {
-                    _log($"[{share.FolderId}] die Gegenstelle kennt unseren Index unter einer anderen Kennung; " +
-                         "er geht vollstaendig hinaus.");
-                }
-                else if (uns.MaxSequence > share.LocalSequence)
-                {
-                    _log($"[{share.FolderId}] die Gegenstelle nennt Sequenz {uns.MaxSequence} unseres Index, " +
-                         $"wir fuehren nur {share.LocalSequence}; er geht vollstaendig hinaus.");
-                }
-                else
-                {
-                    ab = uns.MaxSequence;
-                    _log($"[{share.FolderId}] die Gegenstelle hat unseren Index bis Sequenz {ab} " +
-                         $"(von {share.LocalSequence}); nur Neueres geht hinaus.");
-                }
-
-                share.IndexAnkuendigen(DeviceId, ab);
-            }
+            // Und umgekehrt: was die Gegenstelle von unserem Index hat.
+            if (folder is not null) IndexNachsendungEntscheiden(share, folder);
 
             var entry = new Folder
             {
@@ -851,6 +819,64 @@ public sealed class PeerHost : IAsyncDisposable
         await _connection!.SendClusterConfigAsync(announcement, ct);
     }
 
+    /// <summary>
+    /// Ordner, fuer die in dieser Sitzung entschieden ist, was von unserem
+    /// Index an die Gegenstelle geht.
+    /// </summary>
+    private readonly HashSet<string> _indexEntschieden = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Entscheidet, was von unserem Index an die Gegenstelle geht: alles oder
+    /// nur, was ueber ihrem Stand liegt.
+    /// </summary>
+    /// <remarks>
+    /// Ihr Eintrag zu unserem Geraet in ihrer Ordnerliste nennt die Kennung
+    /// unseres Index, wie sie ihn kennt, und die hoechste Sequenznummer, die
+    /// sie davon gespeichert hat. Stimmt die Kennung, bekommt sie nur, was
+    /// darueber liegt; sonst alles. So entscheidet Syncthing selbst.
+    ///
+    /// Gerufen, sobald die Ordnerliste da ist -- beim Ankuendigen, wenn sie
+    /// schon vorliegt, sonst bei ihrem Eintreffen. Ueber ein Relay kam die
+    /// des Telefons einmal nach sechs Sekunden, eine Sekunde nach Ablauf
+    /// der Wartefrist; ohne diesen zweiten Weg blieb die Entscheidung aus,
+    /// und der Ordner ging beim naechsten Stapel vollstaendig hinaus.
+    /// </remarks>
+    private void IndexNachsendungEntscheiden(ShareHost share, Folder folder)
+    {
+        if (share.OwnIndexId == 0) return;
+
+        lock (_indexEntschieden)
+            if (!_indexEntschieden.Add(share.FolderId)) return;
+
+        var uns = folder.Devices.FirstOrDefault(
+            d => Bep.DeviceId.FromBytes(d.Id.Span) == _identity.Id);
+
+        var ab = 0L;
+
+        if (uns is null || uns.IndexId == 0)
+        {
+            _log($"[{share.FolderId}] die Gegenstelle hat keinen Stand unseres Index; er geht vollstaendig hinaus.");
+        }
+        else if (uns.IndexId != share.OwnIndexId)
+        {
+            _log($"[{share.FolderId}] die Gegenstelle kennt unseren Index unter einer anderen Kennung; " +
+                 "er geht vollstaendig hinaus.");
+        }
+        else if (uns.MaxSequence > share.LocalSequence)
+        {
+            _log($"[{share.FolderId}] die Gegenstelle nennt Sequenz {uns.MaxSequence} unseres Index, " +
+                 $"wir fuehren nur {share.LocalSequence}; er geht vollstaendig hinaus.");
+        }
+        else
+        {
+            ab = uns.MaxSequence;
+            _log($"[{share.FolderId}] die Gegenstelle hat unseren Index bis Sequenz {ab} " +
+                 $"(von {share.LocalSequence}); nur Neueres geht hinaus.");
+        }
+
+        share.IndexAnkuendigen(DeviceId, ab);
+    }
+
     private void OnClusterConfig(ClusterConfig config)
     {
         // Eine Zweitleitung. Syncthing kann mehrere Verbindungen zu einem
@@ -878,6 +904,12 @@ public sealed class PeerHost : IAsyncDisposable
 
         _clusterConfig.TrySetResult(config);
         _log($"[{Display}] Ordnerliste: {config.Folders.Count} Ordner angeboten.");
+
+        // Kam die Liste erst nach dem Ankuendigen, steht die Entscheidung
+        // ueber unseren Index noch aus. Siehe IndexNachsendungEntscheiden.
+        foreach (var folder in config.Folders)
+            if (_shares.TryGetValue(folder.Id, out var share))
+                IndexNachsendungEntscheiden(share, folder);
 
         Offered = config.Folders
             .Select(f => new OfferedFolder(f.Id, f.Label, _shares.ContainsKey(f.Id)))
