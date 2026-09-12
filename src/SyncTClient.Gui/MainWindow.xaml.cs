@@ -375,6 +375,8 @@ public partial class MainWindow : Window
             }
 
             var zeile = Wire(new ShareRow(peer, folderId, label, share));
+            zeile.EingerichteterPfad = _config.Shares
+                .FirstOrDefault(s => s.FolderId.Equals(folderId, StringComparison.Ordinal))?.LocalPath;
             nachOrdner[folderId] = zeile;
             _rows.Add(zeile);
         }
@@ -2378,7 +2380,7 @@ public partial class MainWindow : Window
         // Der Klick kommt aus einer Zelle. Gemeint ist deren Zeile, nicht
         // zwangsläufig die ausgewählte.
         if ((sender as System.Windows.Documents.Hyperlink)?.DataContext is ShareRow row)
-            OpenFolder(row.Share?.Config.LocalPath);
+            OpenFolder(row.PathText);
     }
 
     private void OnOpenFolder(object sender, RoutedEventArgs e)

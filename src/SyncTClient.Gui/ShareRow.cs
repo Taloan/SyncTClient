@@ -323,7 +323,14 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public string FilesText => Gezaehlt ? Format.Count(Share!.IndexFiles) : "—";
     public string LocalFilesText => Gezaehlt ? Format.Count(Share!.CacheFileCount) : "—";
     public string ThumbsText => Share is null ? "—" : Format.Count(Share.ThumbnailUsage().Count);
-    public string PathText => Share?.Config.LocalPath ?? "";
+    /// <summary>
+    /// Der Pfad aus der Konfiguration, falls die Freigabe eingerichtet ist.
+    /// Ohne Verbindung gibt es keinen ShareHost, der Pfad steht aber fest --
+    /// und die Zeile zeigte einen Strich, als waere keiner festgelegt.
+    /// </summary>
+    public string? EingerichteterPfad { get; set; }
+
+    public string PathText => Share?.Config.LocalPath ?? EingerichteterPfad ?? "";
     public string ModeText => Share?.Config.Mode == ShareMode.AlwaysLocal ? App.S("R.ModeAlways") : App.S("R.ModeOnDemand");
 
     public string LimitText => Share is null || Share.CacheMaxBytes == 0

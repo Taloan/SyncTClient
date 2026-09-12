@@ -62,6 +62,12 @@ commit-by-commit history.*
   Entscheidung aus, und der Ordner ging beim nächsten Stapel vollständig
   hinaus. Jetzt fällt sie, sobald die Liste da ist.
 
+**Tabelle**
+
+- Eine eingerichtete Freigabe ohne Verbindung zeigte in der Pfadspalte einen
+  Strich, als wäre kein Pfad festgelegt. Jetzt steht der Pfad aus der
+  Konfiguration da, auch wenn die Gegenstelle nicht verbunden ist.
+
 **Protokoll**
 
 - "Response musste n ms warten, weil über die Verbindung gerade etwas
