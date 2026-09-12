@@ -54,6 +54,15 @@ commit-by-commit history.*
   liegt — wie bei Syncthing. Ein vollständiger Index geht in Stapeln hinaus,
   und ein Abriss mittendrin kostet nichts: beim nächsten Mal geht es dort
   weiter, wo die Gegenstelle stehen geblieben ist.
+- Der Index geht in einem eigenen Lauf hinaus, nicht im Hintergrundlauf
+  des Ordners: der übernimmt derweil Eingehendes und stößt Übertragungen
+  an, statt minutenlang hinter dem Senden zu stehen.
+
+**Protokoll**
+
+- Das Protokoll wird zusätzlich als Datei geschrieben: `protokoll.log`
+  neben der Konfiguration, je Start eine neue; die vorige bleibt als
+  `protokoll.1.log` stehen.
 - Eine Löschung wurde immer als Datei angekündigt, auch für ein Verzeichnis.
   Syncthing verwirft das ("encountered directory when trying to remove
   file/symlink"), und der Ordner stand bei der Rossibox dauerhaft auf "nicht

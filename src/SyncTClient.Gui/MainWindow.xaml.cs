@@ -2877,6 +2877,40 @@ public partial class MainWindow : Window
         => _protokoll.Enqueue($"{DateTime.Now:HH:mm:ss}  {line}");
 
     /// <summary>
+    /// Das Protokoll als Datei, neben der Konfiguration.
+    /// </summary>
+    /// <remarks>
+    /// Das Protokollfeld zeigt die letzten Zeilen; wer einen Verlauf ueber
+    /// Stunden nachlesen will -- oder ihn mitlesen lassen will, waehrend das
+    /// Programm laeuft --, braucht eine Datei. Je Start eine: die vorige
+    /// bleibt als <c>protokoll.1.log</c> stehen.
+    /// </remarks>
+    private string ProtokollDatei => Path.Combine(
+        Path.GetDirectoryName(_configPath) ?? ".", "protokoll.log");
+
+    private bool _protokollDateiBereit;
+
+    private void ProtokollSchreiben(string zeilen)
+    {
+        try
+        {
+            if (!_protokollDateiBereit)
+            {
+                _protokollDateiBereit = true;
+                Directory.CreateDirectory(Path.GetDirectoryName(ProtokollDatei)!);
+                if (File.Exists(ProtokollDatei))
+                    File.Move(ProtokollDatei, Path.ChangeExtension(ProtokollDatei, ".1.log"), overwrite: true);
+            }
+
+            File.AppendAllText(ProtokollDatei, zeilen);
+        }
+        catch (Exception)
+        {
+            // Ohne Datei bleibt das Protokollfeld.
+        }
+    }
+
+    /// <summary>
     /// Schreibt alles Aufgelaufene in einem Zug.
     /// </summary>
     /// <remarks>
@@ -2891,6 +2925,8 @@ public partial class MainWindow : Window
 
         var zeilen = new System.Text.StringBuilder();
         while (_protokoll.TryDequeue(out var zeile)) zeilen.AppendLine(zeile);
+
+        ProtokollSchreiben(zeilen.ToString());
 
         // Solange jemand das Feld in der Hand hat, wird daran nicht gezogen
         // und nichts darin ersetzt.

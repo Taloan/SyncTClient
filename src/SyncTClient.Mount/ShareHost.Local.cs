@@ -422,6 +422,16 @@ public sealed partial class ShareHost
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Ordnet den Uebergang: der Nachsender streicht eine Gegenstelle erst,
+    /// wenn er sicher ist, dass nichts mehr aussteht, und ein Stapel sieht
+    /// entweder den Vermerk oder die fertige Gegenstelle -- nie dazwischen.
+    /// </summary>
+    private readonly object _nachsendeSperre = new();
+
+    /// <summary>1, solange der Nachsender laeuft.</summary>
+    private int _nachsenderLaeuft;
+
+    /// <summary>
     /// Merkt vor, dass diese Gegenstelle den eigenen Index bekommt: ab der
     /// Sequenznummer, die sie schon hat, oder vollstaendig (0).
     /// </summary>
@@ -429,6 +439,46 @@ public sealed partial class ShareHost
     {
         _nachsenden[device] = ab;
         Wake();
+    }
+
+    /// <summary>
+    /// Startet den Nachsender, falls er nicht schon laeuft.
+    /// </summary>
+    /// <remarks>
+    /// Ein eigener Lauf, nicht der Hintergrundlauf des Ordners. Der Index
+    /// von Lightroom hat 67 000 Eintraege, der von PRI eine Million Bloecke;
+    /// ueber ein Relay braucht das Minuten. Der Hintergrundlauf uebernimmt
+    /// derweil Eingehendes und stoesst Uebertragungen an -- stuende er
+    /// hinter dem Senden, staende fuer diesen Ordner alles, solange der
+    /// Index hinausgeht.
+    /// </remarks>
+    private void StarteNachsender(CancellationToken ct)
+    {
+        if (Interlocked.CompareExchange(ref _nachsenderLaeuft, 1, 0) != 0) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await NachsendenAsync(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Der Ordner wird angehalten.
+            }
+            catch (Exception ex)
+            {
+                _log($"[{FolderId}] Index nachsenden: {ex.Message}");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _nachsenderLaeuft, 0);
+
+                // Waehrenddessen dazugekommen? Dann gleich noch einmal.
+                if (!ct.IsCancellationRequested && _nachsenden.Keys.Any(_connections.ContainsKey))
+                    StarteNachsender(ct);
+            }
+        }, CancellationToken.None);
     }
 
     /// <summary>
@@ -2209,19 +2259,9 @@ public sealed partial class ShareHost
                 AbgelehnteMelden();
 
                 // Was eine neu verbundene Gegenstelle von unserem Index noch
-                // nicht hat, geht zuerst hinaus -- vor der Bewertung, damit
-                // deren Nachtraege darauf aufsetzen.
+                // nicht hat, geht nebenher hinaus; siehe StarteNachsender.
                 if (!IsPaused && _nachsenden.Keys.Any(_connections.ContainsKey))
-                {
-                    try
-                    {
-                        await NachsendenAsync(ct).ConfigureAwait(false);
-                    }
-                    catch (Exception ex) when (ex is not OperationCanceledException)
-                    {
-                        _log($"[{FolderId}] Index nachsenden: {ex.Message}");
-                    }
-                }
+                    StarteNachsender(ct);
 
                 if (_dirty.IsEmpty && _removed.IsEmpty && _weiterzugeben.IsEmpty) continue;
 
@@ -2260,8 +2300,6 @@ public sealed partial class ShareHost
         // Ankuendigung ohne eigenen Zaehler waere fuer die Gegenstelle
         // dieselbe Version wie zuvor.
         if (OwnDeviceId == Bep.DeviceId.Empty) return;
-
-        await NachsendenAsync(ct).ConfigureAwait(false);
 
         var batch = new List<BepFileInfo>();
         var bytes = 0;
@@ -3307,21 +3345,18 @@ public sealed partial class ShareHost
     /// <returns>false, wenn die Verbindung dabei verlorenging.</returns>
     private async Task<bool> IndexSendenAsync(string device, BepConnection connection, long ab, CancellationToken ct)
     {
-        List<BepFileInfo> eintraege;
-        lock (_indexGate)
-            eintraege = [.. (_index?.LocalFrom(ab + 1) ?? []).Where(f => f.Sequence > 0)];
-
         // Die Gegenstelle hat bis hierher; ein Nachtrag setzt darauf auf, und
         // kein Stapel darf dahinter zurueckfallen.
         var prev = ab;
         if (ab > 0)
         {
             _lastSentTo[device] = ab;
-            if (ab > _hoechsteGesendet) _hoechsteGesendet = ab;
+            HoechsteGesendetMerken(ab);
         }
 
         var erster = ab == 0;
         var nachrichten = 0;
+        var gesamt = 0;
 
         async Task Schicken(List<BepFileInfo> stapel)
         {
@@ -3344,36 +3379,65 @@ public sealed partial class ShareHost
             prev = bis;
             nachrichten++;
             _lastSentTo[device] = bis;
-            if (bis > _hoechsteGesendet) _hoechsteGesendet = bis;
+            HoechsteGesendetMerken(bis);
         }
 
         try
         {
-            var stapel = new List<BepFileInfo>();
-            var bytes = 0;
-
-            foreach (var eintrag in eintraege)
+            while (true)
             {
-                stapel.Add(eintrag);
-                bytes += eintrag.CalculateSize();
+                ct.ThrowIfCancellationRequested();
 
-                if (stapel.Count < BatchFiles && bytes < BatchBytes) continue;
+                // Was ueber dem Stand der Gegenstelle liegt. Waehrend des
+                // Sendens schreibt die Bewertung weiter in den Index; deshalb
+                // wird nachgesehen, bis nichts mehr darueber liegt -- und der
+                // Uebergang zu "hat den Index" geschieht unter der Sperre,
+                // damit kein Stapel dazwischenfaellt (siehe FlushAsync).
+                List<BepFileInfo> eintraege;
+                lock (_nachsendeSperre)
+                {
+                    lock (_indexGate)
+                        eintraege = [.. (_index?.LocalFrom(prev + 1) ?? []).Where(f => f.Sequence > 0)];
 
-                await Schicken(stapel).ConfigureAwait(false);
-                stapel = [];
-                bytes = 0;
+                    if (eintraege.Count == 0 && !erster)
+                    {
+                        _indexSentTo[device] = true;
+                        _nachsenden.TryRemove(device, out _);
+                        break;
+                    }
+                }
+
+                if (eintraege.Count == 0)
+                {
+                    // Ein leerer Bestand ist auch einer.
+                    await Schicken([]).ConfigureAwait(false);
+                    continue;
+                }
+
+                var stapel = new List<BepFileInfo>();
+                var bytes = 0;
+
+                foreach (var eintrag in eintraege)
+                {
+                    stapel.Add(eintrag);
+                    bytes += eintrag.CalculateSize();
+
+                    if (stapel.Count < BatchFiles && bytes < BatchBytes) continue;
+
+                    await Schicken(stapel).ConfigureAwait(false);
+                    stapel = [];
+                    bytes = 0;
+                }
+
+                if (stapel.Count > 0) await Schicken(stapel).ConfigureAwait(false);
+                gesamt += eintraege.Count;
             }
 
-            if (stapel.Count > 0 || erster) await Schicken(stapel).ConfigureAwait(false);
-
-            _indexSentTo[device] = true;
-            _nachsenden.TryRemove(device, out _);
-
             if (ab == 0)
-                _log($"[{FolderId}] -> Index an {device[..7]}: {eintraege.Count} Dateien " +
+                _log($"[{FolderId}] -> Index an {device[..7]}: {gesamt} Dateien " +
                      $"in {nachrichten} Nachrichten, bis {prev}.");
-            else if (eintraege.Count > 0)
-                _log($"[{FolderId}] -> Index an {device[..7]}: {eintraege.Count} Dateien " +
+            else if (gesamt > 0)
+                _log($"[{FolderId}] -> Index an {device[..7]}: {gesamt} Dateien " +
                      $"ab Sequenz {ab + 1} in {nachrichten} Nachrichten, bis {prev}.");
 
             return true;
@@ -3413,6 +3477,17 @@ public sealed partial class ShareHost
     /// <summary>Die hoechste Sequenznummer, die je an eine Gegenstelle ging.</summary>
     private long _hoechsteGesendet;
 
+    /// <summary>Hebt <see cref="_hoechsteGesendet"/> an; der Nachsender schreibt nebenher.</summary>
+    private void HoechsteGesendetMerken(long sequenz)
+    {
+        long bisher;
+        do
+        {
+            bisher = Volatile.Read(ref _hoechsteGesendet);
+            if (sequenz <= bisher) return;
+        } while (Interlocked.CompareExchange(ref _hoechsteGesendet, sequenz, bisher) != bisher);
+    }
+
     private async Task FlushAsync(List<BepFileInfo> batch, CancellationToken ct)
     {
         if (batch.Count == 0) return;
@@ -3447,7 +3522,7 @@ public sealed partial class ShareHost
         var neu = false;
         for (var i = 0; i < batch.Count; i++)
         {
-            if (batch[i].Sequence > _hoechsteGesendet) continue;
+            if (batch[i].Sequence > Volatile.Read(ref _hoechsteGesendet)) continue;
 
             var nummer = NextSequence();
             BepFileInfo? umnummeriert;
@@ -3481,55 +3556,52 @@ public sealed partial class ShareHost
 
         foreach (var (device, connection) in _connections)
         {
-            // Eine Gegenstelle, der unser Index noch aussteht, bekommt ihn
-            // zuerst. Er enthaelt den Stapel, soweit der ueber ihrem Stand
-            // liegt -- Evaluate hat ihn vor dem Senden geschrieben.
-            if (_nachsenden.TryGetValue(device, out var ab))
+            // Eine Gegenstelle, der unser Index noch aussteht, bekommt den
+            // Stapel mit ihm: der Nachsender liest, bis nichts mehr ueber
+            // ihrem Stand liegt, und Evaluate hat den Stapel vor dem Senden
+            // geschrieben. Die Sperre ordnet beides: sieht der Stapel den
+            // Vermerk noch, hat der Nachsender ihn noch nicht gestrichen und
+            // liest noch einmal nach.
+            bool nachsender;
+            lock (_nachsendeSperre)
             {
-                if (!await IndexSendenAsync(device, connection, ab, ct).ConfigureAwait(false)) continue;
+                nachsender = _nachsenden.ContainsKey(device);
 
-                if (ab == 0 || batch[0].Sequence > ab)
+                // Und wer noch gar keinen Index hat, bekommt ihn auf demselben
+                // Weg -- nicht hier, wo er den Hintergrundlauf aufhielte.
+                if (!nachsender && !(_indexSentTo.TryGetValue(device, out var hat) && hat))
                 {
-                    erreicht++;
-                    continue;
+                    _nachsenden[device] = 0;
+                    nachsender = true;
                 }
+            }
+
+            if (nachsender)
+            {
+                StarteNachsender(ct);
+                erreicht++;
+                continue;
             }
 
             try
             {
-                if (_indexSentTo.TryGetValue(device, out var gesendet) && gesendet)
+                // Die Gegenstelle hat den Index; der Stapel ist ein Nachtrag
+                // mit der Nummer ihres Vorgaengers.
+                var update = new BepIndexUpdate
                 {
-                    var update = new BepIndexUpdate
-                    {
-                        Folder = FolderId,
-                        LastSequence = last,
-                        PrevSequence = _lastSentTo.GetValueOrDefault(device)
-                    };
-                    update.Files.AddRange(batch);
+                    Folder = FolderId,
+                    LastSequence = last,
+                    PrevSequence = _lastSentTo.GetValueOrDefault(device)
+                };
+                update.Files.AddRange(batch);
 
-                    _log($"[{FolderId}] -> IndexUpdate an {device[..7]}: " +
-                         $"{batch.Count} Dateien, prev {update.PrevSequence}, bis {last}.");
+                _log($"[{FolderId}] -> IndexUpdate an {device[..7]}: " +
+                     $"{batch.Count} Dateien, prev {update.PrevSequence}, bis {last}.");
 
-                    await connection.SendIndexUpdateAsync(update, ct).ConfigureAwait(false);
-                }
-                else
-                {
-                    // Ein Index ist die Aussage "das ist mein vollstaendiger
-                    // Bestand zu diesem Ordner". Nur den gerade geaenderten
-                    // Stapel hineinzuschreiben hiesse, der Gegenstelle zu
-                    // sagen, unser Ordner bestehe aus diesen paar Dateien --
-                    // und alles frueher Angekuendigte waere fuer sie fort.
-                    //
-                    // Hinaus geht deshalb der gesamte eigene Bestand. Der
-                    // Stapel steckt darin, denn Evaluate hat ihn vor dem
-                    // Senden geschrieben.
-                    if (await IndexSendenAsync(device, connection, 0, ct).ConfigureAwait(false)) erreicht++;
-                    else Zurueckstellen(batch);
-                    continue;
-                }
+                await connection.SendIndexUpdateAsync(update, ct).ConfigureAwait(false);
 
                 _lastSentTo[device] = last;
-                if (last > _hoechsteGesendet) _hoechsteGesendet = last;
+                HoechsteGesendetMerken(last);
                 erreicht++;
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
