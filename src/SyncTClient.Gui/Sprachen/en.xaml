@@ -261,12 +261,14 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="R.Error">error</s:String>
   <s:String x:Key="R.Stopped">stopped</s:String>
   <s:String x:Key="R.NotConnected">not connected</s:String>
+  <s:String x:Key="R.Offered">offered</s:String>
   <s:String x:Key="R.PhaseIndex">index</s:String>
   <s:String x:Key="R.PhasePlaceholders">placeholders</s:String>
   <s:String x:Key="R.PhaseCache">cache</s:String>
   <s:String x:Key="R.PhaseContent">downloading</s:String>
   <s:String x:Key="R.PhaseWaiting">waiting</s:String>
   <s:String x:Key="R.NotConnectedHint">Not connected yet.</s:String>
+  <s:String x:Key="R.OfferedHint">Offered by a remote device, not accepted here.</s:String>
   <s:String x:Key="R.CopiesNone">No reachable node carries this share. Placeholders cannot be opened right now. Whether space may be freed still follows the last announcement received, not reachability.</s:String>
   <s:String x:Key="R.CopiesSome">Reachable nodes carrying the content: {0}. No information is available about nodes that are not connected, so this number is a lower bound.</s:String>
   <s:String x:Key="R.ModeAlways">fully local</s:String>

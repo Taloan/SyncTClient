@@ -97,7 +97,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
         ShareState.Pausiert => App.S("R.Paused"),
         ShareState.Fehler => App.S("R.Error"),
         ShareState.Gestoppt => App.S("R.Stopped"),
-        _ => App.S("R.NotConnected")
+        _ => Eingerichtet ? App.S("R.NotConnected") : App.S("R.Offered")
     };
 
     private string PhaseText => Share?.Phase switch
@@ -179,7 +179,7 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     public bool CopiesAtRisk => Accepted && Copies < 1;
 
     public string CopiesHint => !Accepted
-        ? App.S("R.NotConnectedHint")
+        ? App.S(Eingerichtet ? "R.NotConnectedHint" : "R.OfferedHint")
         : Copies == 0
             ? App.S("R.CopiesNone")
             : App.S("R.CopiesSome", Copies);
@@ -329,6 +329,14 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
     /// und die Zeile zeigte einen Strich, als waere keiner festgelegt.
     /// </summary>
     public string? EingerichteterPfad { get; set; }
+
+    /// <summary>
+    /// Ob die Freigabe hier eingerichtet ist. Ohne ShareHost heisst das:
+    /// eingerichtet, aber die Gegenstelle ist nicht verbunden. Ohne beides
+    /// ist sie nur ein Angebot einer Gegenstelle -- und das ist kein
+    /// Verbindungszustand, sondern ein anderer Fall.
+    /// </summary>
+    public bool Eingerichtet { get; set; }
 
     public string PathText => Share?.Config.LocalPath ?? EingerichteterPfad ?? "";
     public string ModeText => Share?.Config.Mode == ShareMode.AlwaysLocal ? App.S("R.ModeAlways") : App.S("R.ModeOnDemand");

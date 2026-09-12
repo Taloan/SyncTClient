@@ -67,6 +67,10 @@ commit-by-commit history.*
 - Eine eingerichtete Freigabe ohne Verbindung zeigte in der Pfadspalte einen
   Strich, als wäre kein Pfad festgelegt. Jetzt steht der Pfad aus der
   Konfiguration da, auch wenn die Gegenstelle nicht verbunden ist.
+- "nicht verbunden" stand auch bei Ordnern, die eine Gegenstelle nur
+  anbietet und die hier nicht übernommen sind — GPS Tracks von der
+  Rossibox, die verbunden war. Die heißen jetzt "angeboten"; "nicht
+  verbunden" bleibt den eingerichteten Freigaben ohne Verbindung.
 
 **Protokoll**
 

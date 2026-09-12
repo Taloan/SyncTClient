@@ -253,12 +253,14 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="R.Error">Fehler</s:String>
   <s:String x:Key="R.Stopped">gestoppt</s:String>
   <s:String x:Key="R.NotConnected">nicht verbunden</s:String>
+  <s:String x:Key="R.Offered">angeboten</s:String>
   <s:String x:Key="R.PhaseIndex">Index</s:String>
   <s:String x:Key="R.PhasePlaceholders">Platzhalter</s:String>
   <s:String x:Key="R.PhaseCache">Cache</s:String>
   <s:String x:Key="R.PhaseContent">lädt herunter</s:String>
   <s:String x:Key="R.PhaseWaiting">wartet</s:String>
   <s:String x:Key="R.NotConnectedHint">Noch nicht verbunden.</s:String>
+  <s:String x:Key="R.OfferedHint">Von einer Gegenstelle angeboten, hier nicht übernommen.</s:String>
   <s:String x:Key="R.CopiesNone">Kein erreichbarer Knoten führt diesen Share. Platzhalter lassen sich gerade nicht öffnen. Ob Speicherplatz freigegeben werden darf, richtet sich weiterhin nach der zuletzt empfangenen Ankündigung, nicht nach der Erreichbarkeit.</s:String>
   <s:String x:Key="R.CopiesSome">Erreichbare Knoten mit dem Inhalt: {0}. Über nicht verbundene Knoten liegen keine Angaben vor, die Zahl ist daher eine Untergrenze.</s:String>
   <s:String x:Key="R.ModeAlways">vollständig lokal</s:String>

@@ -375,8 +375,10 @@ public partial class MainWindow : Window
             }
 
             var zeile = Wire(new ShareRow(peer, folderId, label, share));
-            zeile.EingerichteterPfad = _config.Shares
-                .FirstOrDefault(s => s.FolderId.Equals(folderId, StringComparison.Ordinal))?.LocalPath;
+            var konfiguriert = _config.Shares
+                .FirstOrDefault(s => s.FolderId.Equals(folderId, StringComparison.Ordinal));
+            zeile.Eingerichtet = konfiguriert is not null;
+            zeile.EingerichteterPfad = konfiguriert?.LocalPath;
             nachOrdner[folderId] = zeile;
             _rows.Add(zeile);
         }
