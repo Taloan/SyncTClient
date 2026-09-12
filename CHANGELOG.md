@@ -11,6 +11,14 @@ commit-by-commit history.*
 
 ## 0.9.5 — in Arbeit
 
+**Verbindungen**
+
+- Ein Relay, der auf allen Schnittstellen horcht, trägt in seine Einladung
+  die unbestimmte Adresse ein (`::ffff:0.0.0.0`). Der Aufbau dorthin
+  scheiterte mit "die angeforderte Adresse ist in diesem Kontext ungültig",
+  bei jedem Versuch, und das Telefon blieb unerreichbar. Eine unbestimmte
+  Adresse heißt jetzt wie eine leere: der Relay selbst.
+
 **Mehrere Gegenstellen an einem Ordner**
 
 - Eine aus der Freigabe genommene Gegenstelle verlor nur ihre Verbindung;

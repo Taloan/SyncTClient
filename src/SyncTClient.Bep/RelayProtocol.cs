@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Text;
 
 namespace SyncTClient.Bep;
@@ -178,6 +178,15 @@ public static class RelayProtocol
     /// Vier Byte sind IPv4, sechzehn sind IPv6, nichts heißt "derselbe
     /// Rechner, von dem die Einladung kam". Der Aufrufer setzt dann den Host
     /// des Relays ein.
+    ///
+    /// Dasselbe gilt für eine unbestimmte Adresse: <c>0.0.0.0</c>, <c>::</c>
+    /// oder <c>::ffff:0.0.0.0</c>. Ein Relay, der auf allen Schnittstellen
+    /// horcht, trägt in die Einladung die Adresse ein, an der er horcht --
+    /// und das ist dann die unbestimmte. Gemessen an einem Relay auf Port
+    /// 8080: sechzehn Byte, <c>::ffff:0:0</c>, und der Aufbau dorthin
+    /// scheiterte mit "die angeforderte Adresse ist in diesem Kontext
+    /// ungültig". Syncthing setzt in diesem Fall ebenfalls den Host des
+    /// Relays ein.
     /// </remarks>
     private static string AdresseAlsText(byte[] roh)
     {
@@ -185,7 +194,14 @@ public static class RelayProtocol
 
         try
         {
-            return new System.Net.IPAddress(roh).ToString();
+            var adresse = new System.Net.IPAddress(roh);
+
+            if (System.Net.IPAddress.Any.Equals(adresse)
+                || System.Net.IPAddress.IPv6Any.Equals(adresse)
+                || (adresse.IsIPv4MappedToIPv6 && System.Net.IPAddress.Any.Equals(adresse.MapToIPv4())))
+                return "";
+
+            return adresse.ToString();
         }
         catch (ArgumentException)
         {
