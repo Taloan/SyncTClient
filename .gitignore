@@ -43,3 +43,5 @@ src/SyncTClient.ExplorerProvider/obj/
 # der Gegenstelle, mit der hier entwickelt wird -- Angaben ueber ein fremdes
 # Geraet, die in keine Veroeffentlichung gehoeren.
 **/Properties/launchSettings.json
+protokoll.log
+protokoll.1.log
