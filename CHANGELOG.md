@@ -19,6 +19,17 @@ commit-by-commit history.*
   bei jedem Versuch, und das Telefon blieb unerreichbar. Eine unbestimmte
   Adresse heißt jetzt wie eine leere: der Relay selbst.
 
+**Start**
+
+- Zwei Ordner dürfen gleichzeitig anlaufen; die Plätze bekamen die, deren
+  Index zuerst da war — und Lightroom mit 67 000 Einträgen hielt einen davon
+  drei Minuten, während sieben kleine Ordner warteten. Jetzt läuft
+  aufsteigend nach Indexgröße an: die kleinen sind nach Sekunden fertig, der
+  große braucht dieselbe Zeit wie vorher.
+- Die Sequenznummern der eigenen Ankündigungen sprangen zwischen zwei
+  Nachrichten zurück. Syncthing nimmt das an, meldet es aber als Formfehler.
+  Jetzt liegt alles, was hinausgeht, über allem, was je hinausging.
+
 **Mehrere Gegenstellen an einem Ordner**
 
 - Eine aus der Freigabe genommene Gegenstelle verlor nur ihre Verbindung;
