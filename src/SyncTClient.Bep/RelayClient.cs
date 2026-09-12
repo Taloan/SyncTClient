@@ -1,4 +1,4 @@
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 
 namespace SyncTClient.Bep;
 
@@ -96,7 +96,7 @@ public static class RelayClient
         using var tcp = new TcpClient { NoDelay = true };
 
         await tcp.ConnectAsync(relay.Host, relay.Port, ct)
-            .AsTask().WaitAsync(Frist, ct).ConfigureAwait(false);
+            .WartenAsync(Frist, ct).ConfigureAwait(false);
 
         var tls = await BepTls
             .ConnectAsync(tcp.GetStream(), identity, ct, BepTls.RelayProtocolName)
@@ -122,7 +122,7 @@ public static class RelayClient
         while (true)
         {
             var nachricht = await RelayProtocol.LesenAsync(tls.Stream, ct)
-                .WaitAsync(Frist, ct).ConfigureAwait(false);
+                .WartenAsync(Frist, ct).ConfigureAwait(false);
 
             switch (nachricht.Art)
             {
@@ -162,7 +162,7 @@ public static class RelayClient
         try
         {
             await tcp.ConnectAsync(host, einladung.Port, ct)
-                .AsTask().WaitAsync(Frist, ct).ConfigureAwait(false);
+                .WartenAsync(Frist, ct).ConfigureAwait(false);
 
             var strom = tcp.GetStream();
 
@@ -171,7 +171,7 @@ public static class RelayClient
                 RelayProtocol.SitzungBeitretenRumpf(einladung.Schluessel), ct).ConfigureAwait(false);
 
             var nachricht = await RelayProtocol.LesenAsync(strom, ct)
-                .WaitAsync(Frist, ct).ConfigureAwait(false);
+                .WartenAsync(Frist, ct).ConfigureAwait(false);
 
             if (nachricht.Art != RelayProtocol.Art.Antwort)
                 throw new InvalidDataException(

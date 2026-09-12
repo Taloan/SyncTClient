@@ -102,7 +102,7 @@ public static class BepQuic
 
         var verbindung = await QuicConnection
             .ConnectAsync(einstellungen, ct)
-            .AsTask().WaitAsync(Frist, ct).ConfigureAwait(false);
+            .WartenAsync(Frist, ct).ConfigureAwait(false);
 
         QuicStream? strom = null;
 
@@ -118,7 +118,7 @@ public static class BepQuic
             // faehrt darauf dasselbe Protokoll wie ueber TCP.
             strom = await verbindung
                 .OpenOutboundStreamAsync(QuicStreamType.Bidirectional, ct)
-                .AsTask().WaitAsync(Frist, ct).ConfigureAwait(false);
+                .WartenAsync(Frist, ct).ConfigureAwait(false);
 
             return await BepConnection.UeberQuicAsync(
                 verbindung, strom, peerId, deviceName, ct).ConfigureAwait(false);
@@ -251,7 +251,7 @@ public static class BepQuic
 
                 strom = await verbindung
                     .AcceptInboundStreamAsync(ct)
-                    .AsTask().WaitAsync(Frist, ct).ConfigureAwait(false);
+                    .WartenAsync(Frist, ct).ConfigureAwait(false);
 
                 var sitzung = await BepConnection
                     .UeberQuicAsync(verbindung, strom, peerId, _deviceName, ct).ConfigureAwait(false);

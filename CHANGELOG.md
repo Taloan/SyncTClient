@@ -30,6 +30,17 @@ commit-by-commit history.*
   Nachrichten zurück. Syncthing nimmt das an, meldet es aber als Formfehler.
   Jetzt liegt alles, was hinausgeht, über allem, was je hinausging.
 
+**Fehlerdatei**
+
+- Die Fehlerdatei füllte sich mit Aufruflisten, die keinen Fehler des
+  Programms beschrieben: 163-mal "The connection timed out from inactivity"
+  von QUIC-Verbindungsversuchen, die nach 15 Sekunden aufgegeben waren, dazu
+  abgebrochene TLS-Lesevorgänge vom Relay. Eine aufgegebene Aufgabe lief
+  weiter, scheiterte später, und niemand nahm das Ergebnis entgegen. Jetzt
+  bekommt jede befristete Aufgabe einen Nachläufer, der es entgegennimmt —
+  und eine doch noch zustande gekommene QUIC-Verbindung schließt, statt sie
+  offen liegenzulassen.
+
 **Eigener Index**
 
 - Bei jeder neuen Verbindung ging der ganze eigene Bestand hinaus, in einer

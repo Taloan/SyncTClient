@@ -111,7 +111,7 @@ public static class BepTls
         {
             var (protokoll, peerCertificate, kontext) = await Task
                 .Run(handschlag, ct)
-                .WaitAsync(Frist, ct)
+                .WartenAsync(Frist, ct)
                 .ConfigureAwait(false);
 
             var kennwerte = kontext.SecurityParameters;
