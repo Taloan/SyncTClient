@@ -786,6 +786,42 @@ public sealed class PeerHost : IAsyncDisposable
             if (maxSequence > 0)
                 _log($"[{share.FolderId}] setze bei Sequenz {maxSequence} fort ({share.IndexCount} Eintraege bekannt).");
 
+            // Und umgekehrt: was die Gegenstelle von unserem Index hat. Ihr
+            // Eintrag zu unserem Geraet nennt die Kennung unseres Index, wie
+            // sie ihn kennt, und die hoechste Sequenznummer, die sie davon
+            // gespeichert hat. Stimmt die Kennung, bekommt sie nur, was
+            // darueber liegt; sonst alles. So entscheidet Syncthing selbst.
+            if (folder is not null && share.OwnIndexId != 0)
+            {
+                var uns = folder.Devices.FirstOrDefault(
+                    d => Bep.DeviceId.FromBytes(d.Id.Span) == _identity.Id);
+
+                var ab = 0L;
+
+                if (uns is null || uns.IndexId == 0)
+                {
+                    _log($"[{share.FolderId}] die Gegenstelle hat keinen Stand unseres Index; er geht vollstaendig hinaus.");
+                }
+                else if (uns.IndexId != share.OwnIndexId)
+                {
+                    _log($"[{share.FolderId}] die Gegenstelle kennt unseren Index unter einer anderen Kennung; " +
+                         "er geht vollstaendig hinaus.");
+                }
+                else if (uns.MaxSequence > share.LocalSequence)
+                {
+                    _log($"[{share.FolderId}] die Gegenstelle nennt Sequenz {uns.MaxSequence} unseres Index, " +
+                         $"wir fuehren nur {share.LocalSequence}; er geht vollstaendig hinaus.");
+                }
+                else
+                {
+                    ab = uns.MaxSequence;
+                    _log($"[{share.FolderId}] die Gegenstelle hat unseren Index bis Sequenz {ab} " +
+                         $"(von {share.LocalSequence}); nur Neueres geht hinaus.");
+                }
+
+                share.IndexAnkuendigen(DeviceId, ab);
+            }
+
             var entry = new Folder
             {
                 Id = share.FolderId,

@@ -1664,6 +1664,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _connections.TryRemove(device, out _);
         _indexSentTo.TryRemove(device, out _);
         _lastSentTo.TryRemove(device, out _);
+        _nachsenden.TryRemove(device, out _);
     }
 
     /// <summary>

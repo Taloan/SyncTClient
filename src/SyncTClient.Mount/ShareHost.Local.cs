@@ -394,6 +394,44 @@ public sealed partial class ShareHost
         new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Gegenstellen, denen der eigene Index noch hinausgeht, und ab welcher
+    /// Sequenznummer: 0 heisst vollstaendig, alles andere heisst nur, was
+    /// darueber liegt.
+    /// </summary>
+    /// <remarks>
+    /// Was die Gegenstelle von uns hat, sagt sie in ihrer Ordnerliste: die
+    /// Kennung unseres Index und die hoechste Sequenznummer, die sie davon
+    /// gespeichert hat. Stimmt die Kennung, fehlt ihr nur, was darueber
+    /// liegt -- so setzt Syncthing fort, und so erwartet es die Gegenseite.
+    ///
+    /// Vorher ging bei jeder neuen Verbindung der ganze Bestand hinaus, und
+    /// zwar in einer Nachricht. Bei einem Ordner mit 66 000 Eintraegen und
+    /// einer Million Bloecken sind das rund 40 MB. Ueber ein Relay, das
+    /// alle paar Minuten die Verbindung verliert, kam die Nachricht nie an
+    /// ihr Ende: die Gegenstelle empfing die Ankuendigung nicht, meldete
+    /// den Ordner "aktuell", und die neuen Dateien standen hier tagelang auf
+    /// "wartet auf die Gegenstelle". Nach jedem Abriss begann dasselbe von
+    /// vorn.
+    ///
+    /// Jetzt geht nur hinaus, was fehlt, und das in Stapeln wie jeder andere
+    /// Nachtrag. Ein Abriss mittendrin kostet nichts: die Gegenstelle
+    /// speichert jeden Stapel, nennt beim naechsten Mal die neue Nummer, und
+    /// es geht dort weiter.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, long> _nachsenden =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Merkt vor, dass diese Gegenstelle den eigenen Index bekommt: ab der
+    /// Sequenznummer, die sie schon hat, oder vollstaendig (0).
+    /// </summary>
+    public void IndexAnkuendigen(string device, long ab)
+    {
+        _nachsenden[device] = ab;
+        Wake();
+    }
+
+    /// <summary>
     /// Die eigene Geraete-ID. Sie steht in <c>modified_by</c> und im eigenen
     /// Zaehler des Versionsvektors.
     /// </summary>
@@ -2170,6 +2208,21 @@ public sealed partial class ShareHost
                 Faellige();
                 AbgelehnteMelden();
 
+                // Was eine neu verbundene Gegenstelle von unserem Index noch
+                // nicht hat, geht zuerst hinaus -- vor der Bewertung, damit
+                // deren Nachtraege darauf aufsetzen.
+                if (!IsPaused && _nachsenden.Keys.Any(_connections.ContainsKey))
+                {
+                    try
+                    {
+                        await NachsendenAsync(ct).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        _log($"[{FolderId}] Index nachsenden: {ex.Message}");
+                    }
+                }
+
                 if (_dirty.IsEmpty && _removed.IsEmpty && _weiterzugeben.IsEmpty) continue;
 
                 await Task.Delay(SettleDelay, ct).ConfigureAwait(false);
@@ -2207,6 +2260,8 @@ public sealed partial class ShareHost
         // Ankuendigung ohne eigenen Zaehler waere fuer die Gegenstelle
         // dieselbe Version wie zuvor.
         if (OwnDeviceId == Bep.DeviceId.Empty) return;
+
+        await NachsendenAsync(ct).ConfigureAwait(false);
 
         var batch = new List<BepFileInfo>();
         var bytes = 0;
@@ -2949,7 +3004,7 @@ public sealed partial class ShareHost
             return [];
         }
 
-        var candidates = new List<(string Name, Vector? Version)>();
+        var candidates = new List<(string Name, FileInfoType Type, Vector? Version)>();
 
         var jetzt = DateTime.UtcNow;
 
@@ -2983,7 +3038,7 @@ public sealed partial class ShareHost
             var known = LocalCopy(announced) ?? PeerCopy(announced);
             if (known is null || known.Deleted) continue;
 
-            candidates.Add((announced, known.Version));
+            candidates.Add((announced, known.Type, known.Version));
         }
 
         if (candidates.Count == 0) return [];
@@ -2999,12 +3054,17 @@ public sealed partial class ShareHost
 
         var files = new List<BepFileInfo>(candidates.Count);
 
-        foreach (var (name, version) in candidates)
+        foreach (var (name, type, version) in candidates)
         {
+            // Mit dem Typ des Eintrags, der geloescht wird. Eine Loeschung
+            // vom Typ Datei fuer ein Verzeichnis verwirft Syncthing:
+            // "encountered directory when trying to remove file/symlink" --
+            // und der Ordner blieb bei der Gegenstelle auf "nicht
+            // synchronisiert", bei jedem Durchgang aufs Neue.
             var file = new BepFileInfo
             {
                 Name = name,
-                Type = FileInfoType.File,
+                Type = type,
                 Size = 0,
                 Permissions = 0,
                 NoPermissions = true,
@@ -3209,32 +3269,126 @@ public sealed partial class ShareHost
         Wake();
     }
 
-    private List<BepFileInfo> Bestand(List<BepFileInfo> batch)
+    /// <summary>
+    /// Schickt den eigenen Index an jede Gegenstelle, die ihn noch nicht hat.
+    /// </summary>
+    private async Task NachsendenAsync(CancellationToken ct)
     {
-        List<BepFileInfo> gespeichert;
-        lock (_indexGate) gespeichert = [.. _index?.LocalFrom(0) ?? []];
+        foreach (var (device, ab) in _nachsenden)
+        {
+            ct.ThrowIfCancellationRequested();
 
-        var namen = new HashSet<string>(batch.Select(f => f.Name), StringComparer.Ordinal);
+            // Ohne Verbindung bleibt der Vermerk stehen; die Verbindung kommt
+            // gleich nach der Ankuendigung.
+            if (!_connections.TryGetValue(device, out var connection)) continue;
 
-        var alle = new List<BepFileInfo>(gespeichert.Count + batch.Count);
+            await IndexSendenAsync(device, connection, ab, ct).ConfigureAwait(false);
+        }
+    }
 
-        // Nur was eine eigene Sequenznummer hat, gehoert in den Index.
-        //
-        // Eine uebernommene Datei traegt die Null: sie stammt von der
-        // Gegenstelle, wir haben sie nie angekuendigt, und der Eintrag haelt
-        // nur fest, dass wir sie haben. Im Protokoll ist die Sequenznummer
-        // aber eindeutig und aufsteigend. Mehrere Nullen in einer Nachricht
-        // sind darum kein Schoenheitsfehler, sondern ein Formfehler --
-        // Syncthing beantwortet ihn mit "duplicate remote sequence number 0"
-        // und schliesst die Verbindung.
-        //
-        // Genau deshalb brach die Leitung ab, sobald ein Ordner mit
-        // vorhandenen Dateien uebernommen wurde: die Aufnahme des Bestands
-        // erzeugt lauter Eintraege mit Nummer null.
-        alle.AddRange(gespeichert.Where(f => f.Sequence > 0 && !namen.Contains(f.Name)));
-        alle.AddRange(batch);
+    /// <summary>
+    /// Schickt einer Gegenstelle den eigenen Index: vollstaendig (<paramref
+    /// name="ab"/> = 0) oder nur, was ueber ihrer Sequenznummer liegt.
+    /// </summary>
+    /// <remarks>
+    /// In Stapeln, wie jeder Nachtrag: die erste Nachricht eines
+    /// vollstaendigen Index ist ein Index, jede weitere ein Nachtrag mit der
+    /// Nummer ihres Vorgaengers. Ein vollstaendiger Index geht auch leer
+    /// hinaus -- er ist die Aussage "das ist alles", und ohne ihn behielte
+    /// die Gegenstelle, was sie zuletzt von uns gespeichert hat.
+    ///
+    /// Nur was eine eigene Sequenznummer hat, gehoert hinein. Eine
+    /// uebernommene Datei traegt die Null: sie stammt von der Gegenstelle,
+    /// wir haben sie nie angekuendigt, und der Eintrag haelt nur fest, dass
+    /// wir sie haben. Im Protokoll ist die Sequenznummer aber eindeutig und
+    /// aufsteigend; mehrere Nullen in einer Nachricht beantwortet Syncthing
+    /// mit "duplicate remote sequence number 0" und schliesst die Verbindung.
+    /// </remarks>
+    /// <returns>false, wenn die Verbindung dabei verlorenging.</returns>
+    private async Task<bool> IndexSendenAsync(string device, BepConnection connection, long ab, CancellationToken ct)
+    {
+        List<BepFileInfo> eintraege;
+        lock (_indexGate)
+            eintraege = [.. (_index?.LocalFrom(ab + 1) ?? []).Where(f => f.Sequence > 0)];
 
-        return alle;
+        // Die Gegenstelle hat bis hierher; ein Nachtrag setzt darauf auf, und
+        // kein Stapel darf dahinter zurueckfallen.
+        var prev = ab;
+        if (ab > 0)
+        {
+            _lastSentTo[device] = ab;
+            if (ab > _hoechsteGesendet) _hoechsteGesendet = ab;
+        }
+
+        var erster = ab == 0;
+        var nachrichten = 0;
+
+        async Task Schicken(List<BepFileInfo> stapel)
+        {
+            var bis = stapel.Count > 0 ? stapel[^1].Sequence : prev;
+
+            if (erster)
+            {
+                var index = new BepIndex { Folder = FolderId, LastSequence = bis };
+                index.Files.AddRange(stapel);
+                await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
+                erster = false;
+            }
+            else
+            {
+                var update = new BepIndexUpdate { Folder = FolderId, LastSequence = bis, PrevSequence = prev };
+                update.Files.AddRange(stapel);
+                await connection.SendIndexUpdateAsync(update, ct).ConfigureAwait(false);
+            }
+
+            prev = bis;
+            nachrichten++;
+            _lastSentTo[device] = bis;
+            if (bis > _hoechsteGesendet) _hoechsteGesendet = bis;
+        }
+
+        try
+        {
+            var stapel = new List<BepFileInfo>();
+            var bytes = 0;
+
+            foreach (var eintrag in eintraege)
+            {
+                stapel.Add(eintrag);
+                bytes += eintrag.CalculateSize();
+
+                if (stapel.Count < BatchFiles && bytes < BatchBytes) continue;
+
+                await Schicken(stapel).ConfigureAwait(false);
+                stapel = [];
+                bytes = 0;
+            }
+
+            if (stapel.Count > 0 || erster) await Schicken(stapel).ConfigureAwait(false);
+
+            _indexSentTo[device] = true;
+            _nachsenden.TryRemove(device, out _);
+
+            if (ab == 0)
+                _log($"[{FolderId}] -> Index an {device[..7]}: {eintraege.Count} Dateien " +
+                     $"in {nachrichten} Nachrichten, bis {prev}.");
+            else if (eintraege.Count > 0)
+                _log($"[{FolderId}] -> Index an {device[..7]}: {eintraege.Count} Dateien " +
+                     $"ab Sequenz {ab + 1} in {nachrichten} Nachrichten, bis {prev}.");
+
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // Ein geschlossener Socket wird nicht dadurch besser, dass man
+            // ihn weiter beschreibt. Die Gegenstelle hat gespeichert, was
+            // ankam, und nennt beim naechsten Verbinden die Nummer, ab der
+            // es weitergeht.
+            _log($"[{FolderId}] Index an {device[..7]} nach {nachrichten} Nachrichten abgebrochen: {ex.Message}");
+            DropConnection(device);
+            LineLost?.Invoke(device);
+            return false;
+        }
     }
 
     /// <summary>Der Versionsvektor in einer Zeile.</summary>
@@ -3327,6 +3481,20 @@ public sealed partial class ShareHost
 
         foreach (var (device, connection) in _connections)
         {
+            // Eine Gegenstelle, der unser Index noch aussteht, bekommt ihn
+            // zuerst. Er enthaelt den Stapel, soweit der ueber ihrem Stand
+            // liegt -- Evaluate hat ihn vor dem Senden geschrieben.
+            if (_nachsenden.TryGetValue(device, out var ab))
+            {
+                if (!await IndexSendenAsync(device, connection, ab, ct).ConfigureAwait(false)) continue;
+
+                if (ab == 0 || batch[0].Sequence > ab)
+                {
+                    erreicht++;
+                    continue;
+                }
+            }
+
             try
             {
                 if (_indexSentTo.TryGetValue(device, out var gesendet) && gesendet)
@@ -3352,28 +3520,11 @@ public sealed partial class ShareHost
                     // sagen, unser Ordner bestehe aus diesen paar Dateien --
                     // und alles frueher Angekuendigte waere fuer sie fort.
                     //
-                    // Genommen wird deshalb der gesamte eigene Bestand. Der
+                    // Hinaus geht deshalb der gesamte eigene Bestand. Der
                     // Stapel steckt darin, denn Evaluate hat ihn vor dem
                     // Senden geschrieben.
-                    var alle = Bestand(batch);
-
-                    // Der Bestand ist ein eigener Stapel: aufsteigend, und
-                    // seine hoechste Nummer ist die letzte der Nachricht --
-                    // nicht die des kleinen Stapels, der ihn ausgeloest hat.
-                    alle.Sort(static (a, b) => a.Sequence.CompareTo(b.Sequence));
-                    var bis = alle[^1].Sequence;
-
-                    var index = new BepIndex { Folder = FolderId, LastSequence = bis };
-                    index.Files.AddRange(alle);
-
-                    _log($"[{FolderId}] -> Index an {device[..7]}: " +
-                         $"{alle.Count} Dateien (Bestand), bis {bis}.");
-
-                    await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
-                    _indexSentTo[device] = true;
-                    _lastSentTo[device] = bis;
-                    if (bis > _hoechsteGesendet) _hoechsteGesendet = bis;
-                    erreicht++;
+                    if (await IndexSendenAsync(device, connection, 0, ct).ConfigureAwait(false)) erreicht++;
+                    else Zurueckstellen(batch);
                     continue;
                 }
 
@@ -3391,32 +3542,7 @@ public sealed partial class ShareHost
                 DropConnection(device);
                 LineLost?.Invoke(device);
 
-                // Und die Dateien zurueck in die Vermerke.
-                //
-                // Der eigene Eintrag steht zu diesem Zeitpunkt schon auf
-                // "angekuendigt" -- Evaluate schreibt ihn, bevor gesendet
-                // wird, damit eine vergebene Sequenznummer nicht verlorengeht.
-                // Scheitert das Senden, gilt die Datei damit als erledigt,
-                // und der Vorfilter uebergeht sie fortan: Groesse und Zeit
-                // passen ja zum eigenen Eintrag. Sie waere nie wieder
-                // angekuendigt worden.
-                foreach (var eintrag in batch)
-                {
-                    if (eintrag.Deleted)
-                    {
-                        _removed[eintrag.Name] = DateTime.UtcNow + Loeschfrist;
-                        continue;
-                    }
-
-                    _dirty[eintrag.Name] = 0;
-
-                    // Ohne dies faellt sie beim naechsten Mal durch den
-                    // Vorfilter: an der Datei hat sich nichts geaendert, nur
-                    // das Wissen der Gegenstelle ueber sie.
-                    _force[eintrag.Name] = 0;
-                }
-
-                Wake();
+                Zurueckstellen(batch);
 
                 _log($"[{FolderId}] Ankuendigung fehlgeschlagen, Verbindung verworfen, " +
                      $"{batch.Count} Dateien erneut vorgemerkt: {ex.Message}");
@@ -3434,6 +3560,38 @@ public sealed partial class ShareHost
         }
 
         batch.Clear();
+    }
+
+    /// <summary>
+    /// Stellt einen Stapel, der nicht hinausging, in die Vermerke zurueck.
+    /// </summary>
+    /// <remarks>
+    /// Der eigene Eintrag steht zu diesem Zeitpunkt schon auf "angekuendigt"
+    /// -- Evaluate schreibt ihn, bevor gesendet wird, damit eine vergebene
+    /// Sequenznummer nicht verlorengeht. Scheitert das Senden, gilt die Datei
+    /// damit als erledigt, und der Vorfilter uebergeht sie fortan: Groesse
+    /// und Zeit passen ja zum eigenen Eintrag. Sie waere nie wieder
+    /// angekuendigt worden.
+    /// </remarks>
+    private void Zurueckstellen(List<BepFileInfo> batch)
+    {
+        foreach (var eintrag in batch)
+        {
+            if (eintrag.Deleted)
+            {
+                _removed[eintrag.Name] = DateTime.UtcNow + Loeschfrist;
+                continue;
+            }
+
+            _dirty[eintrag.Name] = 0;
+
+            // Ohne dies faellt sie beim naechsten Mal durch den Vorfilter: an
+            // der Datei hat sich nichts geaendert, nur das Wissen der
+            // Gegenstelle ueber sie.
+            _force[eintrag.Name] = 0;
+        }
+
+        Wake();
     }
 
     // ------------------------------------------------------------ Datenbank

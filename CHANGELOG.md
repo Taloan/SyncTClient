@@ -1,4 +1,4 @@
-# Änderungen
+﻿# Änderungen
 
 Die Einträge sind von Hand geschrieben. Sie nennen, was sich für den Anwender
 geändert hat, nicht die Betreffe der Commits — wer den Verlauf im einzelnen
@@ -29,6 +29,25 @@ commit-by-commit history.*
 - Die Sequenznummern der eigenen Ankündigungen sprangen zwischen zwei
   Nachrichten zurück. Syncthing nimmt das an, meldet es aber als Formfehler.
   Jetzt liegt alles, was hinausgeht, über allem, was je hinausging.
+
+**Eigener Index**
+
+- Bei jeder neuen Verbindung ging der ganze eigene Bestand hinaus, in einer
+  einzigen Nachricht — bei PRI mit einer Million Blöcken rund 40 MB. Über
+  einen Relay, der alle paar Minuten die Verbindung verlor, kam sie nie an
+  ihr Ende: die Rossibox empfing die Ankündigung nicht, zeigte den Ordner
+  "aktuell", und 66 neue Dateien standen hier stundenlang auf "wartet auf
+  die Gegenstelle"; nach jedem Abriss begann dasselbe von vorn. Jetzt gilt,
+  was die Gegenstelle in ihrer Ordnerliste über uns sagt: kennt sie unseren
+  Index unter seiner Kennung bis Sequenz n, bekommt sie nur, was darüber
+  liegt — wie bei Syncthing. Ein vollständiger Index geht in Stapeln hinaus,
+  und ein Abriss mittendrin kostet nichts: beim nächsten Mal geht es dort
+  weiter, wo die Gegenstelle stehen geblieben ist.
+- Eine Löschung wurde immer als Datei angekündigt, auch für ein Verzeichnis.
+  Syncthing verwirft das ("encountered directory when trying to remove
+  file/symlink"), und der Ordner stand bei der Rossibox dauerhaft auf "nicht
+  synchronisiert" — SyncAll wegen `.sync`, BackgroundSwitcher wegen
+  `Current`. Jetzt trägt die Löschung den Typ des Eintrags, den sie löscht.
 
 **Mehrere Gegenstellen an einem Ordner**
 
