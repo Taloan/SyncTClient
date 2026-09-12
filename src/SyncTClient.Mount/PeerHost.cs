@@ -563,6 +563,7 @@ public sealed class PeerHost : IAsyncDisposable
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _clusterConfig = new TaskCompletionSource<ClusterConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_indexEntschieden) _indexEntschieden.Clear();
+        _ersteAnkuendigung = true;
         State = PeerState.Verbindet;
         LastError = null;
         return _cts.Token;
@@ -725,6 +726,17 @@ public sealed class PeerHost : IAsyncDisposable
         catch (Exception ex) { _log($"[{host.FolderId}] {ex.Message}"); }
     }
 
+    /// <summary>
+    /// Ob die naechste Ankuendigung die erste dieser Verbindung ist.
+    /// </summary>
+    /// <remarks>
+    /// Nur die erste sagt je Ordner, wo fortgesetzt wird. Jede weitere --
+    /// beim Uebernehmen oder Loesen eines Ordners -- wiederholte dieselben
+    /// neun Zeilen, und ein geoeffneter und gleich wieder geschlossener
+    /// Dialog kostete achtzehn.
+    /// </remarks>
+    private bool _ersteAnkuendigung = true;
+
     private async Task NegotiateAsync(CancellationToken ct)
     {
         // Syncthing schickt seinen ClusterConfig sofort nach dem Hello. Kommt
@@ -784,7 +796,7 @@ public sealed class PeerHost : IAsyncDisposable
                 maxSequence = share.MaxSequenceFor(DeviceId);
             }
 
-            if (maxSequence > 0)
+            if (maxSequence > 0 && _ersteAnkuendigung)
                 _log($"[{share.FolderId}] setze bei Sequenz {maxSequence} fort ({share.IndexCount} Eintraege bekannt).");
 
             // Und umgekehrt: was die Gegenstelle von unserem Index hat.
@@ -817,6 +829,7 @@ public sealed class PeerHost : IAsyncDisposable
         }
 
         await _connection!.SendClusterConfigAsync(announcement, ct);
+        _ersteAnkuendigung = false;
     }
 
     /// <summary>

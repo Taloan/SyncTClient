@@ -74,6 +74,12 @@ commit-by-commit history.*
 
 **Protokoll**
 
+- Ein geschlossener Übernahmedialog stand als "OperationCanceledException"
+  mit Aufrufweg im Protokoll, als wäre etwas gescheitert. Ein Abbruch ist
+  kein Fehler und wird nicht mehr so gemeldet.
+- "setze bei Sequenz n fort" kam bei jeder erneuten Ankündigung für alle
+  Ordner noch einmal — ein geöffneter und gleich wieder geschlossener
+  Übernahmedialog kostete achtzehn Zeilen. Jetzt nur noch beim Verbinden.
 - "Response musste n ms warten, weil über die Verbindung gerade etwas
   anderes lief" stand alle fünf Sekunden im Protokoll, solange die Rossibox
   Blöcke abrief: jede Blockantwort wartete auf ihre Vorgänger. Das ist die

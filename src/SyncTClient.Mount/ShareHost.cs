@@ -1405,6 +1405,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             await WaitForIndexAsync(device, ct);
             _log($"[{FolderId}] Index der Gegenstelle da nach {wartete.ElapsedMilliseconds} ms.");
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Abgebrochen, nicht gescheitert: der Dialog zur Uebernahme wurde
+            // geschlossen, oder der Ordner wird angehalten. Das stand als
+            // "OperationCanceledException" mit Aufrufweg im Protokoll und
+            // sah nach einem Fehler aus.
+            throw;
+        }
         catch (Exception ex)
         {
             Fail(ex);
@@ -1465,6 +1473,11 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
             await ApplyModeAsync(ct);
             SetPhase(SyncPhase.Fertig);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Siehe PrepareAsync: ein Abbruch ist kein Fehler.
+            throw;
         }
         catch (Exception ex)
         {
