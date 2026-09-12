@@ -3256,6 +3256,9 @@ public sealed partial class ShareHost
     /// Scheitert eine Verbindung, laufen die uebrigen weiter. Der Ausfall einer
     /// Gegenstelle ist kein Grund, den anderen nichts zu sagen.
     /// </remarks>
+    /// <summary>Die hoechste Sequenznummer, die je an eine Gegenstelle ging.</summary>
+    private long _hoechsteGesendet;
+
     private async Task FlushAsync(List<BepFileInfo> batch, CancellationToken ct)
     {
         if (batch.Count == 0) return;
@@ -3273,6 +3276,37 @@ public sealed partial class ShareHost
         // nichts und nimmt der Reihenfolge jede Abhaengigkeit davon, wer den
         // Stapel gefuellt hat.
         batch.Sort(static (a, b) => a.Sequence.CompareTo(b.Sequence));
+
+        // Und hoeher als alles, was je hinausging.
+        //
+        // Sortieren ordnet den Stapel in sich; zwischen zwei Stapeln gilt
+        // dieselbe Zusage, und die hielt nicht. Eine uebernommene Datei
+        // bekommt ihre Nummer beim Empfang und wartet dann auf den naechsten
+        // Durchgang; die Bewertung vergibt derweil hoehere und schickt sie.
+        // Der naechste Stapel sprang dann zurueck: "prev 14101, bis 14063".
+        // Syncthing nimmt das noch an, meldet es aber als Formfehler -- und
+        // ein Empfaenger, der sich an die Zusage haelt, duerfte es verwerfen.
+        //
+        // Wer zu niedrig ist, bekommt eine frische Nummer. Das ist erlaubt:
+        // die Nummer sagt nichts ueber die Datei, nur ueber die Reihenfolge
+        // unserer Meldungen, und die wird gerade erst festgelegt.
+        var neu = false;
+        for (var i = 0; i < batch.Count; i++)
+        {
+            if (batch[i].Sequence > _hoechsteGesendet) continue;
+
+            var nummer = NextSequence();
+            BepFileInfo? umnummeriert;
+            lock (_indexGate) umnummeriert = _index?.Renumber(batch[i].Name, nummer);
+
+            // Steht der Eintrag nicht mehr in der Datenbank, geht er trotzdem
+            // hinaus -- mit der neuen Nummer, denn die alte ist verbraucht.
+            batch[i].Sequence = nummer;
+            if (umnummeriert is not null) batch[i] = umnummeriert;
+            neu = true;
+        }
+
+        if (neu) batch.Sort(static (a, b) => a.Sequence.CompareTo(b.Sequence));
 
         var last = batch[^1].Sequence;
         var erreicht = 0;
@@ -3323,17 +3357,28 @@ public sealed partial class ShareHost
                     // Senden geschrieben.
                     var alle = Bestand(batch);
 
-                    var index = new BepIndex { Folder = FolderId, LastSequence = last };
+                    // Der Bestand ist ein eigener Stapel: aufsteigend, und
+                    // seine hoechste Nummer ist die letzte der Nachricht --
+                    // nicht die des kleinen Stapels, der ihn ausgeloest hat.
+                    alle.Sort(static (a, b) => a.Sequence.CompareTo(b.Sequence));
+                    var bis = alle[^1].Sequence;
+
+                    var index = new BepIndex { Folder = FolderId, LastSequence = bis };
                     index.Files.AddRange(alle);
 
                     _log($"[{FolderId}] -> Index an {device[..7]}: " +
-                         $"{alle.Count} Dateien (Bestand), bis {last}.");
+                         $"{alle.Count} Dateien (Bestand), bis {bis}.");
 
                     await connection.SendIndexAsync(index, ct).ConfigureAwait(false);
                     _indexSentTo[device] = true;
+                    _lastSentTo[device] = bis;
+                    if (bis > _hoechsteGesendet) _hoechsteGesendet = bis;
+                    erreicht++;
+                    continue;
                 }
 
                 _lastSentTo[device] = last;
+                if (last > _hoechsteGesendet) _hoechsteGesendet = last;
                 erreicht++;
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)

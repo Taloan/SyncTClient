@@ -447,6 +447,37 @@ public sealed class PersistentFolderIndex : IDisposable
     }
 
     /// <summary>
+    /// Gibt einem eigenen Eintrag eine neue Sequenznummer; alles andere
+    /// bleibt, auch der Zustand.
+    /// </summary>
+    /// <returns>Der Eintrag mit der neuen Nummer, oder null, wenn es ihn nicht gibt.</returns>
+    public BepFileInfo? Renumber(string name, long sequence)
+    {
+        using var gate = _gate.EnterScope();
+
+        byte[] blob;
+        using (var lesen = _db.CreateCommand())
+        {
+            lesen.CommandText = "SELECT info FROM local_files WHERE name = $name";
+            lesen.Parameters.AddWithValue("$name", name);
+            if (lesen.ExecuteScalar() is not byte[] gelesen) return null;
+            blob = gelesen;
+        }
+
+        var file = BepFileInfo.Parser.ParseFrom(blob);
+        file.Sequence = sequence;
+
+        using var schreiben = _db.CreateCommand();
+        schreiben.CommandText = "UPDATE local_files SET sequence = $sequence, info = $info WHERE name = $name";
+        schreiben.Parameters.AddWithValue("$name", name);
+        schreiben.Parameters.AddWithValue("$sequence", sequence);
+        schreiben.Parameters.AddWithValue("$info", file.ToByteArray());
+        schreiben.ExecuteNonQuery();
+
+        return file;
+    }
+
+    /// <summary>
     /// Nimmt den eigenen Eintrag fort. Danach gilt fuer diesen Namen allein,
     /// was die Gegenstelle fuehrt.
     /// </summary>
