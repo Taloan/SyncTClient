@@ -89,10 +89,33 @@ public sealed partial class ShareHost
     /// mitgenommen wird, entscheidet niemand ausser dem, dem er gehoert.
     /// </remarks>
     public static bool IsHousekeeping(string name)
-        => Unterhalb(name, VersionsFolder)
-           || Unterhalb(name, MarkerFolder)
+        => EnthaeltOrdner(name, VersionsFolder)
+           || EnthaeltOrdner(name, MarkerFolder)
            || Heisst(name, IgnoreFile)
            || IstArbeitsdatei(name);
+
+    /// <summary>
+    /// Ob der Ordner an irgendeiner Stelle des Pfads steht, nicht nur an
+    /// der Wurzel.
+    /// </summary>
+    /// <remarks>
+    /// Bisher galt nur die Wurzel: ".stfolder" und ".stfolder/...". Ein
+    /// "Phone/Pictures/.stfolder" fiel durch. So ein Eintrag entsteht, wenn
+    /// ein Unterordner auf einem anderen Geraet selbst eine Syncthing-Wurzel
+    /// ist -- die Markierung dieses Geraets steht dann im Index der
+    /// Gegenstelle wie ein gewoehnliches Verzeichnis. Verwaltung ist sie
+    /// trotzdem, und im Auswahlbaum stand sie zum An- und Abwaehlen.
+    ///
+    /// Trifft es einen Ordner, gehoert alles darunter dazu, so wie bei den
+    /// Arbeitsdateien.
+    /// </remarks>
+    private static bool EnthaeltOrdner(string name, string ordner)
+    {
+        foreach (var teil in name.Split('/'))
+            if (teil.Equals(ordner, StringComparison.OrdinalIgnoreCase)) return true;
+
+        return false;
+    }
 
     /// <summary>
     /// Der eigene Namensraum von Syncthing.
@@ -144,10 +167,6 @@ public sealed partial class ShareHost
         var letzter = schnitt < 0 ? name : name[(schnitt + 1)..];
         return letzter.Equals(dateiname, StringComparison.OrdinalIgnoreCase);
     }
-
-    private static bool Unterhalb(string name, string ordner)
-        => name.Equals(ordner, StringComparison.OrdinalIgnoreCase)
-           || name.StartsWith(ordner + "/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Vermerkt, dass diese Namen neu zu betrachten sind.</summary>
     /// <summary>Nimmt Namen entgegen und meldet, wie viele neu dazukamen.</summary>
