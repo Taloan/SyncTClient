@@ -1715,6 +1715,34 @@ public sealed partial class ShareHost
         Outgoing = ausgehend;
         OutgoingBytes = ausgehendBytes;
 
+        // Und was hier liegt und noch nicht hinaus ist. Die Namen stehen in
+        // zwei Listen: die eine wartet auf die Bewertung, die andere auf das
+        // Ende einer Frist.
+        var ungesagt = _dirty.Count + _wartend.Count;
+        if (ungesagt != Unannounced)
+        {
+            if (ungesagt > 0)
+            {
+                var jetzt = DateTime.UtcNow;
+                var namen = _wartend
+                    .Select(w => w.Value > jetzt
+                        ? $"{w.Key} (wartet bis {w.Value.ToLocalTime():HH:mm:ss})"
+                        : w.Key)
+                    .Concat(_dirty.Keys)
+                    .Take(5)
+                    .ToList();
+
+                _log($"[{FolderId}] hier geaendert, noch nicht angekuendigt: {ungesagt} Dateien: " +
+                     string.Join(", ", namen) +
+                     (ungesagt > namen.Count ? $" und {ungesagt - namen.Count} weitere" : "") + ".");
+            }
+            else
+            {
+                _log($"[{FolderId}] alle lokalen Aenderungen sind angekuendigt.");
+            }
+        }
+        Unannounced = ungesagt;
+
         Outstanding = offen;
         OutstandingBytes = bytes;
         OutstandingItems = offeneListe;
@@ -2575,14 +2603,40 @@ public sealed partial class ShareHost
             // und stimmt mit der ueberein, die wir fuehren.
             if (known.Sequence == 0) UebernehmenUndWeitergeben(known);
 
-            return Done(name);
+            // Gleicher Inhalt, aber die Zeit auf der Platte ist eine andere
+            // als die im Eintrag. Damit war es bisher nicht getan: der
+            // Durchgang vergleicht Groesse und Zeit, fand die Datei im
+            // naechsten Takt wieder als "geaendert", die Bewertung hashte sie
+            // erneut, stellte gleichen Inhalt fest -- und liess die Zeit
+            // stehen. Gemessen an elf Dateien eines Katalogs: jeder
+            // Durchgang meldete sie neu, darunter eine mit 132 MB, die jedes
+            // Mal vollstaendig gelesen wurde. Und solange die Zeit nicht
+            // passte, galt die Datei als "hier geaendert und noch nicht
+            // angekuendigt": eingehende Fassungen warteten darauf, dass sie
+            // hinausgeht, und das tat sie nie.
+            //
+            // Stammt der Eintrag von einer Gegenstelle, ist ihre Zeit die
+            // richtige -- die Datei ist inhaltlich deren Fassung, und so
+            // stuende sie auch da, waere sie uebertragen worden. Ist der
+            // Eintrag unser eigener, hat jemand die Zeit veraendert, und das
+            // ist eine Aenderung wie jede andere: sie wird angekuendigt, mit
+            // den bekannten Bloecken, ohne dass etwas uebertragen werden muss.
+            if (known.ModifiedS == modified) return Done(name);
+
+            if (known.ModifiedBy != OwnDeviceId.ShortId() && ZeitAngleichen(path, known))
+                return Done(name);
         }
 
         // Zum ersten Mal gesehen, und der Inhalt ist genau der, den die
         // Gegenstelle angekuendigt hat: die Datei ist von dort gekommen. Sie
         // wird in den eigenen Bestand uebernommen, aber nicht angekuendigt.
+        //
+        // Die Zeit auf der Platte wird dabei auf die der Gegenstelle gesetzt,
+        // damit Eintrag und Datei zusammenpassen; siehe oben. Gelingt das
+        // nicht, wird die Datei als eigene Fassung angekuendigt.
         if (known is null && PeerCopy(announced) is { } peer &&
-            !peer.Deleted && peer.Size == length && peer.BlocksHash.Span.SequenceEqual(blocksHash))
+            !peer.Deleted && peer.Size == length && peer.BlocksHash.Span.SequenceEqual(blocksHash)
+            && (peer.ModifiedS == modified || ZeitAngleichen(path, peer)))
         {
             UebernehmenUndWeitergeben(peer);
             return Done(name);
@@ -2886,6 +2940,26 @@ public sealed partial class ShareHost
     {
         _attempts.TryRemove(name, out _);
         return null;
+    }
+
+    /// <summary>
+    /// Setzt die Aenderungszeit der Datei auf die des Eintrags.
+    /// </summary>
+    /// <returns><c>false</c>, wenn die Datei das nicht zuliess -- etwa, weil
+    /// ein Programm sie exklusiv haelt.</returns>
+    private bool ZeitAngleichen(string path, BepFileInfo eintrag)
+    {
+        try
+        {
+            var zeit = DateTimeOffset.FromUnixTimeSeconds(eintrag.ModifiedS).UtcDateTime
+                .AddTicks(eintrag.ModifiedNs / 100);
+            File.SetLastWriteTimeUtc(path, zeit);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

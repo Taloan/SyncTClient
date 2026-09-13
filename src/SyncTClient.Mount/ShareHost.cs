@@ -1261,6 +1261,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     public long OutgoingBytes { get; private set; }
 
     /// <summary>
+    /// Dateien, die hier geaendert und noch nicht angekuendigt sind.
+    /// </summary>
+    /// <remarks>
+    /// Der Rueckstand zaehlt, was von der Gegenstelle fehlt, und Outgoing,
+    /// was sie noch nicht abgerufen hat. Dazwischen lag ein Zustand, den
+    /// keine Zahl nannte: eine Datei, die hier geschrieben wurde und deren
+    /// Ankuendigung noch aussteht -- weil sie in der Ruhefrist liegt, weil
+    /// ein Programm sie haelt, oder weil die Bewertung sie noch nicht
+    /// erreicht hat. Windows zeigt sie als "ausstehend", die Gegenstelle
+    /// bekommt auf ihre Anfragen "seit der Ankuendigung geaendert", und die
+    /// Zeile sagte "abgeglichen".
+    /// </remarks>
+    public int Unannounced { get; private set; }
+
+    /// <summary>
     /// Was im Ordner steht, Platzhalter eingerechnet.
     /// </summary>
     /// <remarks>
@@ -2150,8 +2165,23 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         TransferStarted?.Invoke(transfer);
         transfer.State = TransferState.Laeuft;
 
-        // Waehrend wir schreiben, ist jede Meldung darueber unsere eigene.
-        using var hold = HoldHydration(name);
+        // Waehrend wir die Datei selbst schreiben, ist jede Meldung darueber
+        // unsere eigene. Die Sperre dafuer beginnt erst nach der Uebertragung.
+        //
+        // Sie umfasste bisher auch die Uebertragung in die Nebendatei -- und
+        // die beruehrt die Datei am Ort gar nicht. Solange die Sperre steht,
+        // uebergeht die Bewertung den Namen: eine eigene Aenderung an der
+        // Datei wird nicht angekuendigt, bis die Uebertragung zu Ende ist.
+        // Bei einer Uebertragung, die nicht zu Ende geht, heisst das: nie.
+        //
+        // Gemessen am 13.09. an zwei Rechnern mit demselben Katalog: jede
+        // Seite hatte ihre Fassung angekuendigt, jede holte die der anderen,
+        // jede lehnte die Anfragen der anderen ab ("seit der Ankuendigung
+        // geaendert"), weil ihre Datei inzwischen weitergeschrieben war --
+        // und keine kuendigte die neue Fassung an, weil die Uebertragung
+        // noch lief. Beide standen auf "offen", minutenlang, bei geschlossenem
+        // Programm auf beiden Seiten.
+        IDisposable? hold = null;
 
         var temp = TempPfad();
 
@@ -2187,6 +2217,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                     schritt = "den Inhalt holen";
                 }
             }
+
+            hold = HoldHydration(name);
 
             schritt = "den Zeitstempel setzen";
             File.SetLastWriteTimeUtc(temp, DateTimeOffset.FromUnixTimeSeconds(file.ModifiedS).UtcDateTime);
@@ -2263,6 +2295,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
         finally
         {
+            hold?.Dispose();
             TransferFinished?.Invoke(transfer);
         }
     }

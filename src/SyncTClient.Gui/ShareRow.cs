@@ -248,6 +248,12 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
                 return App.S("R.Outgoing",
                     Format.Count(Share.Outgoing), Format.Bytes(Share.OutgoingBytes));
 
+            // Hier geaendert und noch nicht angekuendigt ist ebenfalls nicht
+            // abgeglichen: Windows zeigt diese Dateien als ausstehend, und
+            // die Gegenstelle kennt ihren Stand noch nicht.
+            if (Share.Unannounced > 0)
+                return App.S("R.Unannounced", Format.Count(Share.Unannounced));
+
             // Die Spalte daneben nennt den Zustand bereits. Ihn hier zu
             // wiederholen fuellt Platz und sagt nichts.
             if (!Busy)

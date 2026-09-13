@@ -360,7 +360,21 @@ public sealed partial class ShareHost
 
         if (!ungesagt) _wartetAufAnkuendigung.TryRemove(name, out _);
 
-        if (ungesagt && !theirs.Deleted)
+        // Auch eine Loeschung wartet. Bisher galt das Warten nur fuer eine
+        // Fassung mit Inhalt; eine Loeschung ging an dieser Pruefung vorbei
+        // in den Vergleich unten -- und dort stand fuer unsere Datei noch
+        // der alte Vektor, denn die Aenderung auf der Platte war nie
+        // angekuendigt. Die Loeschung der Gegenstelle sah damit neuer aus
+        // als eine Datei, die hier eben erst geschrieben worden war, und
+        // wurde ausgefuehrt. Gemessen am 13.09.: 79 Dateien eines offenen
+        // Katalogs entfernt, weil die Gegenstelle einen aelteren Stand des
+        // Ordners fuer geloescht erklaert hatte.
+        //
+        // Syncthing verhaelt sich anders, und zwar richtig: der Durchgang
+        // gibt der geaenderten Datei zuerst ihren eigenen Zaehler, und erst
+        // dann wird verglichen. Eine Aenderung neben einer Loeschung ist
+        // dann ein Konflikt, und in dem gewinnt die Aenderung.
+        if (ungesagt)
         {
             // Vergleichbar ist an dieser Stelle nur, was wir zuletzt
             // angekuendigt haben -- die Aenderung auf der Platte steht in
@@ -446,6 +460,19 @@ public sealed partial class ShareHost
                 // etwas zu tun.
                 case VersionOrder.Gleich when File.Exists(path) != theirs.Deleted:
                     return;
+
+                // Eine Aenderung neben einer Loeschung: die Aenderung gewinnt.
+                // So haelt es Syncthing, und es ist die einzige Regel, die
+                // keinen Inhalt kostet -- eine Loeschung ist nach dem
+                // Loeschen nicht mehr einzuholen, eine behaltene Datei kann
+                // jederzeit noch geloescht werden. Die Einstellung zur
+                // Konfliktloesung gilt fuer zwei Fassungen mit Inhalt; eine
+                // Konfliktkopie neben einem geloeschten Namen waere keine
+                // Loesung, sondern ein Umweg zum selben Verlust.
+                case VersionOrder.Nebeneinander when theirs.Deleted:
+                    bilanz.Konflikte++;
+                    if (!KeepMine(name, theirs, "eine Aenderung gilt mehr als eine Loeschung")) return;
+                    break;
 
                 case VersionOrder.Nebeneinander:
                     bilanz.Konflikte++;
