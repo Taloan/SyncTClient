@@ -317,6 +317,7 @@ public sealed class BepConnection : IAsyncDisposable
 
                     case MessageType.Response:
                         var response = Response.Parser.ParseFrom(payload);
+                        Volatile.Write(ref _letzteAntwort, Environment.TickCount64);
                         if (_pending.TryRemove(response.Id, out var waiter))
                             waiter.TrySetResult(response);
                         break;
@@ -481,8 +482,21 @@ public sealed class BepConnection : IAsyncDisposable
     /// Zwei Minuten sind grosszuegig. Ein Block ist hoechstens 16 MB; wer
     /// dafuer laenger braucht, hat ein anderes Problem als eine zu knappe
     /// Schranke.
+    ///
+    /// Gemessen wird aber nicht je Anfrage, sondern an der Leitung: die
+    /// Frist gilt, solange gar keine Antwort mehr hereinkommt. Die
+    /// Gegenstelle beantwortet Anfragen der Reihe nach; stehen 45 Dateien
+    /// zu je 15 MB in der Schlange, kommt die Antwort auf die letzte
+    /// Anfrage ueber ein Relay erst nach drei Minuten -- die Leitung war
+    /// die ganze Zeit ausgelastet, nichts war tot. Zwei Dateien von 47
+    /// blieben so als "keine Antwort in 120 s" liegen, waehrend 500 MB
+    /// ankamen. Syncthing kennt gar keine Frist je Anfrage, nur die fuer
+    /// die Leitung als Ganzes.
     /// </remarks>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(2);
+
+    /// <summary>Wann zuletzt eine Antwort auf einen Block hereinkam.</summary>
+    private long _letzteAntwort = Environment.TickCount64;
 
     /// <summary>Nach dieser Zeit ohne Antwort wird es einmal gesagt.</summary>
     private static readonly TimeSpan Nachfrist = TimeSpan.FromSeconds(10);
@@ -519,10 +533,24 @@ public sealed class BepConnection : IAsyncDisposable
 
             await using var registration = ct.Register(() => waiter.TrySetCanceled(ct));
 
-            using var frist = new CancellationTokenSource(RequestTimeout);
-            await using var abgelaufen = frist.Token.Register(() => waiter.TrySetException(
-                new TimeoutException(
-                    $"Keine Antwort auf Block {blockNo} von \"{name}\" in {RequestTimeout.TotalSeconds:0} s.")));
+            // Die Frist laeuft ab, wenn die Leitung seit zwei Minuten keine
+            // Antwort mehr geliefert hat -- nicht, wenn diese eine Anfrage
+            // so lange in der Schlange stand. Siehe RequestTimeout.
+            while (!waiter.Task.IsCompleted)
+            {
+                var seitLetzter = Environment.TickCount64 - Volatile.Read(ref _letzteAntwort);
+                var rest = RequestTimeout - TimeSpan.FromMilliseconds(seitLetzter);
+
+                if (rest <= TimeSpan.Zero)
+                {
+                    waiter.TrySetException(new TimeoutException(
+                        $"Keine Antwort auf Block {blockNo} von \"{name}\"; die Leitung liefert seit " +
+                        $"{RequestTimeout.TotalSeconds:0} s keine Antworten mehr."));
+                    break;
+                }
+
+                await Task.WhenAny(waiter.Task, Task.Delay(rest, ct)).ConfigureAwait(false);
+            }
 
             var response = await waiter.Task.ConfigureAwait(false);
 

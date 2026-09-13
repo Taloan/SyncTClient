@@ -30,6 +30,38 @@ commit-by-commit history.*
   Nachrichten zurück. Syncthing nimmt das an, meldet es aber als Formfehler.
   Jetzt liegt alles, was hinausgeht, über allem, was je hinausging.
 
+**Immer lokal**
+
+- Auch "immer lokal" legte für jede neue oder geänderte Fassung der
+  Gegenstelle einen Platzhalter an: die vorhandene Datei wurde entfernt, ein
+  leerer Platzhalter trat an ihre Stelle, der Inhalt kam später — oder
+  nicht. Über ein Relay, das die Verbindung verlor, blieben so 47 Fotos als
+  leere Platzhalter zurück; Lightroom meldete sie beim Import als
+  beschädigt, und die Fassung, die vorher dort lag, war fort. Jetzt wie bei
+  Syncthing: die Fassung der Gegenstelle wird vollständig in eine Nebendatei
+  übertragen und erst dann an die Stelle der alten gesetzt. Bis dahin bleibt
+  die alte Datei unversehrt, und eine neue erscheint erst, wenn sie ganz da
+  ist. Platzhalter gibt es nur noch bei "bei Bedarf".
+- Vor dem Ersetzen wird geprüft, ob die Datei inzwischen hier geschrieben
+  wurde. Dann wird sie nicht überschrieben, sondern angekündigt, und der
+  Vergleich der Fassungen entscheidet beim nächsten Mal.
+- Nach dem ersten Herunterladen stand die Zeile auf "in sync", auch wenn
+  Dateien fehlten ("45 von 47 geholt, 2 fehlen weiterhin", 7409 gegen 7407).
+  Jetzt misst der nächste Durchgang den Rückstand; fertig ist erst, was er
+  bestätigt.
+- Ein gescheiterter Abruf wurde erst beim nächsten Durchgang über den Ordner
+  erneut versucht. Jetzt bleibt er vorgemerkt und wird nach einer Minute
+  wiederholt.
+
+**Übertragung**
+
+- Die Frist für eine Blockanfrage (zwei Minuten) galt je Anfrage. Die
+  Gegenstelle beantwortet der Reihe nach; standen 45 Dateien in der
+  Schlange, kam die Antwort auf die letzte über das Relay erst nach drei
+  Minuten, und zwei Dateien blieben mit "keine Antwort in 120 s" liegen,
+  während 500 MB ankamen. Jetzt gilt die Frist für die Leitung: sie läuft
+  ab, wenn zwei Minuten lang gar keine Antwort mehr hereinkommt.
+
 **Fehlerdatei**
 
 - Die Fehlerdatei füllte sich mit Aufruflisten, die keinen Fehler des

@@ -1472,7 +1472,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             State = ShareState.Bereit;
 
             await ApplyModeAsync(ct);
-            SetPhase(SyncPhase.Fertig);
+
+            // Nicht "fertig", sondern "Abgleich" -- fertig ist erst, was der
+            // Durchgang ueber den Ordner bestaetigt. Hier stand Fertig ohne
+            // Bedingung: "45 von 47 geholt, 2 fehlen weiterhin", und die
+            // Zeile zeigte trotzdem "in sync" mit 7409 gegen 7407 Dateien.
+            // Der naechste Durchgang misst den Rueckstand; ist er null, wird
+            // die Phase nach der Ruhefrist auf Fertig gesetzt, sonst bleibt
+            // sie beim Abgleich mit dem, was fehlt.
+            SetPhase(SyncPhase.Abgleich);
+            _lastScan = DateTime.MinValue;
+            Wake();
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -2181,6 +2191,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             schritt = "den Zeitstempel setzen";
             File.SetLastWriteTimeUtc(temp, DateTimeOffset.FromUnixTimeSeconds(file.ModifiedS).UtcDateTime);
 
+            // Liegt hier inzwischen eine Datei, die nicht die ist, die wir
+            // zuletzt angekuendigt haben, hat jemand geschrieben, waehrend
+            // uebertragen wurde. Die wird nicht ueberschrieben: sie wird
+            // angekuendigt, und der Vergleich der Fassungen entscheidet
+            // beim naechsten Mal -- so prueft es auch Syncthing, bevor es
+            // eine Datei ersetzt.
+            schritt = "die vorhandene Datei pruefen";
+            if (UnangekuendigtGeaendert(name, path))
+            {
+                _dirty[name] = 0;
+                Wake();
+                throw new IOException("hier inzwischen geaendert und noch nicht angekuendigt; " +
+                                      "die Fassung der Gegenstelle wartet.");
+            }
+
             // Erst jetzt an die Stelle der leeren Datei. Ein Abbruch unterwegs
             // laesst den Platzhalter stehen, statt eine halbe Datei zu
             // hinterlassen.
@@ -2416,10 +2441,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// </remarks>
     private async Task FetchMissingAsync(CancellationToken ct)
     {
-        if (_config.Mode != ShareMode.AlwaysLocal || IsPaused) return;
-        if (_connections.IsEmpty) return;
+        if (IsPaused || _connections.IsEmpty) return;
 
-        var offen = _ohneInhalt;
+        // Auch ein Ordner "bei Bedarf" kann Zweige "immer lokal" haben; was
+        // dort zu uebertragen ist, steht in _zuUebertragen.
+        if (_config.Mode != ShareMode.AlwaysLocal && _zuUebertragen.IsEmpty) return;
+
+        // Platzhalter ohne Inhalt aus frueheren Laeufen, und alles, was die
+        // Gegenstelle neu oder geaendert fuehrt (siehe _zuUebertragen).
+        var offen = _ohneInhalt.Union(_zuUebertragen.Keys, StringComparer.Ordinal).ToList();
         if (offen.Count == 0) return;
 
         // "Platzhalter" stand hier, seit "vollstaendig lokal" welche anlegte.
@@ -2427,6 +2457,7 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         _log($"[{FolderId}] {offen.Count} fehlende Inhalte werden nachgeholt ...");
 
         var done = 0;
+        var gescheitert = new ConcurrentBag<string>();
         SetPhase(SyncPhase.Inhalte, 0, offen.Count);
 
         await Parallel.ForEachAsync(
@@ -2437,9 +2468,12 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 try
                 {
                     await MaterialiseAsync(LocalPathOf(name), token).ConfigureAwait(false);
+                    _zuUebertragen.TryRemove(name, out _);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    gescheitert.Add(name);
+
                     // Je Name einmal. Der Durchgang laeuft jede Minute, und
                     // ein Grund, der sich nicht aendert, gehoert nicht
                     // sechzigmal je Stunde ins Protokoll.
@@ -2450,9 +2484,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 SetPhase(SyncPhase.Inhalte, Interlocked.Increment(ref done), offen.Count);
             }).ConfigureAwait(false);
 
-        // Der naechste Durchgang misst neu. Bis dahin gilt die Liste als
-        // abgearbeitet -- sonst liefe sie im naechsten Takt noch einmal.
-        _ohneInhalt = [];
+        // Was kam, ist erledigt; der naechste Durchgang misst ohnehin neu.
+        // Was nicht kam, bleibt vorgemerkt und wird in einer Minute erneut
+        // versucht. Vorher wurde die ganze Liste geleert, und erst der
+        // naechste Durchgang ueber den Ordner fuellte sie wieder -- zwei
+        // Dateien, deren Abruf an einer ausgelasteten Leitung gescheitert
+        // war, blieben so bis dahin Platzhalter.
+        _ohneInhalt = [.. gescheitert.Where(n => !_zuUebertragen.ContainsKey(n))];
+
+        if (!gescheitert.IsEmpty)
+            _log($"[{FolderId}] {offen.Count - gescheitert.Count} von {offen.Count} geholt, " +
+                 $"{gescheitert.Count} werden in einer Minute erneut versucht.");
 
         // Und die Phase zurueckgeben, aus demselben Grund wie beim ersten
         // Herunterladen: "Inhalte" beendet niemand von selbst.
@@ -3152,6 +3194,31 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// Datei Inhalt haelt, darf nicht an zwei Stellen unterschiedlich
     /// beantwortet werden.
     /// </remarks>
+    /// <summary>
+    /// Ob an diesem Pfad eine Datei mit Inhalt liegt, die nicht unserem
+    /// eigenen Eintrag entspricht -- also eine Aenderung, die noch in
+    /// keiner Ankuendigung steht.
+    /// </summary>
+    private bool UnangekuendigtGeaendert(string name, string path)
+    {
+        var info = new System.IO.FileInfo(path);
+        if (!info.Exists || IsPlaceholder(path)) return false;
+
+        lock (_indexGate)
+        {
+            if (_index is not null && _index.TryGetLocal(name, out var eigene) && !eigene.Deleted)
+                return eigene.Size != info.Length
+                       || eigene.ModifiedS != new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds();
+        }
+
+        // Ohne eigenen Eintrag: die Datei kann die vorige Fassung der
+        // Gegenstelle sein, die einmal ohne eigenen Eintrag uebernommen
+        // wurde -- oder eine hier neu geschriebene. Das unterscheidet nur
+        // der Beobachter: eine Aenderung, die er gemeldet hat, steht in den
+        // Vermerken.
+        return _dirty.ContainsKey(name) || _wartend.ContainsKey(name);
+    }
+
     private static bool FehltHier(string path)
     {
         if (!File.Exists(path)) return true;

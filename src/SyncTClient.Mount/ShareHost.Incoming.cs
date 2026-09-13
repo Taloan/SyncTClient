@@ -200,14 +200,16 @@ public sealed partial class ShareHost
         public int Ersetzt;
         public int Entfernt;
         public int Konflikte;
+        public int ZuHolen;
 
-        public bool Leer => Angelegt + Ersetzt + Entfernt + Konflikte == 0;
+        public bool Leer => Angelegt + Ersetzt + Entfernt + Konflikte + ZuHolen == 0;
 
         public override string ToString()
         {
-            var teile = new List<string>(4);
+            var teile = new List<string>(5);
             if (Angelegt > 0) teile.Add($"{Angelegt} neu");
             if (Ersetzt > 0) teile.Add($"{Ersetzt} geaendert");
+            if (ZuHolen > 0) teile.Add($"{ZuHolen} zu uebertragen");
             if (Entfernt > 0) teile.Add($"{Entfernt} entfernt");
             if (Konflikte > 0) teile.Add($"{Konflikte} Konflikt(e)");
             return string.Join(", ", teile);
@@ -481,7 +483,71 @@ public sealed partial class ShareHost
             return;
         }
 
+        // "Immer lokal": kein Platzhalter. Die Fassung der Gegenstelle wird
+        // vollstaendig uebertragen und erst dann an die Stelle der
+        // vorhandenen Datei gesetzt; bis dahin bleibt die Datei, wie sie
+        // ist, und eine neue erscheint erst, wenn sie ganz da ist.
+        if (ImmerLokal(name))
+        {
+            ZumHolenVormerken(name, path, theirs, bilanz);
+            return;
+        }
+
         PlaceRemoteVersion(name, path, theirs, bilanz);
+    }
+
+    /// <summary>
+    /// Namen, deren Fassung der Gegenstelle noch zu uebertragen ist -- in
+    /// einem Ordner oder Zweig, der "immer lokal" ist.
+    /// </summary>
+    /// <remarks>
+    /// Bis hierher legte auch "immer lokal" fuer jede geaenderte oder neue
+    /// Fassung der Gegenstelle einen Platzhalter an: die vorhandene Datei
+    /// wurde entfernt, ein leerer Platzhalter trat an ihre Stelle, und der
+    /// Inhalt kam spaeter -- oder nicht. Ueber ein Relay, das die Verbindung
+    /// verlor, blieben so 47 Fotos als leere Platzhalter zurueck; Lightroom
+    /// meldete sie beim Import als beschaedigt, und die Fassung, die vorher
+    /// dort lag, war fort.
+    ///
+    /// Syncthing legt nie einen Platzhalter an. Es uebertraegt in eine
+    /// Nebendatei und setzt sie erst an die Stelle der alten, wenn sie
+    /// vollstaendig ist. Bis dahin ist die alte Datei unversehrt, und eine
+    /// neue gibt es fuer andere Programme erst, wenn sie ganz da ist. So
+    /// ist es jetzt auch hier; der Weg ist derselbe wie beim ersten
+    /// Herunterladen (MaterialiseKernAsync). Platzhalter gibt es nur noch
+    /// dort, wo sie gemeint sind: bei "bei Bedarf".
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, byte> _zuUebertragen =
+        new(StringComparer.Ordinal);
+
+    /// <summary>Ob dieser Name ohne Platzhalter, mit Inhalt, zu fuehren ist.</summary>
+    private bool ImmerLokal(string name) => !ZaehltZumCache(name);
+
+    private void ZumHolenVormerken(string name, string path, BepFileInfo theirs, Bilanz bilanz)
+    {
+        var info = new System.IO.FileInfo(path);
+
+        // Was schon so dasteht, wird nicht angefasst; siehe PlaceRemoteVersion.
+        if (info.Exists
+            && info.Length == theirs.Size
+            && new DateTimeOffset(info.LastWriteTimeUtc).ToUnixTimeSeconds() == theirs.ModifiedS
+            && !IsPlaceholder(path))
+        {
+            // Mit ihrer Fassung als eigener Eintrag, wie Syncthing es tut:
+            // der Durchgang sieht Groesse und Zeit passen und kuendigt
+            // nichts an, und der Vergleich beim naechsten Mal hat einen
+            // Eintrag, gegen den er messen kann.
+            UebernehmenUndWeitergeben(theirs);
+            _zuUebertragen.TryRemove(name, out _);
+            return;
+        }
+
+        if (_zuUebertragen.TryAdd(name, 0)) bilanz.ZuHolen++;
+
+        // Der Abruf laeuft im Takt des Nachholens; er soll nicht erst in
+        // einer Minute beginnen.
+        _lastFetch = DateTime.MinValue;
+        Wake();
     }
 
     /// <summary>
