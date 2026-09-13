@@ -1273,7 +1273,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// bekommt auf ihre Anfragen "seit der Ankuendigung geaendert", und die
     /// Zeile sagte "abgeglichen".
     /// </remarks>
-    public int Unannounced { get; private set; }
+    public int Unannounced => _dirty.Count + _wartend.Count;
+
+    /// <summary>Der zuletzt im Protokoll genannte Stand von <see cref="Unannounced"/>.</summary>
+    /// <remarks>
+    /// Die Zahl selbst ist immer die aktuelle. Sie stand vorher nur nach
+    /// einem Durchgang fest, und der laeuft stuendlich: vier Dateien, die
+    /// laengst angekuendigt waren, standen eine Stunde lang in der Zeile.
+    /// </remarks>
+    private int _ungesagtGemeldet;
 
     /// <summary>
     /// Was im Ordner steht, Platzhalter eingerechnet.
@@ -4089,7 +4097,17 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
         var info = new System.IO.FileInfo(local);
         if (!info.Exists)
+        {
+            // Die Gegenstelle fragt, weil unsere Ankuendigung sagt, die
+            // Datei liege hier. Tut sie das nicht mehr, ist die Ankuendigung
+            // falsch, und sie wird berichtigt -- sonst fragt die Gegenstelle
+            // in jeder Minute dasselbe. Gemessen am 13.09.: 168 abgelehnte
+            // Anfragen je Minute nach Dateien eines abgewaehlten Zweigs, ueber
+            // Stunden. Der Durchgang meldet solche Namen nicht: was abgewaehlt
+            // ist, gilt ihm als "gehoert nicht hierher", nicht als fehlend.
+            NichtVorhandenMelden(request.Name);
             return Deny(request, ErrorCode.NoSuchFile, "liegt hier nicht");
+        }
 
         if (((uint)info.Attributes & (RecallOnDataAccess | RecallOnOpen | Offline)) != 0)
             return Deny(request, ErrorCode.NoSuchFile, "liegt hier nur als Platzhalter");

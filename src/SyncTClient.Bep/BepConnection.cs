@@ -536,9 +536,22 @@ public sealed class BepConnection : IAsyncDisposable
             // Die Frist laeuft ab, wenn die Leitung seit zwei Minuten keine
             // Antwort mehr geliefert hat -- nicht, wenn diese eine Anfrage
             // so lange in der Schlange stand. Siehe RequestTimeout.
+            //
+            // Gerechnet wird ab der letzten Antwort oder ab dem Absenden
+            // dieser Anfrage, je nachdem, was spaeter war. Ohne das Absenden
+            // als Bezug lief die Frist auf einer Leitung, ueber die zwei
+            // Minuten lang nichts angefordert wurde, schon ab: die erste
+            // Anfrage danach galt sofort als unbeantwortet, bevor die
+            // Gegenstelle sie ueberhaupt lesen konnte. Gemessen am 13.09.:
+            // "Keine Antwort auf Block 2" in derselben Sekunde wie die
+            // Anfrage, die Antwort kam 44 Sekunden spaeter, als niemand mehr
+            // wartete -- und in der naechsten Minute dasselbe noch einmal.
+            var gesendet = Environment.TickCount64;
+
             while (!waiter.Task.IsCompleted)
             {
-                var seitLetzter = Environment.TickCount64 - Volatile.Read(ref _letzteAntwort);
+                var bezug = Math.Max(Volatile.Read(ref _letzteAntwort), gesendet);
+                var seitLetzter = Environment.TickCount64 - bezug;
                 var rest = RequestTimeout - TimeSpan.FromMilliseconds(seitLetzter);
 
                 if (rest <= TimeSpan.Zero)

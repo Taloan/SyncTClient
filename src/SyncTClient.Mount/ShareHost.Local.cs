@@ -1719,7 +1719,7 @@ public sealed partial class ShareHost
         // zwei Listen: die eine wartet auf die Bewertung, die andere auf das
         // Ende einer Frist.
         var ungesagt = _dirty.Count + _wartend.Count;
-        if (ungesagt != Unannounced)
+        if (ungesagt != _ungesagtGemeldet)
         {
             if (ungesagt > 0)
             {
@@ -1741,7 +1741,7 @@ public sealed partial class ShareHost
                 _log($"[{FolderId}] alle lokalen Aenderungen sind angekuendigt.");
             }
         }
-        Unannounced = ungesagt;
+        _ungesagtGemeldet = ungesagt;
 
         Outstanding = offen;
         OutstandingBytes = bytes;
@@ -3369,7 +3369,33 @@ public sealed partial class ShareHost
     {
         if (PeerCopy(name) is not { } fremd || fremd.Deleted) return;
 
-        var eigen = fremd.Clone();
+        AlsNichtVorhandenAnkuendigen(fremd);
+    }
+
+    /// <summary>
+    /// Berichtigt eine eigene Ankuendigung: die Datei liegt hier nicht mehr,
+    /// ohne dass sie geloescht waere.
+    /// </summary>
+    /// <remarks>
+    /// Keine Loeschung -- die Gegenstelle haelt die Datei und soll sie
+    /// behalten. Angekuendigt wird der Eintrag als ungueltig: dieselbe
+    /// Aussage wie bei einem abgewaehlten Zweig, nur ausgehend vom eigenen
+    /// Eintrag statt vom Index der Gegenstelle. Denn genau dann, wenn die
+    /// Gegenstelle die Datei erst noch holen will, steht sie nicht in ihrem
+    /// Index, und AbwahlMelden haette nichts zu sagen.
+    /// </remarks>
+    private void NichtVorhandenMelden(string name)
+    {
+        if (LocalCopy(name) is not { } eigen || eigen.Deleted || eigen.Invalid) return;
+
+        AlsNichtVorhandenAnkuendigen(eigen);
+        _log($"[{FolderId}] \"{name}\" war als vorhanden angekuendigt, liegt hier aber nicht. " +
+             "Die Ankuendigung wird berichtigt.");
+    }
+
+    private void AlsNichtVorhandenAnkuendigen(BepFileInfo vorlage)
+    {
+        var eigen = vorlage.Clone();
         eigen.Blocks.Clear();
         eigen.BlocksHash = Google.Protobuf.ByteString.Empty;
         eigen.Invalid = true;
