@@ -233,6 +233,17 @@ public sealed class TrayIcon : IDisposable
         _ => App.S("S.Tray.Offline")
     };
 
+    /// <summary>
+    /// Zeigt eine Meldung am Symbol im Infobereich.
+    /// </summary>
+    /// <remarks>
+    /// Fuer Ereignisse, die der Anwender nicht ausgeloest hat und die er
+    /// auch bei verstecktem Fenster sehen soll -- etwa einen Ordner, den
+    /// eine Gegenstelle eben angeboten hat.
+    /// </remarks>
+    public void Notify(string titel, string text)
+        => _icon.ShowBalloonTip(10_000, titel, text, Forms.ToolTipIcon.Info);
+
     public void Dispose()
     {
         // Ohne diesen Aufruf bleibt das Symbol im Infobereich stehen, bis der

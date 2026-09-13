@@ -289,8 +289,26 @@ public partial class MainWindow : Window
         var host = new PeerHost(peerConfig, _runtime, _identity!, AppendLog, _registry);
         host.StateChanged += _ => Dispatcher.BeginInvoke(RefreshRows);
         host.OfferedChanged += () => Dispatcher.BeginInvoke(RebuildRows);
+        host.FolderOffered += angebot => Dispatcher.BeginInvoke(() => OrdnerAngeboten(host, angebot));
         host.ShareAdded += WireShare;
         return host;
+    }
+
+    /// <summary>
+    /// Meldet einen eben angebotenen Ordner in der Statuszeile und am Symbol
+    /// im Infobereich.
+    /// </summary>
+    /// <remarks>
+    /// Die Zeile "angeboten" in der Uebersicht allein reicht nicht: sie
+    /// entsteht ohne Hinweis, und der Filter "verbunden" blendet sie aus.
+    /// Wer auf der anderen Seite gerade den Haken gesetzt hat, sieht hier
+    /// sonst keine Wirkung.
+    /// </remarks>
+    private void OrdnerAngeboten(PeerHost gegenstelle, OfferedFolder angebot)
+    {
+        var meldung = App.S("M.FolderOffered", gegenstelle.Display, angebot.Display);
+        Status(meldung);
+        _tray?.Notify(App.S("M.FolderOfferedTitle"), meldung);
     }
 
     /// <summary>

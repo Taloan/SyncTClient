@@ -253,6 +253,8 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="R.Error">Fehler</s:String>
   <s:String x:Key="R.Stopped">gestoppt</s:String>
   <s:String x:Key="R.NotConnected">nicht verbunden</s:String>
+  <s:String x:Key="M.FolderOfferedTitle">Ordner angeboten</s:String>
+  <s:String x:Key="M.FolderOffered">{0} bietet den Ordner „{1}“ an. Zum Übernehmen die Zeile in der Übersicht wählen.</s:String>
   <s:String x:Key="R.Offered">angeboten</s:String>
   <s:String x:Key="R.PhaseIndex">Index</s:String>
   <s:String x:Key="R.PhasePlaceholders">Platzhalter</s:String>

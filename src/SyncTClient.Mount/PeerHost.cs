@@ -121,6 +121,19 @@ public sealed class PeerHost : IAsyncDisposable
     public event Action? OfferedChanged;
 
     /// <summary>
+    /// Die Gegenstelle bietet einen Ordner an, der hier nicht uebernommen ist
+    /// und den sie bisher nicht genannt hat.
+    /// </summary>
+    /// <remarks>
+    /// Die Ordnerliste kommt beim Verbinden und noch einmal, wenn die
+    /// Gegenstelle eine Freigabe um dieses Geraet erweitert. Im zweiten Fall
+    /// aenderte sich bisher nur eine Zeile in der Uebersicht -- wer die
+    /// Uebersicht gerade nicht vor sich hatte oder nach "verbunden"
+    /// filterte, erfuhr nichts davon.
+    /// </remarks>
+    public event Action<OfferedFolder>? FolderOffered;
+
+    /// <summary>
     /// Nimmt einen Ordner in die eigene Liste und hoert auf seine Verbindungen.
     /// </summary>
     /// <remarks>
@@ -924,6 +937,8 @@ public sealed class PeerHost : IAsyncDisposable
             if (_shares.TryGetValue(folder.Id, out var share))
                 IndexNachsendungEntscheiden(share, folder);
 
+        var bisher = Offered.Select(o => o.FolderId).ToHashSet(StringComparer.Ordinal);
+
         Offered = config.Folders
             .Select(f => new OfferedFolder(f.Id, f.Label, _shares.ContainsKey(f.Id)))
             .OrderBy(f => f.Display, StringComparer.CurrentCultureIgnoreCase)
@@ -932,6 +947,13 @@ public sealed class PeerHost : IAsyncDisposable
         PruefeRueckzug(config);
 
         OfferedChanged?.Invoke();
+
+        foreach (var neu in Offered.Where(o => !o.Accepted && !bisher.Contains(o.FolderId)))
+        {
+            _log($"[{Display}] bietet den Ordner \"{neu.Display}\" an. Hier nicht uebernommen; " +
+                 "zum Uebernehmen die Zeile in der Uebersicht waehlen.");
+            FolderOffered?.Invoke(neu);
+        }
     }
 
     /// <summary>
