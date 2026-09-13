@@ -998,6 +998,7 @@ public sealed partial class ShareHost
 
             ModusVergessen(name);
         }
+        var vorher = _vorhanden;
         _vorhanden = vorhanden;
 
         // Der Durchgang rechnet die Zahlen gleich selbst; was zwischen zwei
@@ -1008,7 +1009,7 @@ public sealed partial class ShareHost
         // Und was der Durchgang nicht mehr angetroffen hat. Vorher blieb das
         // ungenutzt: die Liste sagte, was da ist, und niemand fragte, was
         // fehlt.
-        FehlendeAusDemDurchgang(vorhanden);
+        FehlendeAusDemDurchgang(vorhanden, vorher);
 
         // Nur wenn es auffaellt. Ein Durchgang ueber fuenfundvierzigtausend
         // Dateien kostet Zeit, und er laeuft in jeder Minute; eine Zeile je

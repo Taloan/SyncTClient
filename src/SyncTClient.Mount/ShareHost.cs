@@ -3070,9 +3070,15 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     /// entsteht manche Datei neu.
     /// </remarks>
     /// <param name="vorhanden">Was der Durchgang im Ordner angetroffen hat.</param>
-    private void FehlendeAusDemDurchgang(Dictionary<string, (long Size, long ModifiedS)> vorhanden)
+    private void FehlendeAusDemDurchgang(
+        Dictionary<string, (long Size, long ModifiedS)> vorhanden,
+        Dictionary<string, (long Size, long ModifiedS)> vorher)
     {
         if (_index is null) return;
+
+        // Ohne vorigen Durchgang gibt es keinen Zeugen. Was beim Start fehlt,
+        // beurteilt OfflineGeloeschte.
+        if (vorher.Count == 0) return;
 
         // Fehlt die Markierung, fehlt der Ordner und nicht sein Inhalt.
         if (!Directory.Exists(MarkerPath)) return;
@@ -3093,6 +3099,18 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
             if (Absichtlich(eigen.Name, isDirectory: false)) continue;
 
             if (vorhanden.ContainsKey(eigen.Name)) continue;
+
+            // Nur, was der vorige Durchgang noch gesehen hat. Ein Eintrag im
+            // eigenen Bestand heisst nicht, dass die Datei je hier lag: bei
+            // "vollstaendig lokal" standen Fassungen der Gegenstelle als
+            // Platzhalter im Bestand, die nie Inhalt bekamen und spaeter
+            // ohne Loeschung verschwanden. Sie als geloescht zu melden hiess,
+            // 25 Dateien eines Sicherungsordners bei jedem Durchgang zur
+            // Loeschung anzukuendigen -- Dateien, die es hier nie gab und
+            // die die Gegenstellen halten. Eine Loeschung braucht einen
+            // Zeugen: den Durchgang, der die Datei zuletzt noch vorfand, oder
+            // den Beobachter.
+            if (!vorher.ContainsKey(eigen.Name)) continue;
 
             // Schon unterwegs.
             if (_removed.ContainsKey(eigen.Name)) continue;
@@ -3185,6 +3203,8 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
 
         var fehlend = new List<string>();
+        var nieGehalten = new List<BepFileInfo>();
+        var eigenerZaehler = OwnDeviceId.ShortId();
 
         foreach (var eigen in _index.LocalFrom(0))
         {
@@ -3201,7 +3221,36 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
                 ? Directory.Exists(path)
                 : File.Exists(path);
 
-            if (!da) fehlend.Add(eigen.Name);
+            if (da) continue;
+
+            // Beim Start gibt es keinen Zeugen dafuer, dass die Datei je hier
+            // lag. Ein Eintrag ohne eigenen Zaehler im Versionsvektor ist eine
+            // uebernommene Fassung der Gegenstelle -- die kann heruntergeladen
+            // gewesen sein, oder nur ein Platzhalter, der nie Inhalt bekam.
+            // Beides sieht im Bestand gleich aus. Eine Loeschung an die
+            // Gegenstellen zu melden, waere im zweiten Fall die Loeschung
+            // einer Datei, die es hier nie gab. Gemeldet wird deshalb nur,
+            // dass sie hier nicht liegt; die Fassung der Gegenstelle gilt,
+            // und bei "vollstaendig lokal" kommt sie wieder her.
+            //
+            // Was hier selbst geschrieben oder geaendert wurde, traegt den
+            // eigenen Zaehler. Dafuer bleibt es bei der Loeschung, wie bei
+            // Syncthing.
+            var eigene = eigen.Version?.Counters.Any(c => c.Id == eigenerZaehler) == true;
+
+            if (eigene) fehlend.Add(eigen.Name);
+            else nieGehalten.Add(eigen);
+        }
+
+        if (nieGehalten.Count > 0)
+        {
+            foreach (var eintrag in nieGehalten) AlsNichtVorhandenAnkuendigen(eintrag);
+
+            _log($"[{FolderId}] {nieGehalten.Count} uebernommene Dateien fehlen beim Start. Sie werden " +
+                 "nicht als geloescht gemeldet, sondern als hier nicht vorhanden; die Fassung der " +
+                 "Gegenstelle gilt. Erste: " +
+                 string.Join(", ", nieGehalten.Take(3).Select(e => $"\"{e.Name}\"")) +
+                 (nieGehalten.Count > 3 ? $" und {nieGehalten.Count - 3} weitere" : "") + ".");
         }
 
         if (fehlend.Count == 0) return;

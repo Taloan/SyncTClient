@@ -851,8 +851,17 @@ public sealed partial class ShareHost
 
         try
         {
-            File.Move(path, LocalPathOf(target), overwrite: false);
-            _log($"[{FolderId}] Konflikt bei \"{name}\": die eigene Version liegt jetzt " +
+            // Kopieren, nicht verschieben. Beim Verschieben war der Name fuer
+            // die Zeit bis zum Einsetzen der Fassung der Gegenstelle leer --
+            // und bei "vollstaendig lokal" kann das dauern oder ausbleiben.
+            // Der Beobachter meldete das Verschwinden als Loeschung, die ging
+            // hinaus, und die Gegenstellen loeschten ihre Fassung. Gemessen am
+            // 13.09., 16:20:16: der Katalog "PRI-v14.lrcat" auf dem Server
+            // geloescht, ausgeloest durch eine Konfliktkopie auf einem
+            // anderen Rechner. Die eigene Fassung bleibt jetzt an ihrem Platz,
+            // bis die der Gegenstelle sie ersetzt.
+            File.Copy(path, LocalPathOf(target), overwrite: false);
+            _log($"[{FolderId}] Konflikt bei \"{name}\": die eigene Version liegt jetzt auch " +
                  $"unter \"{target}\".");
 
             // Die abgelegte Version ist eine neue Datei in der Freigabe und
