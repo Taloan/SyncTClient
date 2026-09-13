@@ -264,19 +264,86 @@ public partial class MainWindow : Window
         _registry = new ShareRegistry(_runtime, _identity!, AppendLog);
 
         foreach (var peerConfig in _config.Peers)
-        {
-            var host = new PeerHost(peerConfig, _runtime, _identity!, AppendLog, _registry);
-            host.StateChanged += _ => Dispatcher.BeginInvoke(RefreshRows);
-            host.OfferedChanged += () => Dispatcher.BeginInvoke(RebuildRows);
-            host.ShareAdded += WireShare;
-            _peers.Add(new PeerItem(host));
-        }
+            _peers.Add(new PeerItem(NeueGegenstelle(peerConfig)));
 
         RebuildRows();
         RestartNetwork();
         Status(_peers.Count == 0
             ? App.S("M.NoPeer")
             : App.S("M.Configured", _peers.Count, _config.Shares.Count));
+    }
+
+    /// <summary>
+    /// Legt den Host einer Gegenstelle an und verdrahtet ihn mit der
+    /// Oberflaeche.
+    /// </summary>
+    /// <remarks>
+    /// Derselbe Weg fuer den Start und fuer eine Gegenstelle, die spaeter
+    /// dazukommt. Vorher lief das Hinzufuegen ueber Load(): alle Hosts neu,
+    /// Listener, Erkennung und QUIC neu gestartet, jede bestehende Verbindung
+    /// getrennt. Eine neue Gegenstelle ist aber nur ein weiterer Eintrag in
+    /// der Liste; die anderen sind davon nicht beruehrt.
+    /// </remarks>
+    private PeerHost NeueGegenstelle(PeerConfig peerConfig)
+    {
+        var host = new PeerHost(peerConfig, _runtime, _identity!, AppendLog, _registry);
+        host.StateChanged += _ => Dispatcher.BeginInvoke(RefreshRows);
+        host.OfferedChanged += () => Dispatcher.BeginInvoke(RebuildRows);
+        host.ShareAdded += WireShare;
+        return host;
+    }
+
+    /// <summary>
+    /// Nimmt eine Gegenstelle in die laufende Liste auf und verbindet sie,
+    /// wenn sie das automatisch tun soll.
+    /// </summary>
+    private async Task<PeerItem> GegenstelleAufnehmenAsync(PeerConfig peerConfig)
+    {
+        var item = new PeerItem(NeueGegenstelle(peerConfig));
+        _peers.Add(item);
+        RebuildRows();
+
+        if (peerConfig.AutoConnect && !_config.Paused) await ConnectAsync(item);
+        return item;
+    }
+
+    /// <summary>
+    /// Baut die Verbindung zu genau dieser Gegenstelle neu auf.
+    /// </summary>
+    /// <remarks>
+    /// Nach einer Aenderung, die die Sitzung betrifft: Adresse, Erkennung,
+    /// Relay oder die Liste der geteilten Ordner. Die Ordnerliste geht beim
+    /// Verbinden ueber den ClusterConfig hinaus; eine bestehende Sitzung
+    /// erfaehrt von der Aenderung nichts.
+    /// </remarks>
+    private async Task GegenstelleNeuVerbindenAsync(PeerItem item)
+    {
+        if (item.Host.State is PeerState.Verbunden or PeerState.Verbindet)
+        {
+            try { await item.Host.DisconnectAsync(); }
+            catch (Exception ex) { Status($"[{item.Display}] {ex.Message}"); }
+        }
+
+        if (item.Config.AutoConnect && !_config.Paused) await ConnectAsync(item);
+        else RebuildRows();
+    }
+
+    /// <summary>
+    /// Die Angaben einer Gegenstelle, die eine bestehende Sitzung betreffen.
+    /// </summary>
+    /// <remarks>
+    /// Name und "automatisch verbinden" gehoeren nicht dazu: sie aendern
+    /// nichts an einer Verbindung, die schon steht.
+    /// </remarks>
+    private string Sitzungsangaben(PeerConfig peerConfig)
+    {
+        var ordner = _config.SharesOf(peerConfig)
+            .Select(s => s.FolderId)
+            .OrderBy(id => id, StringComparer.Ordinal);
+
+        return string.Join("|",
+            peerConfig.DeviceId, peerConfig.Address, peerConfig.Discovery, peerConfig.Relays,
+            string.Join(",", ordner));
     }
 
     private void WireShare(ShareHost share) => Dispatcher.Invoke(() =>
@@ -1878,11 +1945,16 @@ public partial class MainWindow : Window
                 return;
             }
 
-            _config.Peers.Add(new PeerConfig { Name = name, Address = address, DeviceId = id });
+            var neu = new PeerConfig { Name = name, Address = address, DeviceId = id };
+            _config.Peers.Add(neu);
             Persist();
-            Load();
 
-            peer = _peers.FirstOrDefault(p => p.Config.DeviceId == id);
+            // Nicht ueber Load(): das traf alle anderen Gegenstellen. Nur
+            // der Host fuer diese eine, ohne selbst zu verbinden -- die
+            // Verbindung steht ja schon, sie wird gleich uebernommen.
+            peer = new PeerItem(NeueGegenstelle(neu));
+            _peers.Add(peer);
+            RebuildRows();
         }
 
         if (peer is null)
@@ -1988,7 +2060,7 @@ public partial class MainWindow : Window
         RebuildRows();
     }
 
-    private void AddPeer()
+    private async void AddPeer()
     {
         var dialog = new PeerDialog(null, _config.Shares) { Owner = this };
         if (dialog.ShowDialog() != true) return;
@@ -1996,17 +2068,21 @@ public partial class MainWindow : Window
         _config.Peers.Add(dialog.Result);
         ApplySharing(dialog.Result.DeviceId, dialog.SharedFolders);
         Persist();
-        Load();
+
+        // Nur diese eine dazu. Die uebrigen Gegenstellen und ihre Sitzungen
+        // bleiben, wie sie sind.
         Status(App.S("M.PeerAdded", dialog.Result.Display));
+        await GegenstelleAufnehmenAsync(dialog.Result);
     }
 
     /// <summary>
     /// Aendert eine bestehende Gegenstelle. Ohne diesen Weg waeren Adresse,
     /// Erkennung und Relay einmalig beim Anlegen zu entscheiden.
     /// </summary>
-    private void EditPeer(PeerItem item)
+    private async void EditPeer(PeerItem item)
     {
         var before = item.Config.DeviceId;
+        var vorher = Sitzungsangaben(item.Config);
 
         var dialog = new PeerDialog(item.Config, _config.Shares) { Owner = this };
         if (dialog.ShowDialog() != true) return;
@@ -2029,8 +2105,41 @@ public partial class MainWindow : Window
         ApplySharing(item.Config.DeviceId, dialog.SharedFolders);
 
         Persist();
-        Load();
         Status(App.S("M.PeerChanged", item.Config.Display));
+
+        // Drei Stufen, je nachdem, was sich geaendert hat. Vorher lief in
+        // jedem Fall Load(), und das trennte alle Gegenstellen -- auch die,
+        // an denen sich nichts geaendert hatte.
+        //
+        // Eine andere Geraete-ID ist eine andere Gegenstelle: der Host
+        // fuehrt Verbindungen und Freigaben unter der alten ID und wird
+        // ersetzt. Eine andere Adresse, Erkennung, Relay-Einstellung oder
+        // Ordnerliste betrifft die Sitzung: nur diese eine wird neu
+        // aufgebaut. Ein neuer Name oder ein anderes "automatisch verbinden"
+        // betrifft keine Sitzung: die Anzeige wird nachgezogen, sonst nichts.
+        if (!string.Equals(before, item.Config.DeviceId, StringComparison.Ordinal))
+        {
+            var stelle = _peers.IndexOf(item);
+
+            try { await item.Host.DisposeAsync(); }
+            catch (Exception ex) { Status($"[{item.Display}] {ex.Message}"); }
+
+            var neu = new PeerItem(NeueGegenstelle(item.Config));
+            if (stelle >= 0) _peers[stelle] = neu;
+            else _peers.Add(neu);
+
+            RebuildRows();
+            if (neu.Config.AutoConnect && !_config.Paused) await ConnectAsync(neu);
+        }
+        else if (Sitzungsangaben(item.Config) != vorher)
+        {
+            await GegenstelleNeuVerbindenAsync(item);
+        }
+        else
+        {
+            RefreshRows();
+            RebuildRows();
+        }
     }
 
     /// <summary>
@@ -2081,7 +2190,14 @@ public partial class MainWindow : Window
         await item.Host.DisposeAsync();
         _config.Peers.Remove(item.Config);
         Persist();
-        Load();
+
+        // Nur diese eine fort. Die Liste ist beobachtet, das Fenster der
+        // Gegenstellen folgt von selbst.
+        _peers.Remove(item);
+        RebuildRows();
+        Status(_peers.Count == 0
+            ? App.S("M.NoPeer")
+            : App.S("M.Configured", _peers.Count, _config.Shares.Count));
     }
 
     private void OnShowPeers(object sender, RoutedEventArgs e)
