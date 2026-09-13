@@ -2594,7 +2594,14 @@ public sealed partial class ShareHost
         // noch nicht bestaetigt" endet erst mit der Bestaetigung durch die
         // Gegenstelle, nicht damit, dass die Datei sich seither nicht
         // geaendert hat.
-        if (known is not null && !known.Deleted && known.BlocksHash.Span.SequenceEqual(blocksHash))
+        // Erzwungen heisst: der Inhalt ist derselbe, aber die Zustaendigkeit
+        // hat gewechselt -- nach einem gewonnenen Konflikt muss die Datei mit
+        // neuer Version hinaus, sonst haelt die Gegenstelle ihre Fassung fuer
+        // die gueltige. Der Zweig "gleicher Inhalt" darunter beendete das
+        // bisher stillschweigend: KeepMine setzte den Zwang, der Vorfilter
+        // liess die Datei durch, und hier war Schluss. Gemessen am 13.09.:
+        // "PRI-v14.lrcat" nach dem Konflikt um 16:20 nie angekuendigt.
+        if (!erzwungen && known is not null && !known.Deleted && known.BlocksHash.Span.SequenceEqual(blocksHash))
         {
             // Gleicher Inhalt -- und jetzt nachgerechnet, nicht vermutet.
             //
