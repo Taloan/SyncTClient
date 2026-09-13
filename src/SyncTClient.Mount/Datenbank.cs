@@ -72,6 +72,104 @@ namespace SyncTClient.Mount;
 /// </remarks>
 public static class Datenbank
 {
+    // ------------------------------------------------------------ Katalog
+
+    /// <summary>
+    /// Die Namen, die zu einem Lightroom-Katalog "X.lrcat" gehören, als
+    /// Anhang an den Grundnamen X.
+    /// </summary>
+    /// <remarks>
+    /// Ein Katalog ist kein einzelner Satz aus Datei und Journal, sondern
+    /// ein Verbund: die SQLite-Datei selbst, daneben ein Ordner mit einer
+    /// zweiten Datenbank (LevelDB, ".lrcat-data") und mehrere Ordner mit
+    /// Vorschauen und Hilfsdatenbanken (".lrdata"). Lightroom schreibt in
+    /// alle gleichzeitig, solange der Katalog offen ist, und haelt dabei
+    /// nicht jede Datei exklusiv. Der Smart-Datenbankmodus sieht nur das
+    /// SQLite-Journal; den Rest des Verbunds sah niemand.
+    ///
+    /// Gemessen am 13.09.: 79 Dateien aus "PRI-v14.lrcat-data" waehrend
+    /// einer Lightroom-Sitzung durch eine eingehende Aenderung entfernt,
+    /// danach "Reparatur des Speichers fuer KI-Bearbeitungen" und ein
+    /// Absturz beim Lesen des Katalogs.
+    /// </remarks>
+    private static readonly string[] KatalogAnhaenge =
+    [
+        ".lrcat",
+        ".lrcat-data",
+        ".lrcat-journal", ".lrcat-wal", ".lrcat-shm",
+        " Helper.lrdata",
+        " Previews.lrdata",
+        " Smart Previews.lrdata",
+        " Sync.lrdata"
+    ];
+
+    /// <summary>Die Datei, die Lightroom anlegt, solange der Katalog offen ist.</summary>
+    private const string KatalogSperre = ".lrcat.lock";
+
+    /// <summary>
+    /// Gehört dieser Name zu einem Lightroom-Katalog, der gerade offen ist?
+    /// </summary>
+    /// <param name="wurzel">Der lokale Pfad der Freigabe.</param>
+    /// <param name="name">Der Name innerhalb der Freigabe, mit "/".</param>
+    /// <param name="katalog">Der Name des Katalogs innerhalb der Freigabe, etwa "PRI-v14".</param>
+    /// <remarks>
+    /// Offen heisst: neben "X.lrcat" liegt "X.lrcat.lock". Lightroom legt
+    /// die Datei beim Oeffnen an und entfernt sie beim Schliessen; nach
+    /// einem Absturz bleibt sie liegen, und dann bleibt der Katalog auch
+    /// fuer den Abgleich gesperrt, bis Lightroom sie beim naechsten Start
+    /// wegraeumt -- was es tut.
+    ///
+    /// Unabhaengig vom Smart-Datenbankmodus. Der ist eine Vermutung ueber
+    /// Journale; das hier ist die Aussage des Programms selbst, dass es
+    /// schreibt.
+    /// </remarks>
+    public static bool KatalogInBenutzung(string wurzel, string name, out string katalog)
+    {
+        katalog = "";
+
+        var segmente = name.Split('/');
+
+        for (var i = 0; i < segmente.Length; i++)
+        {
+            var segment = segmente[i];
+
+            // Die Sperrdatei selbst gehoert dazu; sie wird nie uebertragen,
+            // solange sie da ist, und eine eingehende Fassung von ihr auch
+            // nicht angelegt.
+            string? basis = null;
+
+            if (segment.EndsWith(KatalogSperre, StringComparison.OrdinalIgnoreCase))
+                basis = segment[..^KatalogSperre.Length];
+            else
+                foreach (var anhang in KatalogAnhaenge)
+                {
+                    if (!segment.EndsWith(anhang, StringComparison.OrdinalIgnoreCase)) continue;
+                    basis = segment[..^anhang.Length];
+                    break;
+                }
+
+            if (basis is null || basis.Length == 0) continue;
+
+            var ordner = string.Join('/', segmente, 0, i);
+            katalog = ordner.Length == 0 ? basis : ordner + "/" + basis;
+
+            var sperre = Path.Combine(wurzel, ordner.Replace('/', Path.DirectorySeparatorChar), basis + KatalogSperre);
+
+            try
+            {
+                return File.Exists(sperre);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    // ------------------------------------------------------------ SQLite
+
     /// <summary>Die Endungen, die zu einer Datenbank gehören, aber nicht sie selbst sind.</summary>
     /// <remarks>
     /// <c>-shm</c> ist Arbeitsspeicher auf Platte, ein Index in das <c>-wal</c>;

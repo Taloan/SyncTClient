@@ -346,6 +346,17 @@ public sealed partial class ShareHost
         if (_app.SmartDatabaseMode && (Datenbank.IstBegleitdatei(name) || Datenbank.Beschaeftigt(path)))
             return;
 
+        // Ein offener Lightroom-Katalog: nichts davon wird angefasst, auch
+        // keine Loeschung ausgefuehrt. Der naechste Durchgang sieht wieder
+        // nach. Siehe Datenbank.KatalogInBenutzung.
+        if (Datenbank.KatalogInBenutzung(_config.LocalPath, name, out var katalog))
+        {
+            Einmal("katalog:" + katalog)(
+                $"[{FolderId}] Katalog \"{katalog}\" ist in Lightroom geoeffnet. Seine Dateien werden " +
+                "weder angekuendigt noch von der Gegenstelle uebernommen, bis er geschlossen ist.");
+            return;
+        }
+
         // Solange hier geschrieben wird, ist jede Meldung darueber unsere
         // eigene. Ohne diese Sperre kuendigen wir an, was wir gerade von der
         // Gegenstelle uebernommen haben.

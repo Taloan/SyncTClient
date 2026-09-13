@@ -2483,6 +2483,18 @@ public sealed partial class ShareHost
         if (alter >= TimeSpan.Zero && alter < frist)
             return Zurueckstellen(name, info.LastWriteTimeUtc + frist);
 
+        // Ein offener Lightroom-Katalog geht nicht hinaus -- keine seiner
+        // Dateien, solange die Sperrdatei daneben liegt. Unabhaengig vom
+        // Smart-Datenbankmodus; warum, steht bei Datenbank.KatalogInBenutzung.
+        if (Datenbank.KatalogInBenutzung(_config.LocalPath, name, out var katalog))
+        {
+            Einmal("katalog:" + katalog)(
+                $"[{FolderId}] Katalog \"{katalog}\" ist in Lightroom geoeffnet. Seine Dateien werden " +
+                "weder angekuendigt noch von der Gegenstelle uebernommen, bis er geschlossen ist.");
+
+            return Zurueckstellen(name, DateTime.UtcNow + Ruhefrist * 3);
+        }
+
         // Smart-Datenbankmodus: eine Datenbank geht erst hinaus, wenn sie
         // alles eingearbeitet hat. Warum, steht bei Datenbank.
         if (_app.SmartDatabaseMode)

@@ -9,6 +9,60 @@ commit-by-commit history.*
 
 <!-- Neue Fassungen kommen von Hand unter diese Zeile, vor die vorige. -->
 
+## 0.9.6 — in Arbeit
+
+**Lightroom**
+
+- Ein geöffneter Katalog wird nicht mehr angefasst. Solange neben `X.lrcat`
+  die Sperrdatei `X.lrcat.lock` liegt, wird keine Datei des Verbunds —
+  `X.lrcat`, `X.lrcat-data`, `X Helper.lrdata`, `X Previews.lrdata`,
+  `X Smart Previews.lrdata`, `X Sync.lrdata` — angekündigt, übernommen oder
+  gelöscht. Unabhängig vom Smart-Datenbankmodus. Anlass: 79 Dateien aus
+  `PRI-v14.lrcat-data` während einer Lightroom-Sitzung durch eine eingehende
+  Änderung entfernt, danach Reparaturmeldung und Absturz.
+
+**Abgleich**
+
+- Eine Änderung neben einer Löschung gewinnt; eine Löschung wartet, bis eine
+  hier noch nicht angekündigte Änderung hinaus ist. Vorher sah die Löschung
+  der Gegenstelle neuer aus als eine eben geschriebene Datei.
+- Eine Löschung braucht einen Zeugen: den Durchgang, der die Datei zuletzt
+  noch vorfand, oder den Beobachter. Einträge, die hier nie mit Inhalt lagen,
+  werden nicht mehr als gelöscht gemeldet.
+- Die Konfliktkopie entsteht durch Kopieren; die eigene Datei bleibt an ihrem
+  Platz, bis die Fassung der Gegenstelle sie ersetzt. Vorher fehlte der Name
+  zwischenzeitlich, und das ging als Löschung hinaus.
+- Nach einem gewonnenen Konflikt geht die Datei mit neuer Version hinaus.
+  Vorher blieb die Ankündigung aus, und die Gegenstelle hielt ihre Fassung
+  für die gültige.
+- Änderungen, die beim Beenden noch nicht angekündigt waren, werden beim
+  nächsten Start aufgegriffen.
+- Eine von der Gegenstelle übernommene Datei bekommt deren Änderungszeit;
+  vorher meldete jeder Durchgang sie als geändert und hashte sie neu.
+- Was hier geändert und noch nicht angekündigt ist, steht in der Zeile und
+  im Protokoll — statt „abgeglichen".
+
+**Verbindungen**
+
+- Eine Blockanfrage nach zwei Minuten Ruhe galt sofort als unbeantwortet;
+  jede Übertragung nach einer Pause scheiterte beim ersten Versuch.
+- Endete die Leitung während der Ankündigung, blieb die Gegenstelle auf
+  „verbindet" stehen: keine Wiederanwahl, jede eingehende Verbindung
+  abgewiesen.
+- Wählen beide Seiten einander gleichzeitig an, weicht die eigene Anwahl der
+  eingehenden Verbindung.
+- Fragt die Gegenstelle nach einer Datei, die hier als vorhanden angekündigt
+  war, aber nicht liegt, wird die Ankündigung berichtigt statt minütlich
+  abgelehnt.
+
+**Oberfläche**
+
+- Eingehende Anfragen — neue Gegenstellen, angebotene Ordner — stehen im
+  Reiter „Anfragen" und werden dort angenommen oder abgelehnt; kein Dialog
+  mehr.
+- Version, Build-Commit und Bauzeitpunkt stehen in der Titelzeile.
+
+
 ## 0.9.5 — in Arbeit
 
 **Verbindungen**
