@@ -270,6 +270,16 @@ Folder ID:   {2}
 
 Accept it now? If not, the folder stays listed as offered in the overview.</s:String>
   <s:String x:Key="M.FolderOfferedLater">“{0}” stays offered and can be accepted from the overview.</s:String>
+  <s:String x:Key="M.PeerOffersKnownFolderBody">“{0}” offers a folder that is already set up here.
+
+Folder:        {1}
+Folder ID:   {2}
+Here:           {3}
+So far with:  {4}
+
+Add “{0}” as another remote device for this folder? If not, the current devices stay as they are; it can be added later in the folder settings under “Sharing”.</s:String>
+  <s:String x:Key="M.PeerOffersKnownFolderLater">{0} not added to “{1}”. To add it later: folder settings, tab “Sharing”.</s:String>
+  <s:String x:Key="M.PeerAddedToFolder">{0} added to “{1}”, the folder is being announced.</s:String>
   <s:String x:Key="R.Offered">offered</s:String>
   <s:String x:Key="R.PhaseIndex">index</s:String>
   <s:String x:Key="R.PhasePlaceholders">placeholders</s:String>

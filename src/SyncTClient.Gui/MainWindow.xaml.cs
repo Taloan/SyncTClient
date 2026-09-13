@@ -304,19 +304,35 @@ public partial class MainWindow : Window
     /// blendet sie aus. Wer auf der anderen Seite gerade den Haken gesetzt
     /// hat, sah hier sonst keine Wirkung.
     ///
-    /// Ein Nein verwirft nichts: der Ordner bleibt als "angeboten" in der
-    /// Uebersicht und laesst sich dort spaeter uebernehmen.
+    /// Zwei Faelle. Ist der Ordner hier noch nicht eingerichtet, wird er
+    /// uebernommen wie aus der Uebersicht. Ist er schon eingerichtet -- mit
+    /// einer anderen Gegenstelle --, kommt diese Gegenstelle als weitere
+    /// dazu. Im zweiten Fall gibt es keine Zeile "angeboten": der Ordner
+    /// steht bereits in der Uebersicht, und die Gegenstelle zaehlt erst zu
+    /// ihm, wenn sie eingetragen ist. Ohne diese Frage bliebe nur der Reiter
+    /// "Teilen" in den Einstellungen des Ordners.
+    ///
+    /// Ein Nein verwirft nichts.
     /// </remarks>
     private async void OrdnerAngeboten(PeerHost gegenstelle, OfferedFolder angebot)
     {
+        Status(App.S("M.FolderOffered", gegenstelle.Display, angebot.Display));
+
+        var eingerichtet = _config.Shares.FirstOrDefault(s =>
+            s.FolderId.Equals(angebot.FolderId, StringComparison.Ordinal));
+
+        if (eingerichtet is not null)
+        {
+            await GegenstelleZumOrdnerAsync(gegenstelle, eingerichtet, angebot);
+            return;
+        }
+
         // Die Zeile ist ueber OfferedChanged schon in Auftrag gegeben; das
         // laeuft vor diesem Aufruf, weil beides in derselben Reihenfolge
         // eingereiht wurde.
         var row = _rows.FirstOrDefault(r =>
             r.FolderId.Equals(angebot.FolderId, StringComparison.Ordinal) && !r.Accepted);
         if (row is null) return;
-
-        Status(App.S("M.FolderOffered", gegenstelle.Display, angebot.Display));
 
         var answer = Ask(
             App.S("M.FolderOfferedBody", gegenstelle.Display, angebot.Label, angebot.FolderId),
@@ -329,6 +345,47 @@ public partial class MainWindow : Window
         }
 
         await OrdnerUebernehmenAsync(row);
+    }
+
+    /// <summary>
+    /// Traegt eine Gegenstelle bei einem Ordner ein, der hier schon
+    /// eingerichtet ist, und reicht ihr den Ordner in der laufenden Sitzung
+    /// nach.
+    /// </summary>
+    private async Task GegenstelleZumOrdnerAsync(PeerHost gegenstelle, ShareConfig share, OfferedFolder angebot)
+    {
+        if (share.PeerDeviceIds.Contains(gegenstelle.DeviceId, StringComparer.OrdinalIgnoreCase)) return;
+
+        var bisher = string.Join(", ", share.PeerDeviceIds
+            .Select(id => _peers.FirstOrDefault(p =>
+                p.Config.DeviceId.Equals(id, StringComparison.OrdinalIgnoreCase))?.Display ?? id[..Math.Min(7, id.Length)]));
+        if (bisher.Length == 0) bisher = "-";
+
+        var answer = Ask(
+            App.S("M.PeerOffersKnownFolderBody", gegenstelle.Display, angebot.Label, angebot.FolderId, share.LocalPath, bisher),
+            App.S("M.FolderOfferedTitle"));
+
+        if (answer != MessageBoxResult.Yes)
+        {
+            Status(App.S("M.PeerOffersKnownFolderLater", gegenstelle.Display, angebot.Display));
+            return;
+        }
+
+        share.PeerDeviceIds.Add(gegenstelle.DeviceId);
+        Persist();
+
+        try
+        {
+            await gegenstelle.ShareNachreichenAsync(share, _cts?.Token ?? default);
+            Status(App.S("M.PeerAddedToFolder", gegenstelle.Display, angebot.Display));
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[{gegenstelle.Display}] {share.FolderId}: {ex.Message}");
+            Status(App.S("M.ConnectFailed", ex.Message));
+        }
+
+        RebuildRows();
     }
 
     /// <summary>

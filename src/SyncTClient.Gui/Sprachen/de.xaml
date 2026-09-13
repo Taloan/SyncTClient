@@ -262,6 +262,16 @@ Ordner-ID:   {2}
 
 Jetzt übernehmen? Bei Nein bleibt der Ordner in der Übersicht als angeboten stehen.</s:String>
   <s:String x:Key="M.FolderOfferedLater">„{0}“ bleibt angeboten und kann in der Übersicht übernommen werden.</s:String>
+  <s:String x:Key="M.PeerOffersKnownFolderBody">„{0}“ bietet einen Ordner an, der hier bereits eingerichtet ist.
+
+Ordner:        {1}
+Ordner-ID:   {2}
+Hier:            {3}
+Bisher mit:   {4}
+
+„{0}“ als weitere Gegenstelle für diesen Ordner eintragen? Bei Nein bleibt es bei den bisherigen Gegenstellen; nachtragen lässt sie sich in den Einstellungen des Ordners unter „Teilen“.</s:String>
+  <s:String x:Key="M.PeerOffersKnownFolderLater">{0} für „{1}“ nicht eingetragen. Nachtragen: Einstellungen des Ordners, Reiter „Teilen“.</s:String>
+  <s:String x:Key="M.PeerAddedToFolder">{0} für „{1}“ eingetragen, der Ordner wird angekündigt.</s:String>
   <s:String x:Key="R.Offered">angeboten</s:String>
   <s:String x:Key="R.PhaseIndex">Index</s:String>
   <s:String x:Key="R.PhasePlaceholders">Platzhalter</s:String>
