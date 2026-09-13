@@ -2383,6 +2383,31 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
     private async Task AufnehmenAsync()
     {
         ScanLocal(quiet: true);
+
+        // Was beim letzten Lauf als "geaendert und noch nicht angekuendigt"
+        // eingetragen wurde, steht so in der Datenbank -- der Vermerk zum
+        // Bewerten stand nur im Arbeitsspeicher. Nach einem Neustart fand
+        // der Durchgang die Datei unveraendert vor (Groesse und Zeit passen
+        // zum Eintrag) und uebersah sie; die Ankuendigung blieb aus.
+        // Gemessen am 13.09.: "PRI-v14.lrcat" nach einem gewonnenen Konflikt
+        // um 16:20 mit Zustand 1 gespeichert, beim Start um 16:42 nicht
+        // wieder aufgegriffen, und die Gegenstelle wartete auf 90 MB, die nie
+        // angekuendigt wurden.
+        if (_index is not null)
+        {
+            var offen = _index.LocalInState(1);
+            foreach (var eintrag in offen)
+            {
+                _force[eintrag.Name] = 0;
+                _dirty[eintrag.Name] = 0;
+            }
+
+            if (offen.Count > 0)
+                _log($"[{FolderId}] {offen.Count} Aenderungen aus dem letzten Lauf sind noch nicht " +
+                     "angekuendigt: " + string.Join(", ", offen.Take(3).Select(e => $"\"{e.Name}\"")) +
+                     (offen.Count > 3 ? $" und {offen.Count - 3} weitere" : "") + ".");
+        }
+
         if (_dirty.IsEmpty) return;
 
         var anzahl = _dirty.Count;
