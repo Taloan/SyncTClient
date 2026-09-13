@@ -180,6 +180,7 @@ public sealed class PeerHost : IAsyncDisposable
         if (State is PeerState.Verbunden or PeerState.Verbindet) return;
 
         var token = Begin(ct);
+        var sitzung = _sitzung;
 
         try
         {
@@ -187,7 +188,7 @@ public sealed class PeerHost : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Fail(ex);
+            Fail(ex, sitzung);
             throw;
         }
     }
@@ -547,7 +548,24 @@ public sealed class PeerHost : IAsyncDisposable
     public async Task AcceptAsync(
         BepConnection connection, IEnumerable<ShareConfig> shares, CancellationToken ct = default)
     {
-        if (State is PeerState.Verbunden or PeerState.Verbindet)
+        if (State == PeerState.Verbindet && _connection is null && _cts is not null)
+        {
+            // Beide Seiten waehlen einander gleichzeitig an. Unser Versuch
+            // steht noch ohne Leitung; die Gegenstelle hat ihre schon. Die
+            // wird genommen, der eigene Versuch abgebrochen.
+            //
+            // Bisher galt der eigene Versuch als "besteht bereits", und die
+            // eingehende Verbindung wurde abgewiesen -- auf beiden Seiten,
+            // denn beide fuehren denselben Ablauf. Gemessen am 13.09.,
+            // 16:28: unsere Anwahl laeuft ins Leere (zehn Sekunden), die
+            // eingehende wird abgewiesen, dann kommt unsere zweite Anwahl
+            // durch, und die Gegenstelle beendet sie eine Sekunde spaeter,
+            // weil bei ihr gerade dasselbe laeuft.
+            _log($"[{Display}] eingehende Verbindung waehrend der eigenen Anwahl: " +
+                 "die Anwahl wird abgebrochen, die eingehende Verbindung genommen.");
+            await _cts.CancelAsync();
+        }
+        else if (State is PeerState.Verbunden or PeerState.Verbindet)
         {
             // Eine zweite Verbindung zur selben Gegenstelle wird nicht
             // gebraucht. Der Grund geht mit, sonst liest die Gegenstelle nur
@@ -558,6 +576,7 @@ public sealed class PeerHost : IAsyncDisposable
         }
 
         var token = Begin(ct);
+        var sitzung = _sitzung;
         _log($"[{Display}] eingehende Verbindung angenommen.");
 
         try
@@ -566,14 +585,26 @@ public sealed class PeerHost : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            Fail(ex);
+            Fail(ex, sitzung);
             throw;
         }
     }
 
+    /// <summary>
+    /// Laufende Nummer der Sitzung. Jeder Aufbau -- angewaehlt oder
+    /// angenommen -- zaehlt sie hoch.
+    /// </summary>
+    /// <remarks>
+    /// Ein Fehler gehoert zu der Sitzung, in der er auftrat. Wird ein
+    /// Aufbau abgebrochen, weil inzwischen ein anderer laeuft, darf sein
+    /// Abbruch den neuen nicht in den Fehlerzustand setzen.
+    /// </remarks>
+    private int _sitzung;
+
     private CancellationToken Begin(CancellationToken ct)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _sitzung++;
         _clusterConfig = new TaskCompletionSource<ClusterConfig>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_indexEntschieden) _indexEntschieden.Clear();
         _ersteAnkuendigung = true;
@@ -582,8 +613,12 @@ public sealed class PeerHost : IAsyncDisposable
         return _cts.Token;
     }
 
-    private void Fail(Exception ex)
+    private void Fail(Exception ex, int sitzung)
     {
+        // Ein Abbruch, der einer ueberholten Sitzung gehoert. Die laufende
+        // bleibt davon unberuehrt.
+        if (sitzung != _sitzung) return;
+
         LastError = ex.Message;
         State = PeerState.Fehler;
         _log($"[{Display}] Fehler: {ex.Message}");
@@ -593,6 +628,15 @@ public sealed class PeerHost : IAsyncDisposable
     private async Task RunSessionAsync(
         BepConnection connection, IEnumerable<ShareConfig> shares, CancellationToken token)
     {
+        // Die Anwahl kam durch, nachdem sie schon aufgegeben war -- weil
+        // inzwischen eine eingehende Verbindung genommen wurde. Diese Leitung
+        // darf die laufende nicht verdraengen.
+        if (token.IsCancellationRequested)
+        {
+            await connection.DisposeAsync("ueberholt");
+            token.ThrowIfCancellationRequested();
+        }
+
         _connection = connection;
 
         ReportedName = connection.PeerHello.DeviceName;
@@ -664,6 +708,16 @@ public sealed class PeerHost : IAsyncDisposable
         }
 
         await NegotiateAsync(token);
+
+        // Die Leitung kann waehrend der Ankuendigung geendet haben. Dann ist
+        // sie nicht "verbunden", und der Wiederverbinder muss sie aufnehmen.
+        // Gemessen am 13.09., 16:28:45: "Die Gegenstelle hat die Verbindung
+        // beendet" eine Sekunde nach dem Aufbau, danach stand die Gegenstelle
+        // bis auf Weiteres als verbunden da, jede eingehende Verbindung wurde
+        // als zweite abgewiesen, und angewaehlt wurde nicht mehr.
+        if (_readLoop is { IsCompleted: true })
+            throw new IOException("die Verbindung endete waehrend der Ankuendigung.");
+
         State = PeerState.Verbunden;
 
         // Nebeneinander, nicht nacheinander.
@@ -1273,7 +1327,10 @@ public sealed class PeerHost : IAsyncDisposable
     /// </remarks>
     public async Task SuspendAsync()
     {
-        if (State != PeerState.Verbunden) return;
+        // Auch waehrend des Aufbaus. Endet die Leitung zwischen dem
+        // Handschlag und der Ankuendigung, ist der Zustand "verbindet" --
+        // und der blieb bisher stehen, mit einer toten Leitung im Feld.
+        if (State is not (PeerState.Verbunden or PeerState.Verbindet)) return;
 
         foreach (var share in _shares.Values) share.DropConnection(DeviceId);
 

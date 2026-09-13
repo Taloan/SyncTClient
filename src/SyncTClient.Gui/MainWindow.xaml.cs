@@ -2193,7 +2193,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (peer.Host.State is PeerState.Verbunden or PeerState.Verbindet)
+        // Eine eigene Anwahl, die noch keine Leitung hat, weicht der
+        // eingehenden Verbindung; das entscheidet AcceptAsync. Abgewiesen
+        // wird hier nur, was wirklich schon eine Leitung hat.
+        if (peer.Host.State == PeerState.Verbunden
+            || (peer.Host.State == PeerState.Verbindet && peer.Host.Connection is not null))
         {
             // Eine zweite Verbindung zur selben Gegenstelle wird nicht
             // gebraucht. Beide Seiten waehlen einander an, das trifft sich
