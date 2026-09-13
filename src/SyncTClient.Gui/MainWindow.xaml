@@ -814,6 +814,52 @@
         </Grid>
       </TabItem>
 
+      <!-- Die Warteliste der eingehenden Anfragen: Gegenstellen, die
+           aufgenommen werden wollen, und Ordner, die eine bekannte
+           Gegenstelle anbietet. Beantwortet wird hier, nicht in einem
+           Dialog, der im falschen Augenblick aufgeht. Die Zahl im Reiter
+           sagt, ob etwas offen ist. -->
+      <TabItem>
+        <TabItem.Header>
+          <TextBlock x:Name="AnfragenHeader" Text="{DynamicResource S.Main.Requests}" />
+        </TabItem.Header>
+        <Grid>
+          <DataGrid x:Name="AnfragenGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    CanUserAddRows="False" CanUserDeleteRows="False" CanUserResizeRows="False"
+                    SelectionMode="Single" HeadersVisibility="Column"
+                    GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{DynamicResource RahmenFein}"
+                    BorderThickness="0" RowHeight="30" Background="Transparent">
+            <DataGrid.CellStyle>
+              <Style TargetType="DataGridCell">
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="BorderThickness" Value="0" />
+              </Style>
+            </DataGrid.CellStyle>
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="{DynamicResource A.Col.Time}" Binding="{Binding ZeitText}" Width="60" />
+              <DataGridTextColumn Header="{DynamicResource A.Col.Kind}" Binding="{Binding ArtText}" Width="80" />
+              <DataGridTextColumn Header="{DynamicResource A.Col.From}" Binding="{Binding Von}" Width="160" />
+              <DataGridTextColumn Header="{DynamicResource A.Col.What}" Binding="{Binding Was}" Width="*" />
+              <DataGridTemplateColumn Width="200">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                      <Button Content="{DynamicResource A.Accept}" Padding="10,2" Margin="0,0,6,0"
+                              Click="OnAnfrageAnnehmen" />
+                      <Button Content="{DynamicResource A.Decline}" Padding="10,2" Margin="0,0,4,0"
+                              Click="OnAnfrageAblehnen" />
+                    </StackPanel>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
+          <TextBlock x:Name="AnfragenLeer" Foreground="{DynamicResource Gedaempft}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     Text="{DynamicResource A.None}" />
+        </Grid>
+      </TabItem>
+
       <TabItem Header="{DynamicResource S.Main.Log}">
         <TextBox x:Name="LogBox" IsReadOnly="True" FontFamily="Consolas" FontSize="11"
                  VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap"

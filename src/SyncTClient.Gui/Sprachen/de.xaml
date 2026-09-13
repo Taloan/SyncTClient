@@ -180,15 +180,6 @@ Diesen Ordner trotzdem verwenden?</s:String>
   <s:String x:Key="M.NothingLocal">Nichts zu leeren. Es liegt kein freigebbarer Inhalt lokal vor.</s:String>
   <s:String x:Key="M.NothingRunning">Nichts zu leeren. Es ist gerade kein Share aktiv.</s:String>
   <s:String x:Key="M.Cleared">Speicherplatz von {0} Dateien freigegeben ({1}), {2} Vorschaubilder verworfen ({3}).</s:String>
-  <s:String x:Key="M.WantsToConnect">„{0}“ möchte sich verbinden.</s:String>
-  <s:String x:Key="M.WantsToConnectBody">„{0}“ möchte sich verbinden.
-
-Adresse:      {1}
-Device-ID:  {2}
-
-Als Gegenstelle hinzufügen?</s:String>
-  <s:String x:Key="M.UnknownPeer">Unbekannte Gegenstelle</s:String>
-  <s:String x:Key="M.Rejected">„{0}“ abgewiesen.</s:String>
   <s:String x:Key="M.PeerAdded">Gegenstelle {0} hinzugefügt.</s:String>
   <s:String x:Key="M.PeerChanged">Gegenstelle {0} geändert. Wirksam beim nächsten Verbinden.</s:String>
   <s:String x:Key="M.RemovePeer">Gegenstelle „{0}“ entfernen?</s:String>
@@ -253,25 +244,25 @@ Angeheftete Dateien und Shares im Modus „vollständig lokal“ bleiben erhalte
   <s:String x:Key="R.Error">Fehler</s:String>
   <s:String x:Key="R.Stopped">gestoppt</s:String>
   <s:String x:Key="R.NotConnected">nicht verbunden</s:String>
-  <s:String x:Key="M.FolderOfferedTitle">Ordner angeboten</s:String>
-  <s:String x:Key="M.FolderOffered">{0} bietet den Ordner „{1}“ an.</s:String>
-  <s:String x:Key="M.FolderOfferedBody">„{0}“ bietet einen Ordner an.
-
-Ordner:        {1}
-Ordner-ID:   {2}
-
-Jetzt übernehmen? Bei Nein bleibt der Ordner in der Übersicht als angeboten stehen.</s:String>
-  <s:String x:Key="M.FolderOfferedLater">„{0}“ bleibt angeboten und kann in der Übersicht übernommen werden.</s:String>
-  <s:String x:Key="M.PeerOffersKnownFolderBody">„{0}“ bietet einen Ordner an, der hier bereits eingerichtet ist.
-
-Ordner:        {1}
-Ordner-ID:   {2}
-Hier:            {3}
-Bisher mit:   {4}
-
-„{0}“ als weitere Gegenstelle für diesen Ordner eintragen? Bei Nein bleibt es bei den bisherigen Gegenstellen; nachtragen lässt sie sich in den Einstellungen des Ordners unter „Teilen“.</s:String>
-  <s:String x:Key="M.PeerOffersKnownFolderLater">{0} für „{1}“ nicht eingetragen. Nachtragen: Einstellungen des Ordners, Reiter „Teilen“.</s:String>
   <s:String x:Key="M.PeerAddedToFolder">{0} für „{1}“ eingetragen, der Ordner wird angekündigt.</s:String>
+  <s:String x:Key="S.Main.Requests">Anfragen</s:String>
+  <s:String x:Key="S.Main.RequestsCount">Anfragen ({0})</s:String>
+  <s:String x:Key="A.Col.Time">Zeit</s:String>
+  <s:String x:Key="A.Col.Kind">Art</s:String>
+  <s:String x:Key="A.Col.From">Von</s:String>
+  <s:String x:Key="A.Col.What">Anfrage</s:String>
+  <s:String x:Key="A.Device">Gerät</s:String>
+  <s:String x:Key="A.Folder">Ordner</s:String>
+  <s:String x:Key="A.DeviceWants">möchte als Gegenstelle aufgenommen werden · {0} · {1}</s:String>
+  <s:String x:Key="A.FolderNew">bietet den Ordner „{0}“ an ({1})</s:String>
+  <s:String x:Key="A.FolderKnown">bietet den Ordner „{0}“ an ({1}) – hier bereits eingerichtet, die Gegenstelle käme als weitere dazu</s:String>
+  <s:String x:Key="A.Accept">Annehmen</s:String>
+  <s:String x:Key="A.Decline">Ablehnen</s:String>
+  <s:String x:Key="A.None">Keine offenen Anfragen.</s:String>
+  <s:String x:Key="A.NewDevice">Anfrage: „{0}“ möchte als Gegenstelle aufgenommen werden – Reiter „Anfragen“.</s:String>
+  <s:String x:Key="A.NewFolder">Anfrage: {0} bietet den Ordner „{1}“ an – Reiter „Anfragen“.</s:String>
+  <s:String x:Key="A.Declined">Anfrage von „{0}“ abgelehnt.</s:String>
+  <s:String x:Key="A.Gone">„{0}“ bietet den Ordner „{1}“ derzeit nicht an; die Anfrage bleibt stehen.</s:String>
   <s:String x:Key="R.Offered">angeboten</s:String>
   <s:String x:Key="R.PhaseIndex">Index</s:String>
   <s:String x:Key="R.PhasePlaceholders">Platzhalter</s:String>

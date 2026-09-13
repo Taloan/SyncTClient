@@ -188,15 +188,6 @@ Use this folder anyway?</s:String>
   <s:String x:Key="M.NothingLocal">Nothing to clear. No releasable content is held locally.</s:String>
   <s:String x:Key="M.NothingRunning">Nothing to clear. No share is active.</s:String>
   <s:String x:Key="M.Cleared">Freed the space of {0} files ({1}), discarded {2} thumbnails ({3}).</s:String>
-  <s:String x:Key="M.WantsToConnect">“{0}” wants to connect.</s:String>
-  <s:String x:Key="M.WantsToConnectBody">“{0}” wants to connect.
-
-Address:      {1}
-Device ID:  {2}
-
-Add as a remote device?</s:String>
-  <s:String x:Key="M.UnknownPeer">Unknown remote device</s:String>
-  <s:String x:Key="M.Rejected">“{0}” rejected.</s:String>
   <s:String x:Key="M.PeerAdded">Remote device {0} added.</s:String>
   <s:String x:Key="M.PeerChanged">Remote device {0} changed. Effective on the next connect.</s:String>
   <s:String x:Key="M.RemovePeer">Remove remote device “{0}”?</s:String>
@@ -261,25 +252,25 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="R.Error">error</s:String>
   <s:String x:Key="R.Stopped">stopped</s:String>
   <s:String x:Key="R.NotConnected">not connected</s:String>
-  <s:String x:Key="M.FolderOfferedTitle">Folder offered</s:String>
-  <s:String x:Key="M.FolderOffered">{0} offers the folder “{1}”.</s:String>
-  <s:String x:Key="M.FolderOfferedBody">“{0}” offers a folder.
-
-Folder:        {1}
-Folder ID:   {2}
-
-Accept it now? If not, the folder stays listed as offered in the overview.</s:String>
-  <s:String x:Key="M.FolderOfferedLater">“{0}” stays offered and can be accepted from the overview.</s:String>
-  <s:String x:Key="M.PeerOffersKnownFolderBody">“{0}” offers a folder that is already set up here.
-
-Folder:        {1}
-Folder ID:   {2}
-Here:           {3}
-So far with:  {4}
-
-Add “{0}” as another remote device for this folder? If not, the current devices stay as they are; it can be added later in the folder settings under “Sharing”.</s:String>
-  <s:String x:Key="M.PeerOffersKnownFolderLater">{0} not added to “{1}”. To add it later: folder settings, tab “Sharing”.</s:String>
   <s:String x:Key="M.PeerAddedToFolder">{0} added to “{1}”, the folder is being announced.</s:String>
+  <s:String x:Key="S.Main.Requests">Requests</s:String>
+  <s:String x:Key="S.Main.RequestsCount">Requests ({0})</s:String>
+  <s:String x:Key="A.Col.Time">Time</s:String>
+  <s:String x:Key="A.Col.Kind">Kind</s:String>
+  <s:String x:Key="A.Col.From">From</s:String>
+  <s:String x:Key="A.Col.What">Request</s:String>
+  <s:String x:Key="A.Device">Device</s:String>
+  <s:String x:Key="A.Folder">Folder</s:String>
+  <s:String x:Key="A.DeviceWants">wants to be added as a remote device · {0} · {1}</s:String>
+  <s:String x:Key="A.FolderNew">offers the folder “{0}” ({1})</s:String>
+  <s:String x:Key="A.FolderKnown">offers the folder “{0}” ({1}) – already set up here, the device would be added to it</s:String>
+  <s:String x:Key="A.Accept">Accept</s:String>
+  <s:String x:Key="A.Decline">Decline</s:String>
+  <s:String x:Key="A.None">No open requests.</s:String>
+  <s:String x:Key="A.NewDevice">Request: “{0}” wants to be added as a remote device – tab “Requests”.</s:String>
+  <s:String x:Key="A.NewFolder">Request: {0} offers the folder “{1}” – tab “Requests”.</s:String>
+  <s:String x:Key="A.Declined">Request from “{0}” declined.</s:String>
+  <s:String x:Key="A.Gone">“{0}” does not currently offer the folder “{1}”; the request stays listed.</s:String>
   <s:String x:Key="R.Offered">offered</s:String>
   <s:String x:Key="R.PhaseIndex">index</s:String>
   <s:String x:Key="R.PhasePlaceholders">placeholders</s:String>

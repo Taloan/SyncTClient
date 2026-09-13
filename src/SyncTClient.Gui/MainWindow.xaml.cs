@@ -113,6 +113,8 @@ public partial class MainWindow : Window
         TransferInfo.UiContext = SynchronizationContext.Current;
 
         UploadList.ItemsSource = _outgoing;
+        AnfragenGrid.ItemsSource = _anfragen;
+        AnfragenAnzeigen();
         DownloadList.ItemsSource = _incoming;
         ShareGrid.ItemsSource = _rows;
 
@@ -294,56 +296,203 @@ public partial class MainWindow : Window
         return host;
     }
 
+    // ------------------------------------------------------------ Anfragen
+
+    /// <summary>Die Warteliste der eingehenden Anfragen, in der Reihenfolge ihres Eintreffens.</summary>
+    private readonly ObservableCollection<Anfrage> _anfragen = [];
+
     /// <summary>
-    /// Fragt nach, sobald eine Gegenstelle einen Ordner anbietet.
+    /// Schluessel der Anfragen, die in diesem Programmlauf abgelehnt wurden.
     /// </summary>
     /// <remarks>
-    /// Wie bei einer unbekannten Gegenstelle, die sich verbinden will: ein
-    /// Dialog, Ja oder Nein. Die Zeile "angeboten" in der Uebersicht allein
-    /// reicht nicht -- sie entsteht ohne Hinweis, und der Filter "verbunden"
-    /// blendet sie aus. Wer auf der anderen Seite gerade den Haken gesetzt
-    /// hat, sah hier sonst keine Wirkung.
-    ///
-    /// Zwei Faelle. Ist der Ordner hier noch nicht eingerichtet, wird er
-    /// uebernommen wie aus der Uebersicht. Ist er schon eingerichtet -- mit
-    /// einer anderen Gegenstelle --, kommt diese Gegenstelle als weitere
-    /// dazu. Im zweiten Fall gibt es keine Zeile "angeboten": der Ordner
-    /// steht bereits in der Uebersicht, und die Gegenstelle zaehlt erst zu
-    /// ihm, wenn sie eingetragen ist. Ohne diese Frage bliebe nur der Reiter
-    /// "Teilen" in den Einstellungen des Ordners.
-    ///
-    /// Ein Nein verwirft nichts.
+    /// Eine abgelehnte Gegenstelle verbindet sich weiter, im Minutentakt.
+    /// Ohne diesen Vermerk stuende sie nach jedem Versuch wieder in der
+    /// Liste. Gespeichert wird das nicht: nach einem Neustart darf sie
+    /// erneut fragen.
     /// </remarks>
-    private async void OrdnerAngeboten(PeerHost gegenstelle, OfferedFolder angebot)
-    {
-        Status(App.S("M.FolderOffered", gegenstelle.Display, angebot.Display));
+    private readonly HashSet<string> _abgelehnt = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Nimmt eine Anfrage in die Warteliste. Eine Wiederholung derselben
+    /// Anfrage setzt nur die Zeit neu.
+    /// </summary>
+    /// <returns>Ob die Anfrage neu ist.</returns>
+    private bool AnfrageEinreihen(Anfrage anfrage)
+    {
+        if (_abgelehnt.Contains(anfrage.Schluessel)) return false;
+
+        var vorhanden = _anfragen.FirstOrDefault(a => a.Schluessel == anfrage.Schluessel);
+        if (vorhanden is not null)
+        {
+            vorhanden.Zuletzt = DateTime.Now;
+            return false;
+        }
+
+        _anfragen.Add(anfrage);
+        AnfragenAnzeigen();
+        return true;
+    }
+
+    /// <summary>Zahl im Reiter und der Hinweis bei leerer Liste.</summary>
+    private void AnfragenAnzeigen()
+    {
+        AnfragenHeader.Text = _anfragen.Count == 0
+            ? App.S("S.Main.Requests")
+            : App.S("S.Main.RequestsCount", _anfragen.Count);
+        AnfragenLeer.Visibility = _anfragen.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Entfernt Anfragen, die sich auf anderem Weg erledigt haben: eine
+    /// Gegenstelle, die inzwischen eingetragen ist, oder ein Ordner, der
+    /// inzwischen mit dieser Gegenstelle eingerichtet ist.
+    /// </summary>
+    private void AnfragenBereinigen()
+    {
+        var erledigt = _anfragen.Where(a => a.Art switch
+        {
+            AnfrageArt.Geraet => _peers.Any(p =>
+                p.Config.DeviceId.Equals(a.DeviceId, StringComparison.OrdinalIgnoreCase)),
+            _ => _config.Shares.Any(sh =>
+                sh.FolderId.Equals(a.FolderId, StringComparison.Ordinal)
+                && sh.PeerDeviceIds.Contains(a.DeviceId, StringComparer.OrdinalIgnoreCase))
+        }).ToList();
+
+        if (erledigt.Count == 0) return;
+
+        foreach (var a in erledigt) _anfragen.Remove(a);
+        AnfragenAnzeigen();
+    }
+
+    /// <summary>
+    /// Stellt einen angebotenen Ordner in die Warteliste.
+    /// </summary>
+    /// <remarks>
+    /// Zwei Faelle. Ist der Ordner hier noch nicht eingerichtet, wird er
+    /// beim Annehmen uebernommen wie aus der Uebersicht. Ist er schon
+    /// eingerichtet -- mit einer anderen Gegenstelle --, kommt diese
+    /// Gegenstelle beim Annehmen als weitere dazu. Im zweiten Fall gibt es
+    /// keine Zeile "angeboten": der Ordner steht bereits in der Uebersicht,
+    /// und die Gegenstelle zaehlt erst zu ihm, wenn sie eingetragen ist.
+    /// Ohne die Warteliste bliebe nur der Reiter "Teilen" in den
+    /// Einstellungen des Ordners.
+    /// </remarks>
+    private void OrdnerAngeboten(PeerHost gegenstelle, OfferedFolder angebot)
+    {
         var eingerichtet = _config.Shares.FirstOrDefault(s =>
             s.FolderId.Equals(angebot.FolderId, StringComparison.Ordinal));
 
+        // Schon beteiligt: dann ist es kein Angebot, sondern die Ordnerliste
+        // einer laufenden Freigabe.
+        if (eingerichtet is not null
+            && eingerichtet.PeerDeviceIds.Contains(gegenstelle.DeviceId, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var neu = AnfrageEinreihen(new Anfrage
+        {
+            Art = AnfrageArt.Ordner,
+            DeviceId = gegenstelle.DeviceId,
+            Von = gegenstelle.Display,
+            FolderId = angebot.FolderId,
+            Label = angebot.Label,
+            OrdnerEingerichtet = eingerichtet is not null
+        });
+
+        if (neu) Status(App.S("A.NewFolder", gegenstelle.Display, angebot.Display));
+    }
+
+    private async void OnAnfrageAnnehmen(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Anfrage anfrage) return;
+
+        switch (anfrage.Art)
+        {
+            case AnfrageArt.Geraet:
+                await GeraetAufnehmenAsync(anfrage);
+                break;
+
+            default:
+                await OrdnerAnnehmenAsync(anfrage);
+                break;
+        }
+    }
+
+    private void OnAnfrageAblehnen(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not Anfrage anfrage) return;
+
+        _abgelehnt.Add(anfrage.Schluessel);
+        _anfragen.Remove(anfrage);
+        AnfragenAnzeigen();
+
+        AppendLog(anfrage.Art == AnfrageArt.Geraet
+            ? $"{anfrage.Von} ({anfrage.DeviceId[..7]}) abgelehnt; weitere Verbindungsversuche werden abgewiesen."
+            : $"[{anfrage.Von}] Angebot des Ordners \"{anfrage.OrdnerName}\" abgelehnt.");
+        Status(App.S("A.Declined", anfrage.Von));
+    }
+
+    /// <summary>
+    /// Traegt eine Gegenstelle ein, die sich verbinden wollte, und verbindet
+    /// sie unter der Adresse, von der sie kam.
+    /// </summary>
+    private async Task GeraetAufnehmenAsync(Anfrage anfrage)
+    {
+        _anfragen.Remove(anfrage);
+        AnfragenAnzeigen();
+
+        if (_peers.Any(p => p.Config.DeviceId.Equals(anfrage.DeviceId, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        var neu = new PeerConfig { Name = anfrage.Von, Address = anfrage.Adresse, DeviceId = anfrage.DeviceId };
+        _config.Peers.Add(neu);
+        Persist();
+
+        await GegenstelleAufnehmenAsync(neu);
+        Status(App.S("M.PeerAdded", anfrage.Von));
+    }
+
+    /// <summary>
+    /// Nimmt einen angebotenen Ordner an: uebernimmt ihn, oder traegt die
+    /// Gegenstelle bei einem schon eingerichteten Ordner ein.
+    /// </summary>
+    private async Task OrdnerAnnehmenAsync(Anfrage anfrage)
+    {
+        var gegenstelle = _peers.FirstOrDefault(p =>
+            p.Config.DeviceId.Equals(anfrage.DeviceId, StringComparison.OrdinalIgnoreCase))?.Host;
+
+        if (gegenstelle is null)
+        {
+            // Die Gegenstelle ist inzwischen entfernt. Ihr Angebot damit auch.
+            _anfragen.Remove(anfrage);
+            AnfragenAnzeigen();
+            return;
+        }
+
+        var eingerichtet = _config.Shares.FirstOrDefault(s =>
+            s.FolderId.Equals(anfrage.FolderId, StringComparison.Ordinal));
+
         if (eingerichtet is not null)
         {
-            await GegenstelleZumOrdnerAsync(gegenstelle, eingerichtet, angebot);
+            _anfragen.Remove(anfrage);
+            AnfragenAnzeigen();
+            await GegenstelleZumOrdnerAsync(gegenstelle, eingerichtet);
             return;
         }
 
-        // Die Zeile ist ueber OfferedChanged schon in Auftrag gegeben; das
-        // laeuft vor diesem Aufruf, weil beides in derselben Reihenfolge
-        // eingereiht wurde.
         var row = _rows.FirstOrDefault(r =>
-            r.FolderId.Equals(angebot.FolderId, StringComparison.Ordinal) && !r.Accepted);
-        if (row is null) return;
+            r.FolderId.Equals(anfrage.FolderId, StringComparison.Ordinal) && !r.Accepted);
 
-        var answer = Ask(
-            App.S("M.FolderOfferedBody", gegenstelle.Display, angebot.Label, angebot.FolderId),
-            App.S("M.FolderOfferedTitle"));
-
-        if (answer != MessageBoxResult.Yes)
+        if (row is null)
         {
-            Status(App.S("M.FolderOfferedLater", angebot.Display));
+            // Die Gegenstelle nennt den Ordner gerade nicht -- etwa, weil sie
+            // getrennt ist. Die Anfrage bleibt; der naechste Versuch kann
+            // klappen.
+            Status(App.S("A.Gone", anfrage.Von, anfrage.OrdnerName));
             return;
         }
 
+        _anfragen.Remove(anfrage);
+        AnfragenAnzeigen();
         await OrdnerUebernehmenAsync(row);
     }
 
@@ -352,32 +501,19 @@ public partial class MainWindow : Window
     /// eingerichtet ist, und reicht ihr den Ordner in der laufenden Sitzung
     /// nach.
     /// </summary>
-    private async Task GegenstelleZumOrdnerAsync(PeerHost gegenstelle, ShareConfig share, OfferedFolder angebot)
+    private async Task GegenstelleZumOrdnerAsync(PeerHost gegenstelle, ShareConfig share)
     {
         if (share.PeerDeviceIds.Contains(gegenstelle.DeviceId, StringComparer.OrdinalIgnoreCase)) return;
-
-        var bisher = string.Join(", ", share.PeerDeviceIds
-            .Select(id => _peers.FirstOrDefault(p =>
-                p.Config.DeviceId.Equals(id, StringComparison.OrdinalIgnoreCase))?.Display ?? id[..Math.Min(7, id.Length)]));
-        if (bisher.Length == 0) bisher = "-";
-
-        var answer = Ask(
-            App.S("M.PeerOffersKnownFolderBody", gegenstelle.Display, angebot.Label, angebot.FolderId, share.LocalPath, bisher),
-            App.S("M.FolderOfferedTitle"));
-
-        if (answer != MessageBoxResult.Yes)
-        {
-            Status(App.S("M.PeerOffersKnownFolderLater", gegenstelle.Display, angebot.Display));
-            return;
-        }
 
         share.PeerDeviceIds.Add(gegenstelle.DeviceId);
         Persist();
 
+        var name = string.IsNullOrWhiteSpace(share.Label) ? share.FolderId : share.Label;
+
         try
         {
             await gegenstelle.ShareNachreichenAsync(share, _cts?.Token ?? default);
-            Status(App.S("M.PeerAddedToFolder", gegenstelle.Display, angebot.Display));
+            Status(App.S("M.PeerAddedToFolder", gegenstelle.Display, name));
         }
         catch (Exception ex)
         {
@@ -597,6 +733,7 @@ public partial class MainWindow : Window
         ShareGrid.SelectedItem = _rows.FirstOrDefault(r => r.FolderId == selected)
             ?? _rows.FirstOrDefault();
 
+        AnfragenBereinigen();
         RefreshRows();
     }
 
@@ -2026,38 +2163,33 @@ public partial class MainWindow : Window
 
         if (peer is null)
         {
-            AppendLog($"{name} von {address} moechte sich verbinden ({id[..7]}).");
-            Status(App.S("M.WantsToConnect", name));
-
-            var answer = Ask(
-                App.S("M.WantsToConnectBody", name, address, id),
-                App.S("M.UnknownPeer"));
-
-            if (answer != MessageBoxResult.Yes)
+            // Eine unbekannte Gegenstelle wird nicht sofort entschieden. Sie
+            // kommt in die Warteliste, und ihre Verbindung wird beendet --
+            // offen halten liesse sie sich nicht, die Gegenstelle wartet
+            // nicht beliebig lange auf die Ordnerliste. Sie verbindet sich
+            // von selbst wieder; wird sie in der Zwischenzeit angenommen,
+            // ist sie beim naechsten Versuch bekannt.
+            var neu = AnfrageEinreihen(new Anfrage
             {
-                await connection.DisposeAsync("abgelehnt");
-                Status(App.S("M.Rejected", name));
-                return;
+                Art = AnfrageArt.Geraet,
+                DeviceId = id,
+                Von = name,
+                Adresse = address
+            });
+
+            if (neu)
+            {
+                AppendLog($"{name} von {address} moechte sich verbinden ({id[..7]}). Anfrage eingereiht.");
+                Status(App.S("A.NewDevice", name));
+                await connection.DisposeAsync("Anfrage offen");
+            }
+            else
+            {
+                await connection.DisposeAsync(_abgelehnt.Contains($"g:{id.ToUpperInvariant()}")
+                    ? "abgelehnt"
+                    : "Anfrage offen");
             }
 
-            var neu = new PeerConfig { Name = name, Address = address, DeviceId = id };
-            _config.Peers.Add(neu);
-            Persist();
-
-            // Nicht ueber Load(): das traf alle anderen Gegenstellen. Nur
-            // der Host fuer diese eine, ohne selbst zu verbinden -- die
-            // Verbindung steht ja schon, sie wird gleich uebernommen.
-            peer = new PeerItem(NeueGegenstelle(neu));
-            _peers.Add(peer);
-            RebuildRows();
-        }
-
-        if (peer is null)
-        {
-            // Das Eintragen ist nicht durchgekommen. Ohne Eintrag gibt es
-            // niemanden, der die Verbindung fuehren koennte.
-            AppendLog($"{name} von {address} liess sich nicht eintragen.");
-            await connection.DisposeAsync("nicht eingetragen");
             return;
         }
 
