@@ -262,7 +262,14 @@ Pinned files and shares in “keep fully local” mode are kept. No data is lost
   <s:String x:Key="R.Stopped">stopped</s:String>
   <s:String x:Key="R.NotConnected">not connected</s:String>
   <s:String x:Key="M.FolderOfferedTitle">Folder offered</s:String>
-  <s:String x:Key="M.FolderOffered">{0} offers the folder “{1}”. Select its row in the overview to accept it.</s:String>
+  <s:String x:Key="M.FolderOffered">{0} offers the folder “{1}”.</s:String>
+  <s:String x:Key="M.FolderOfferedBody">“{0}” offers a folder.
+
+Folder:        {1}
+Folder ID:   {2}
+
+Accept it now? If not, the folder stays listed as offered in the overview.</s:String>
+  <s:String x:Key="M.FolderOfferedLater">“{0}” stays offered and can be accepted from the overview.</s:String>
   <s:String x:Key="R.Offered">offered</s:String>
   <s:String x:Key="R.PhaseIndex">index</s:String>
   <s:String x:Key="R.PhasePlaceholders">placeholders</s:String>

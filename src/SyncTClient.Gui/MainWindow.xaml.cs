@@ -295,20 +295,40 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Meldet einen eben angebotenen Ordner in der Statuszeile und am Symbol
-    /// im Infobereich.
+    /// Fragt nach, sobald eine Gegenstelle einen Ordner anbietet.
     /// </summary>
     /// <remarks>
-    /// Die Zeile "angeboten" in der Uebersicht allein reicht nicht: sie
-    /// entsteht ohne Hinweis, und der Filter "verbunden" blendet sie aus.
-    /// Wer auf der anderen Seite gerade den Haken gesetzt hat, sieht hier
-    /// sonst keine Wirkung.
+    /// Wie bei einer unbekannten Gegenstelle, die sich verbinden will: ein
+    /// Dialog, Ja oder Nein. Die Zeile "angeboten" in der Uebersicht allein
+    /// reicht nicht -- sie entsteht ohne Hinweis, und der Filter "verbunden"
+    /// blendet sie aus. Wer auf der anderen Seite gerade den Haken gesetzt
+    /// hat, sah hier sonst keine Wirkung.
+    ///
+    /// Ein Nein verwirft nichts: der Ordner bleibt als "angeboten" in der
+    /// Uebersicht und laesst sich dort spaeter uebernehmen.
     /// </remarks>
-    private void OrdnerAngeboten(PeerHost gegenstelle, OfferedFolder angebot)
+    private async void OrdnerAngeboten(PeerHost gegenstelle, OfferedFolder angebot)
     {
-        var meldung = App.S("M.FolderOffered", gegenstelle.Display, angebot.Display);
-        Status(meldung);
-        _tray?.Notify(App.S("M.FolderOfferedTitle"), meldung);
+        // Die Zeile ist ueber OfferedChanged schon in Auftrag gegeben; das
+        // laeuft vor diesem Aufruf, weil beides in derselben Reihenfolge
+        // eingereiht wurde.
+        var row = _rows.FirstOrDefault(r =>
+            r.FolderId.Equals(angebot.FolderId, StringComparison.Ordinal) && !r.Accepted);
+        if (row is null) return;
+
+        Status(App.S("M.FolderOffered", gegenstelle.Display, angebot.Display));
+
+        var answer = Ask(
+            App.S("M.FolderOfferedBody", gegenstelle.Display, angebot.Label, angebot.FolderId),
+            App.S("M.FolderOfferedTitle"));
+
+        if (answer != MessageBoxResult.Yes)
+        {
+            Status(App.S("M.FolderOfferedLater", angebot.Display));
+            return;
+        }
+
+        await OrdnerUebernehmenAsync(row);
     }
 
     /// <summary>
@@ -2241,7 +2261,13 @@ public partial class MainWindow : Window
     {
         if (_row is null || _row.Accepted) return;
 
-        var row = _row;
+        await OrdnerUebernehmenAsync(_row);
+    }
+
+    private async Task OrdnerUebernehmenAsync(ShareRow row)
+    {
+        if (row.Accepted) return;
+
         var draft = new ShareConfig
         {
             FolderId = row.FolderId,
