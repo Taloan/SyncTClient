@@ -107,6 +107,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = Titelzeile();
 
         // Meldungen kommen aus dem Threadpool. Bindungen benoetigen den
         // Oberflaechen-Thread.
@@ -3320,6 +3321,42 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------ Fassung
+
+    /// <summary>
+    /// "SyncTClient 0.9.6 · Build ce5d64d · 2026-09-13 16:41". Welcher Stand
+    /// laeuft, steht damit im Fenster und auf jedem Bildschirmfoto.
+    /// </summary>
+    /// <remarks>
+    /// Ein "+" hinter dem Commit heisst: gebaut mit Aenderungen, die noch
+    /// nicht eingecheckt waren. Commit und Zeitpunkt kommen aus
+    /// Directory.Build.props; fehlt Git beim Bauen, steht nur die Nummer.
+    /// </remarks>
+    private static string Titelzeile()
+    {
+        var assembly = System.Reflection.Assembly.GetEntryAssembly();
+
+        var roh = assembly?
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion ?? "";
+
+        var metadaten = assembly?
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .ToDictionary(m => m.Key, m => m.Value ?? "") ?? [];
+
+        var plus = roh.IndexOf('+');
+        var fassung = plus > 0 ? roh[..plus] : roh;
+        var commit = plus > 0 ? roh[(plus + 1)..] : "";
+
+        var titel = $"SyncTClient {fassung}";
+        if (commit.Length > 0)
+            titel += $" · Build {commit}{metadaten.GetValueOrDefault("BuildAenderungen", "")}";
+        if (metadaten.TryGetValue("BuildZeitpunkt", out var zeit) && zeit.Length > 0)
+            titel += $" · {zeit}";
+
+        return titel;
+    }
 
     /// <summary>Die Fassung, die gerade laeuft.</summary>
     private static Version EigeneFassung()

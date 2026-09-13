@@ -15,4 +15,37 @@
     <Version>0.9.6</Version>
   </PropertyGroup>
 
+  <!--
+    Die Build-Nummer: der Git-Commit, aus dem gebaut wurde, und der Zeitpunkt.
+
+    Beides steht in der Titelzeile des Programms. Ohne das war nicht zu
+    sehen, welcher Stand gerade lief; zwei Rechner mit derselben
+    Versionsnummer konnten Wochen auseinanderliegen.
+
+    Der Commit geht als SourceRevisionId in die InformationalVersion ein
+    ("0.9.6+ce5d64d"); der Zeitpunkt und ein Vermerk ueber lokale
+    Aenderungen stehen als AssemblyMetadata. Ohne Git bleibt der Titel bei
+    der Versionsnummer.
+  -->
+  <Target Name="BuildNummerErmitteln" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo">
+    <Exec Command="git rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true"
+          StandardOutputImportance="low" StandardErrorImportance="low" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitCommit" />
+      <Output TaskParameter="ExitCode" PropertyName="GitExitCode" />
+    </Exec>
+    <Exec Command="git status --porcelain" ConsoleToMSBuild="true" IgnoreExitCode="true"
+          StandardOutputImportance="low" StandardErrorImportance="low" ContinueOnError="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitAenderungen" />
+    </Exec>
+    <PropertyGroup>
+      <SourceRevisionId Condition="'$(GitExitCode)' == '0' And '$(GitCommit)' != ''">$(GitCommit)</SourceRevisionId>
+      <BuildZeitpunkt>$([System.DateTime]::Now.ToString("yyyy-MM-dd HH:mm"))</BuildZeitpunkt>
+      <BuildAenderungen Condition="'$(GitAenderungen)' != ''">+</BuildAenderungen>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="BuildZeitpunkt" Value="$(BuildZeitpunkt)" />
+      <AssemblyMetadata Include="BuildAenderungen" Value="$(BuildAenderungen)" />
+    </ItemGroup>
+  </Target>
+
 </Project>
