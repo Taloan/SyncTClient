@@ -130,14 +130,20 @@ if ($juengsterQuelltext -and $juengsterQuelltext.LastWriteTime -gt $anwendung.La
     if ((Read-Host 'Trotzdem weiter? (j/N)') -ne 'j') { exit 1 }
 }
 
-# Inno Setup. Die Fassung 6 liegt unter Programme, die 7 beim Benutzer.
+# Inno Setup. Je nach Installer liegt es unter Programme oder beim Benutzer
+# (winget installiert die Fassung 6 nach %LOCALAPPDATA%\Programs); beide
+# Fassungen an beiden Orten, dazu der Suchpfad.
 Schritt 'Inno Setup suchen'
 
 $Iscc = @(
     "$env:LOCALAPPDATA\Programs\Inno Setup 7\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    "$env:ProgramFiles\Inno Setup 7\ISCC.exe",
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+    (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
 
 if (-not $Iscc) { Abbruch 'ISCC.exe nicht gefunden. Inno Setup installieren: winget install JRSoftware.InnoSetup' }
 Write-Host "    $Iscc"
