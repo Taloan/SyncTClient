@@ -1122,14 +1122,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
                     _indexArrived.Release();
 
-                    // Die Anzahl fuehrt die Anzeige nur, solange kein
+                    // Gezaehlt wird immer; die Anzeige liest die Zahl ab.
+                    // Den Balken fuehrt die Anzahl aber nur, solange kein
                     // Endstand bekannt ist. Nennt die Gegenstelle ihre
                     // hoechste Sequenz, rechnet WaitForIndexAsync gegen sie
                     // -- und zwei Faeden, die abwechselnd verschiedene
                     // Groessen in denselben Balken schreiben, lassen ihn
                     // zwischen Anteil und Suchlauf springen.
+                    var eintraege = Interlocked.Add(ref _aufgenommen, stapel.Count);
                     if (Phase == SyncPhase.Index && Zielsequenz(device) == 0)
-                        SetPhase(SyncPhase.Index, Interlocked.Add(ref _aufgenommen, stapel.Count));
+                        SetPhase(SyncPhase.Index, eintraege);
                 }
                 catch (Exception ex)
                 {
@@ -1192,6 +1194,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
     /// <summary>Wie viele Index-Eintraege in dieser Sitzung hereinkamen.</summary>
     private int _aufgenommen;
+
+    /// <summary>
+    /// Wie viele Index-Eintraege in dieser Sitzung hereinkamen.
+    /// </summary>
+    /// <remarks>
+    /// Fuer die Anzeige waehrend des Index. Der Balken rechnet dort in
+    /// Sequenznummern, weil die Gegenstelle nur ihre hoechste Sequenz
+    /// vorher nennt und keine Anzahl; die Sequenz zaehlt aber jede
+    /// Aenderung seit dem ersten Tag des Ordners und liegt bei einem
+    /// Ordner mit 162.000 Dateien bei ueber zwei Millionen. Als Text
+    /// gelesen wird sie fuer eine Dateizahl gehalten. Diese Zahl hier ist
+    /// eine: Eintraege, die angekommen sind -- Dateien, Verzeichnisse und
+    /// Loeschvermerke.
+    /// </remarks>
+    public int IndexEintraege => Volatile.Read(ref _aufgenommen);
 
     /// <summary>Wann die Gegenstelle zuletzt etwas zu tun gab.</summary>
     private DateTime _letzteMeldung = DateTime.MinValue;

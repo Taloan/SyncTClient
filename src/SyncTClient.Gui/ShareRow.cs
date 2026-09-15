@@ -293,11 +293,12 @@ public sealed class ShareRow(PeerItem peer, string folderId, string label, Share
 
             if (Share.PhaseTotal == 0) return $"{Share.PhaseDone:N0}";
 
-            // Im Index zaehlt der Balken Sequenznummern, nicht Dateien. Ohne
-            // dieses Wort liest sich "12.345 von 176.706" als Dateizahl -- und
-            // die ist eine ganz andere.
+            // Im Index rechnet der Balken in Sequenznummern, nicht in
+            // Dateien; "12.345 von 2.145.334" liest sich aber als Dateizahl,
+            // und die ist eine ganz andere. Genannt werden deshalb die
+            // Eintraege, die angekommen sind. Den Anteil zeigt der Balken.
             if (Share.Phase == SyncPhase.Index)
-                return App.S("R.IndexSequence", $"{Share.PhaseDone:N0}", $"{Share.PhaseTotal:N0}");
+                return App.S("R.IndexEntries", $"{Share.IndexEintraege:N0}");
 
             return $"{Share.PhaseDone:N0} von {Share.PhaseTotal:N0}";
         }

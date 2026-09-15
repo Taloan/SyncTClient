@@ -126,11 +126,14 @@ public partial class ProgressWindow : Window
         Bar.IsIndeterminate = false;
         Bar.Value = Math.Clamp(100.0 * host.PhaseDone / host.PhaseTotal, 0, 100);
 
-        // Im Index zaehlt der Balken Sequenznummern der Gegenstelle, nicht
-        // Dateien. Ihre hoechste Sequenz liegt weit ueber der Anzahl der
-        // Dateien, denn sie zaehlt jede Aenderung seit dem ersten Tag mit.
+        // Im Index rechnet der Balken in Sequenznummern der Gegenstelle,
+        // nicht in Dateien: nur ihre hoechste Sequenz nennt sie vorher.
+        // Die Sequenz zaehlt jede Aenderung seit dem ersten Tag mit und
+        // liegt weit ueber der Dateizahl; als Text wuerde sie dafuer
+        // gehalten. Deshalb steht hier, was gezaehlt werden kann: die
+        // Eintraege, die angekommen sind. Den Anteil zeigt der Balken.
         CountText.Text = host.Phase == SyncPhase.Index
-            ? App.S("R.IndexSequence", Format.Count(host.PhaseDone), Format.Count(host.PhaseTotal))
+            ? App.S("R.IndexEntries", Format.Count(host.IndexEintraege))
             : App.S("S.Work.Of", Format.Count(host.PhaseDone), Format.Count(host.PhaseTotal));
     }
 }
