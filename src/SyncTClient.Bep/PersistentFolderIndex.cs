@@ -111,6 +111,53 @@ public sealed class PersistentFolderIndex : IDisposable
         catch (SqliteException) { /* steht schon da */ }
 
         Schema2();
+        UngueltigeVerwerfen();
+    }
+
+    /// <summary>
+    /// Entfernt einmalig die als ungueltig angekuendigten Eintraege, die
+    /// aeltere Fassungen gespeichert haben (siehe Absorb).
+    /// </summary>
+    private void UngueltigeVerwerfen()
+    {
+        if (GetMeta("ungueltigeVerworfen") == "1") return;
+
+        using var gate = _gate.EnterScope();
+        using var transaction = _db.BeginTransaction();
+
+        var fort = new List<(string Device, string Name)>();
+        using (var lesen = _db.CreateCommand())
+        {
+            lesen.Transaction = transaction;
+            lesen.CommandText = "SELECT device, name, info FROM files";
+            using var reader = lesen.ExecuteReader();
+            while (reader.Read())
+                if (BepFileInfo.Parser.ParseFrom((byte[])reader["info"]).Invalid)
+                    fort.Add((reader.GetString(0), reader.GetString(1)));
+        }
+
+        using (var loeschen = _db.CreateCommand())
+        {
+            loeschen.Transaction = transaction;
+            loeschen.CommandText = "DELETE FROM files WHERE device = $device AND name = $name";
+            var pDevice = loeschen.Parameters.Add("$device", SqliteType.Text);
+            var pName = loeschen.Parameters.Add("$name", SqliteType.Text);
+            foreach (var (device, name) in fort)
+            {
+                pDevice.Value = device;
+                pName.Value = name;
+                loeschen.ExecuteNonQuery();
+            }
+        }
+
+        using (var merken = _db.CreateCommand())
+        {
+            merken.Transaction = transaction;
+            merken.CommandText = "INSERT OR REPLACE INTO meta (key, value) VALUES ('ungueltigeVerworfen', '1')";
+            merken.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
     }
 
     /// <summary>
@@ -232,7 +279,12 @@ public sealed class PersistentFolderIndex : IDisposable
         using var command = _db.CreateCommand();
         command.CommandText = "SELECT COALESCE(MAX(sequence), 0) FROM files WHERE device = $device";
         command.Parameters.AddWithValue("$device", device);
-        return (long)(command.ExecuteScalar() ?? 0L);
+        var gespeichert = (long)(command.ExecuteScalar() ?? 0L);
+
+        // Ungueltige Ankuendigungen stehen nicht in der Tabelle, zaehlen
+        // aber fuer die Stelle, an der die Gegenstelle fortsetzt.
+        var marke = long.TryParse(GetMeta("peerMaxSequence:" + device), out var m) ? m : 0;
+        return Math.Max(gespeichert, marke);
     }
 
     /// <summary>
@@ -345,8 +397,34 @@ public sealed class PersistentFolderIndex : IDisposable
         var pInfo = upsert.Parameters.Add("$info", SqliteType.Blob);
         var pHasBlocks = upsert.Parameters.Add("$hasBlocks", SqliteType.Integer);
 
+        using var verwerfen = _db.CreateCommand();
+        verwerfen.Transaction = transaction;
+        verwerfen.CommandText = "DELETE FROM files WHERE device = $device AND name = $name";
+        verwerfen.Parameters.AddWithValue("$device", device);
+        var verwerfenName = verwerfen.Parameters.Add("$name", SqliteType.Text);
+
+        long hoechste = 0;
+
         foreach (var file in files)
         {
+            if (file.Sequence > hoechste) hoechste = file.Sequence;
+
+            // "Ungueltig" heisst: die Gegenstelle kennt den Namen, fuehrt die
+            // Datei aber nicht -- ausgeschlossen durch ein Muster, oder
+            // abgewaehlt. Syncthing laesst so einen Eintrag nie gegen eine
+            // gueltige Fassung gewinnen und holt ihn nie. Hier stand er in
+            // der Tabelle wie jeder andere und gewann bei neuerer Version:
+            // fuenf GPX-Dateien, die die Rossibox eben ausgeschlossen hatte,
+            // standen als Rueckstand "hier 56 KB statt 0 B". Fuer uns ist
+            // die Aussage dieselbe wie "nicht angekuendigt": der Eintrag der
+            // Gegenstelle geht fort, unsere Datei bleibt.
+            if (file.Invalid)
+            {
+                verwerfenName.Value = file.Name;
+                if (verwerfen.ExecuteNonQuery() > 0) changed.Add(file.Name);
+                continue;
+            }
+
             var version = file.Version?.ToByteArray() ?? [];
 
             lookupName.Value = file.Name;
@@ -370,6 +448,23 @@ public sealed class PersistentFolderIndex : IDisposable
                     ? 1 : 0;
 
             upsert.ExecuteNonQuery();
+        }
+
+        // Die Hochwassermarke der Gegenstelle, auch ueber ungueltige
+        // Eintraege hinweg: sie sagt beim naechsten Verbinden, ab wo die
+        // Gegenstelle fortsetzt.
+        if (hoechste > 0)
+        {
+            using var merken = _db.CreateCommand();
+            merken.Transaction = transaction;
+            merken.CommandText = """
+                INSERT INTO meta (key, value) VALUES ($key, $value)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                WHERE CAST(excluded.value AS INTEGER) > CAST(meta.value AS INTEGER)
+                """;
+            merken.Parameters.AddWithValue("$key", "peerMaxSequence:" + device);
+            merken.Parameters.AddWithValue("$value", hoechste.ToString());
+            merken.ExecuteNonQuery();
         }
 
         transaction.Commit();
@@ -879,8 +974,9 @@ public sealed class PersistentFolderIndex : IDisposable
     {
         using var gate = _gate.EnterScope();
         using var command = _db.CreateCommand();
-        command.CommandText = "DELETE FROM files WHERE device = $device";
+        command.CommandText = "DELETE FROM files WHERE device = $device; DELETE FROM meta WHERE key = $marke";
         command.Parameters.AddWithValue("$device", device);
+        command.Parameters.AddWithValue("$marke", "peerMaxSequence:" + device);
         command.ExecuteNonQuery();
     }
 

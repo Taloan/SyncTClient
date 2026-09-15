@@ -23,6 +23,17 @@ commit-by-commit history.*
 
 **Abgleich**
 
+- Schließt eine Gegenstelle Dateien per Muster aus oder wählt sie ab, kündigt
+  sie die Einträge als ungültig an (0 B, ohne Blöcke). Solche Einträge
+  standen hier in der Tabelle wie jeder andere und gewannen bei neuerer
+  Version: fünf GPX-Dateien, die die Rossibox eben aus AppData ausgeschlossen
+  hatte, standen als Rückstand "hier 56 KB statt 0 B", und 15.561 solcher
+  Einträge lagen im Index. Syncthing lässt einen ungültigen Eintrag nie
+  gegen eine gültige Fassung gewinnen und holt ihn nie. Jetzt gilt er als
+  "nicht angekündigt": der Eintrag der Gegenstelle geht fort, die eigene
+  Datei bleibt; gespeicherte Altlasten werden beim Öffnen einmalig entfernt.
+  Die Sequenznummer der Gegenstelle bleibt dabei erhalten, damit sie beim
+  Verbinden an der richtigen Stelle fortsetzt.
 - Eine Änderung neben einer Löschung gewinnt; eine Löschung wartet, bis eine
   hier noch nicht angekündigte Änderung hinaus ist. Vorher sah die Löschung
   der Gegenstelle neuer aus als eine eben geschriebene Datei.
