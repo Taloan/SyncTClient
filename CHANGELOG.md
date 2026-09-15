@@ -34,6 +34,16 @@ commit-by-commit history.*
   Datei bleibt; gespeicherte Altlasten werden beim Öffnen einmalig entfernt.
   Die Sequenznummer der Gegenstelle bleibt dabei erhalten, damit sie beim
   Verbinden an der richtigen Stelle fortsetzt.
+- Führen mehrere Gegenstellen eine Datei in verschiedenen Fassungen, wurde
+  der Rückstand an der größten Größe und jüngsten Zeit über alle gemessen —
+  einer Fassung, die es nicht gibt. Acht Fotos, die hier und auf der
+  Rossibox neu vorlagen und auf dem getrennten DIRK-PC noch alt, standen so
+  dauerhaft als "hier 21989814 statt 22001291 Bytes" im Rückstand. Gemessen
+  wird jetzt an der geltenden Fassung.
+- Eine Datei, die ein anderes Programm geöffnet hat, wurde bei jedem Versuch
+  vollständig übertragen und erst beim Ersetzen abgewiesen — bei "notizi
+  pr.db" 12,6 MB je Minute über das Relay. Jetzt wird vor dem Übertragen
+  geprüft.
 - Eine Änderung neben einer Löschung gewinnt; eine Löschung wartet, bis eine
   hier noch nicht angekündigte Änderung hinaus ist. Vorher sah die Löschung
   der Gegenstelle neuer aus als eine eben geschriebene Datei.

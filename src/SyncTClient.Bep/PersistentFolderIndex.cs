@@ -808,6 +808,16 @@ public sealed class PersistentFolderIndex : IDisposable
         // Version, welche gilt; siehe TryGet.
         var strittig = new List<int>();
 
+        // Namen, die mehrere Gegenstellen in verschiedenen Fassungen fuehren.
+        // MAX(size) und MAX(modified) ueber die Gegenstellen ergaeben eine
+        // Fassung, die es nicht gibt: gemessen an acht Fotos, die hier und
+        // auf der Rossibox in der neuen Fassung lagen und auf DIRK-PC, der
+        // seit Stunden getrennt war, noch in der alten -- groesseren. Der
+        // Rueckstand nannte sie "hier 21989814 statt 22001291 Bytes", nach
+        // der Groesse der veralteten Kopie. Gemessen wird an der geltenden
+        // Fassung, und die waehlt TryGet.
+        var uneinig = new List<int>();
+
         using (var command = _db.CreateCommand())
         {
             // Je Name eine Zeile, auch wenn mehrere Gegenstellen ihn fuehren.
@@ -819,7 +829,8 @@ public sealed class PersistentFolderIndex : IDisposable
                        MAX(CASE WHEN f.deleted = 0 THEN f.kind END),
                        MAX(CASE WHEN f.deleted = 0 THEN f.has_blocks END),
                        MAX(f.deleted),
-                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 1 THEN 1 ELSE 0 END)
+                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 1 THEN 1 ELSE 0 END),
+                       COUNT(DISTINCT CASE WHEN f.deleted = 0 THEN f.version END)
                 FROM files f LEFT JOIN local_files l ON l.name = f.name
                 WHERE f.name <> '' AND f.name > $nach
                 GROUP BY f.name
@@ -835,6 +846,7 @@ public sealed class PersistentFolderIndex : IDisposable
             while (reader.Read())
             {
                 if (reader.GetInt32(5) != 0 || reader.GetInt32(6) != 0) strittig.Add(eintraege.Count);
+                if (reader.GetInt32(7) > 1) uneinig.Add(eintraege.Count);
 
                 eintraege.Add((
                     reader.GetString(0),
@@ -845,9 +857,20 @@ public sealed class PersistentFolderIndex : IDisposable
             }
         }
 
+        foreach (var stelle in uneinig)
+        {
+            if (!TryGet(eintraege[stelle].Item1, out var geltend) || geltend.Deleted) continue;
+            eintraege[stelle] = (geltend.Name, geltend.Size, geltend.ModifiedS,
+                geltend.Type == FileInfoType.Directory, HatInhalt(geltend));
+        }
+
         NurGeltende(eintraege, strittig, e => e.Item1);
         return eintraege;
     }
+
+    /// <summary>Ob eine Ankuendigung Inhalt fuehrt oder keinen braucht.</summary>
+    private static bool HatInhalt(BepFileInfo file)
+        => file.Deleted || file.Size == 0 || file.Type != FileInfoType.File || file.Blocks.Count > 0;
 
     /// <summary>
     /// Nimmt aus einer Seite die Namen heraus, deren geltende Fassung eine
@@ -905,6 +928,8 @@ public sealed class PersistentFolderIndex : IDisposable
         using var gate = _gate.EnterScope();
         var eintraege = new List<(string, long, long, bool, bool, bool, bool)>();
         var strittig = new List<int>();
+        var uneinig = new List<int>();   // siehe EnumerateLight
+        var eigeneVersion = new Dictionary<int, byte[]?>();
 
         using (var command = _db.CreateCommand())
         {
@@ -921,7 +946,9 @@ public sealed class PersistentFolderIndex : IDisposable
                        MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 0 AND l.sequence > 0
                                 THEN 1 ELSE 0 END),
                        MAX(f.deleted),
-                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 1 THEN 1 ELSE 0 END)
+                       MAX(CASE WHEN l.name IS NOT NULL AND l.deleted = 1 THEN 1 ELSE 0 END),
+                       COUNT(DISTINCT CASE WHEN f.deleted = 0 THEN f.version END),
+                       MAX(l.version)
                 FROM files f LEFT JOIN local_files l ON l.name = f.name
                 WHERE f.name <> '' AND f.name > $nach
                 GROUP BY f.name
@@ -937,6 +964,11 @@ public sealed class PersistentFolderIndex : IDisposable
             while (reader.Read())
             {
                 if (reader.GetInt32(7) != 0 || reader.GetInt32(8) != 0) strittig.Add(eintraege.Count);
+                if (reader.GetInt32(9) > 1)
+                {
+                    uneinig.Add(eintraege.Count);
+                    eigeneVersion[eintraege.Count] = reader.IsDBNull(10) ? null : (byte[])reader[10];
+                }
 
                 eintraege.Add((
                     reader.GetString(0),
@@ -947,6 +979,21 @@ public sealed class PersistentFolderIndex : IDisposable
                     reader.GetInt32(5) != 0,
                     reader.GetInt32(6) != 0));
             }
+        }
+
+        foreach (var stelle in uneinig)
+        {
+            var alt = eintraege[stelle];
+            if (!TryGet(alt.Item1, out var geltend) || geltend.Deleted) continue;
+
+            // "Eigene Fassung gleich" bezieht sich jetzt auf die geltende,
+            // nicht auf irgendeine der Gegenstellen.
+            var eigene = eigeneVersion.GetValueOrDefault(stelle);
+            var gleich = eigene is not null
+                         && eigene.AsSpan().SequenceEqual(geltend.Version?.ToByteArray() ?? []);
+
+            eintraege[stelle] = (geltend.Name, geltend.Size, geltend.ModifiedS,
+                geltend.Type == FileInfoType.Directory, HatInhalt(geltend), gleich, alt.Item7);
         }
 
         NurGeltende(eintraege, strittig, e => e.Item1);

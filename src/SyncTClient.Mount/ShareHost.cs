@@ -2186,6 +2186,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         var leitung = LineFor(name)
             ?? throw new InvalidOperationException($"\"{FolderId}\" ist nicht verbunden.");
 
+        // Vor dem Uebertragen, nicht danach: eine Datei, die ein anderes
+        // Programm geoeffnet hat, laesst sich am Ende nicht ersetzen. Bis
+        // hierher wurde sie trotzdem jede Minute vollstaendig geholt und
+        // erst beim Ersetzen abgewiesen -- gemessen an "notizi pr.db",
+        // 13 MB, offen in Notizi: 12,6 MB je Minute ueber das Relay, fuer
+        // nichts.
+        if (File.Exists(path) && !IsPlaceholder(path) && InBenutzung(path))
+            throw new IOException("von einem anderen Programm geoeffnet; " +
+                                  "die Fassung der Gegenstelle wartet, bis es sie freigibt.");
+
         var transfer = new TransferInfo(FolderId, name, file.Size, TransferDirection.Herein);
         TransferStarted?.Invoke(transfer);
         transfer.State = TransferState.Laeuft;
@@ -3349,6 +3359,21 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         // der Beobachter: eine Aenderung, die er gemeldet hat, steht in den
         // Vermerken.
         return _dirty.ContainsKey(name) || _wartend.ContainsKey(name);
+    }
+
+    /// <summary>
+    /// Ob ein anderes Programm die Datei geoeffnet hat: Oeffnen ohne jede
+    /// Freigabe gelingt nur, wenn niemand sonst einen Handle haelt.
+    /// </summary>
+    private static bool InBenutzung(string path)
+    {
+        try
+        {
+            using var probe = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            return false;
+        }
+        catch (IOException) { return true; }
+        catch (UnauthorizedAccessException) { return true; }
     }
 
     private static bool FehltHier(string path)
