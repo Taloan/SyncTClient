@@ -354,6 +354,13 @@ public sealed partial class ShareHost
             Einmal("katalog:" + katalog)(
                 $"[{FolderId}] Katalog \"{katalog}\" ist in Lightroom geoeffnet. Seine Dateien werden " +
                 "weder angekuendigt noch von der Gegenstelle uebernommen, bis er geschlossen ist.");
+
+            // Der Name bleibt in der Schlange und wird im naechsten Takt
+            // wieder angesehen. Ohne das war er nach dem Schliessen des
+            // Katalogs fort: 799 Eintraege der Gegenstelle standen eine
+            // Stunde nach dem Ende von Lightroom noch als Rueckstand, und
+            // nichts sah sie je wieder an.
+            _incoming[name] = 0;
             return;
         }
 

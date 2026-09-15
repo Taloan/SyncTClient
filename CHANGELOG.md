@@ -13,6 +13,11 @@ commit-by-commit history.*
 
 **Lightroom**
 
+- Einträge der Gegenstelle, die bei geöffnetem Katalog zurückstanden, wurden
+  aus der Schlange genommen und nach dem Schließen nie wieder angesehen: 799
+  Einträge standen eine Stunde nach dem Ende von Lightroom noch als
+  Rückstand. Sie bleiben jetzt in der Schlange und werden im nächsten Takt
+  erneut geprüft.
 - Ein geöffneter Katalog wird nicht mehr angefasst. Solange neben `X.lrcat`
   die Sperrdatei `X.lrcat.lock` liegt, wird keine Datei des Verbunds —
   `X.lrcat`, `X.lrcat-data`, `X Helper.lrdata`, `X Previews.lrdata`,
