@@ -814,6 +814,14 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         var databasePath = Path.Combine(_app.HomeDirectory, $"index-{FolderId}.db");
         _index ??= new PersistentFolderIndex(databasePath, FolderId);
         FremdeVerwerfen();
+
+        // Einmalig, im Hintergrund; siehe PersistentFolderIndex.UngueltigeVerwerfen.
+        var index = _index;
+        _ = Task.Run(() =>
+        {
+            try { index.UngueltigeVerwerfen(); }
+            catch (Exception ex) { _log($"[{FolderId}] ungueltige Eintraege verwerfen: {ex.Message}"); }
+        });
     }
 
     /// <summary>

@@ -111,14 +111,20 @@ public sealed class PersistentFolderIndex : IDisposable
         catch (SqliteException) { /* steht schon da */ }
 
         Schema2();
-        UngueltigeVerwerfen();
     }
 
     /// <summary>
     /// Entfernt einmalig die als ungueltig angekuendigten Eintraege, die
     /// aeltere Fassungen gespeichert haben (siehe Absorb).
     /// </summary>
-    private void UngueltigeVerwerfen()
+    /// <remarks>
+    /// Nicht beim Oeffnen, sondern vom Ordner im Hintergrund gerufen: beim
+    /// Oeffnen lief es auf dem Faden der Oberflaeche, und bei 640 MB
+    /// Lightroom-Index stand das Programm nach dem Start minutenlang.
+    /// Gelesen werden nur Eintraege ohne Groesse -- so kuendigt Syncthing
+    /// Ausgeschlossenes an; alles andere ist nicht ungueltig.
+    /// </remarks>
+    public void UngueltigeVerwerfen()
     {
         if (GetMeta("ungueltigeVerworfen") == "1") return;
 
@@ -129,7 +135,7 @@ public sealed class PersistentFolderIndex : IDisposable
         using (var lesen = _db.CreateCommand())
         {
             lesen.Transaction = transaction;
-            lesen.CommandText = "SELECT device, name, info FROM files";
+            lesen.CommandText = "SELECT device, name, info FROM files WHERE size = 0 AND deleted = 0 AND kind = 0";
             using var reader = lesen.ExecuteReader();
             while (reader.Read())
                 if (BepFileInfo.Parser.ParseFrom((byte[])reader["info"]).Invalid)
