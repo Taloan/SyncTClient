@@ -97,12 +97,13 @@ commit-by-commit history.*
 
 **Oberfläche**
 
-- Wer die Einstellungen mit X oder Escape schloss, hatte nichts gespeichert
-  — der Knopf dafür steht am Ende einer Seite, die man erst hinunterrollen
-  muss; zwei gesetzte Haken waren beim nächsten Öffnen wieder fort. Jetzt
-  wird bei ungespeicherten Änderungen gefragt. Scheitert der
-  Autostart-Eintrag, gehen die übrigen Einstellungen trotzdem durch, und
-  der Fehler wird gemeldet statt nur neben die Knöpfe geschrieben.
+- In den Einstellungen standen Speichern und Abbrechen am Ende des
+  Rollbereichs — wer nicht hinunterrollte, sah sie nicht, dachte nicht ans
+  Speichern und schloss mit X; zwei gesetzte Haken waren beim nächsten
+  Öffnen wieder fort. Die Knöpfe stehen jetzt fest unter dem Rollbereich,
+  wie im Gerätedialog, und bei ungespeicherten Änderungen wird beim
+  Schließen gefragt. Scheitert der Autostart-Eintrag, gehen die übrigen
+  Einstellungen trotzdem durch, und der Fehler wird gemeldet.
 - Eingehende Anfragen — neue Gegenstellen, angebotene Ordner — stehen im
   Reiter „Anfragen" und werden dort angenommen oder abgelehnt; kein Dialog
   mehr.

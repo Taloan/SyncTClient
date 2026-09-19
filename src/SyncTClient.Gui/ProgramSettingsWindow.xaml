@@ -27,10 +27,21 @@
     </Style>
   </Window.Resources>
 
+  <DockPanel Margin="16">
+
+    <!-- Die Knoepfe stehen ausserhalb des Rollbereichs, wie im Geraetedialog.
+         Sie duerfen nie weggescrollt sein: wer sie nicht sieht, denkt nicht
+         ans Speichern, schliesst mit X und hat nichts geaendert. -->
+    <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
+      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Save}" Padding="14,4" Click="OnSave" Margin="0" />
+      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Cancel}" Padding="14,4" IsCancel="True" Margin="0,0,6,0" />
+      <TextBlock x:Name="Hint" Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center" TextWrapping="Wrap" />
+    </DockPanel>
+
   <ScrollViewer VerticalScrollBarVisibility="Auto">
   <!-- Rechts mehr Rand fuer die Bildlaufleiste. Das Fluent-Thema legt sie
        ueber den Inhalt, statt Platz fuer sie zu lassen. -->
-  <StackPanel Margin="16,16,32,16">
+  <StackPanel Margin="0,0,16,0">
 
     <!-- Wer wissen will, welche Fassung hier laeuft, sucht sie sonst in den
          Eigenschaften der Datei. Sie steht jetzt dort, wo man ohnehin
@@ -232,12 +243,7 @@
               Content="{DynamicResource S.Settings.Relays}" />
     <TextBlock Style="{StaticResource Hinweis}"
                Text="{DynamicResource S.Settings.RelaysHint}" />
-
-    <DockPanel Margin="0,18,0,0">
-      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Save}" Padding="14,4" Click="OnSave" Margin="0" />
-      <Button DockPanel.Dock="Right" Content="{DynamicResource S.Cancel}" Padding="14,4" IsCancel="True" Margin="0,0,6,0" />
-      <TextBlock x:Name="Hint" Foreground="{DynamicResource Gedaempft}" VerticalAlignment="Center" TextWrapping="Wrap" />
-    </DockPanel>
   </StackPanel>
   </ScrollViewer>
+  </DockPanel>
 </Window>
