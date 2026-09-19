@@ -209,6 +209,7 @@ Bereits heruntergeladene Dateien bleiben erhalten.</s:String>
   <s:String x:Key="D.Copied">Device-ID in die Zwischenablage kopiert.</s:String>
   <s:String x:Key="D.QrFailed">QR-Code nicht darstellbar: {0}</s:String>
   <s:String x:Key="D.AutostartFailed">Der Autostart-Eintrag konnte nicht geändert werden: {0}</s:String>
+  <s:String x:Key="D.UnsavedSettings">Die Einstellungen wurden geändert, aber nicht gespeichert. Jetzt speichern?</s:String>
   <s:String x:Key="A.NoIndex">Kein Index vorhanden. Es lässt sich nur alles oder nichts übernehmen.</s:String>
   <s:String x:Key="A.HintOnDemand">Zunächst werden nur Platzhalter angelegt. Die Inhalte werden beim ersten Öffnen heruntergeladen und unterliegen dem Verbrauchs Limit des Datenträgers.</s:String>
   <s:String x:Key="A.HintAlways">Alle Inhalte werden sofort heruntergeladen und dauerhaft vorgehalten. Das Verbrauchs Limit gilt für diesen Share nicht.</s:String>

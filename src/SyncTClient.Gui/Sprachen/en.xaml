@@ -216,6 +216,7 @@ Files already downloaded are kept.</s:String>
   <s:String x:Key="M.SaveFailed">Saving failed: {0}</s:String>
   <s:String x:Key="D.Copied">Device ID copied to the clipboard.</s:String>
   <s:String x:Key="D.QrFailed">QR code cannot be drawn: {0}</s:String>
+  <s:String x:Key="D.UnsavedSettings">The settings were changed but not saved. Save them now?</s:String>
   <s:String x:Key="D.AutostartFailed">The autostart entry could not be changed: {0}</s:String>
   <s:String x:Key="A.NoIndex">No index available. You can only take all or nothing.</s:String>
   <s:String x:Key="A.HintOnDemand">At first only placeholders are created. Contents are downloaded the first time you open them and are subject to the volume’s usage limit.</s:String>

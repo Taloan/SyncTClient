@@ -95,6 +95,52 @@ public partial class ProgramSettingsWindow : Window
         RelaysBox.IsChecked = config.Relays;
 
         _loading = false;
+
+        // Der Stand beim Oeffnen. Wer den Dialog mit X oder Escape schliesst,
+        // hat nichts gespeichert -- der Knopf dafuer steht am Ende einer
+        // Seite, die man dazu erst hinunterrollen muss. Zwei gesetzte Haken
+        // waren so beim naechsten Oeffnen wieder fort, ohne ein Wort.
+        _geoeffnet = Stand();
+        Closing += BeimSchliessen;
+    }
+
+    private string _geoeffnet = "";
+
+    /// <summary>Alle Eingaben als eine Zeichenkette, zum Vergleich.</summary>
+    private string Stand() => string.Join("|",
+        LanguageBox.SelectedIndex, ThemeBox.SelectedIndex,
+        AutostartBox.IsChecked, StartMinimizedBox.IsChecked, CloseToTrayBox.IsChecked,
+        UpdateBox.SelectedIndex, ThresholdBox.Text, SmartDbBox.IsChecked, ThumbsBox.IsChecked,
+        HomeBox.Text, ListenBox.IsChecked, ListenPortBox.Text, ParallelismBox.Text,
+        LocalDiscoveryBox.IsChecked, AnnounceBox.IsChecked, DiscoveryBox.IsChecked,
+        DiscoveryServerBox.Text, RelaysBox.IsChecked);
+
+    /// <summary>
+    /// Fragt nach, wenn der Dialog mit Aenderungen geschlossen wird, die
+    /// nicht gespeichert sind.
+    /// </summary>
+    private void BeimSchliessen(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (DialogResult == true) return;
+        if (Stand() == _geoeffnet) return;
+
+        var antwort = MessageBox.Show(this,
+            App.S("D.UnsavedSettings"), App.S("S.Settings.Title"),
+            MessageBoxButton.YesNoCancel, MessageBoxImage.Question, MessageBoxResult.Yes);
+
+        switch (antwort)
+        {
+            case MessageBoxResult.Yes:
+                OnSave(this, new RoutedEventArgs());
+                // Scheitert das Speichern an einer Eingabe, bleibt der Dialog
+                // offen; der Hinweis steht dann neben den Knoepfen.
+                if (DialogResult != true) e.Cancel = true;
+                break;
+
+            case MessageBoxResult.Cancel:
+                e.Cancel = true;
+                break;
+        }
     }
 
     /// <summary>
@@ -376,6 +422,7 @@ public partial class ProgramSettingsWindow : Window
         // Registrierung. Er wird deshalb getrennt geschrieben und danach
         // zurueckgelesen. Zuerst, denn nur er kann fehlschlagen.
         var autostart = AutostartBox.IsChecked == true;
+        string? autostartFehler = null;
         if (autostart != Autostart.Enabled)
         {
             try
@@ -384,9 +431,8 @@ public partial class ProgramSettingsWindow : Window
             }
             catch (Exception ex)
             {
-                Hint.Text = App.S("D.AutostartFailed", ex.Message);
+                autostartFehler = ex.Message;
                 AutostartBox.IsChecked = Autostart.Enabled;
-                return;
             }
         }
 
@@ -416,6 +462,17 @@ public partial class ProgramSettingsWindow : Window
         _config.Relays = RelaysBox.IsChecked == true;
         _config.Language = LanguageBox.SelectedIndex switch { 1 => "de", 2 => "en", _ => "" };
         _config.Theme = ThemeBox.SelectedIndex switch { 1 => "Hell", 2 => "Dunkel", _ => "" };
+
+        // Der Autostart ist der einzige Eintrag ausserhalb der Konfiguration.
+        // Scheitert er, gehen die uebrigen Einstellungen trotzdem durch --
+        // vorher brach das Speichern hier ab, und "Minimiert starten" war
+        // mit dem Autostart zusammen verloren. Der Fehler wird gesagt, nicht
+        // nur in die Zeile neben den Knoepfen geschrieben.
+        if (autostartFehler is not null)
+        {
+            MessageBox.Show(this, App.S("D.AutostartFailed", autostartFehler),
+                App.S("S.Settings.Title"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
 
         DialogResult = true;
     }
