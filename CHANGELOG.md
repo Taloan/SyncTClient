@@ -70,6 +70,20 @@ commit-by-commit history.*
 
 **Verbindungen**
 
+- Ein Index oder Nachtrag konnte vor unserer Ordnerliste hinausgehen, wenn
+  ein schon laufender Ordner auf die Liste der Gegenstelle sofort antwortete
+  und die eigene noch hinter dem Öffnen der Indexdatenbanken stand.
+  Syncthing schließt darauf die Verbindung — am 19.09. viermal in einer
+  Minute, und alle Ordner standen auf "gestoppt". Index und Nachtrag warten
+  jetzt, bis die Ordnerliste durch ist.
+- Die Ordnerliste der Gegenstelle wurde gelesen, bevor die eigenen Ordner
+  eingetragen waren; alle noch fehlenden galten als "nicht übernommen" —
+  sieben Angebote für längst eingerichtete Ordner und eine Anfrage in der
+  Warteliste. Gelesen wird jetzt erst nach dem Eintragen.
+- Der Grund, den die Gegenstelle beim Schließen nennt, steht jetzt im
+  Protokoll; bisher hieß es nur "hat die Verbindung beendet".
+- Endete die Verbindung während der Ankündigung, stand "Object reference not
+  set to an instance of an object" statt eines Abbruchs.
 - Eine Blockanfrage nach zwei Minuten Ruhe galt sofort als unbeantwortet;
   jede Übertragung nach einer Pause scheiterte beim ersten Versuch.
 - Endete die Leitung während der Ankündigung, blieb die Gegenstelle auf

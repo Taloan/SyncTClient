@@ -339,6 +339,7 @@ public sealed class BepConnection : IAsyncDisposable
 
                     case MessageType.Close:
                         var close = Close.Parser.ParseFrom(payload);
+                        CloseReason = close.Reason;
                         FailPending(new IOException($"Peer hat geschlossen: {close.Reason}"));
                         Closed?.Invoke(close.Reason);
                         return;
@@ -437,8 +438,31 @@ public sealed class BepConnection : IAsyncDisposable
         }
     }
 
-    public Task SendClusterConfigAsync(ClusterConfig config, CancellationToken ct = default)
-        => SendAsync(MessageType.ClusterConfig, config, ct);
+    public async Task SendClusterConfigAsync(ClusterConfig config, CancellationToken ct = default)
+    {
+        await SendAsync(MessageType.ClusterConfig, config, ct).ConfigureAwait(false);
+        _angekuendigt.TrySetResult();
+    }
+
+    /// <summary>
+    /// Erfuellt, sobald unsere Ordnerliste hinausgegangen ist.
+    /// </summary>
+    /// <remarks>
+    /// Das Protokoll verlangt die Reihenfolge: erst ClusterConfig, dann
+    /// Index und Nachtraege. Ein Index vor der Ordnerliste ist fuer
+    /// Syncthing ein Formfehler, und es schliesst die Verbindung -- ohne
+    /// dass hier mehr zu sehen waere als "die Gegenstelle hat die Verbindung
+    /// beendet". Gemessen am 19.09., 09:07 bis 09:08, viermal hintereinander:
+    /// die Ordnerliste der Rossibox kam, der Nachsender eines schon
+    /// laufenden Ordners schickte seinen Nachtrag sofort, und unsere eigene
+    /// Ordnerliste stand noch hinter dem Oeffnen von zehn Indexdatenbanken.
+    /// Index und Nachtrag warten deshalb hier, bis die Ordnerliste durch ist.
+    /// </remarks>
+    private readonly TaskCompletionSource _angekuendigt =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Der Grund, den die Gegenstelle beim Schliessen genannt hat.</summary>
+    public string? CloseReason { get; private set; }
 
     /// <summary>
     /// Schickt einen Index: unseren vollstaendigen Bestand zu einem Ordner.
@@ -448,8 +472,11 @@ public sealed class BepConnection : IAsyncDisposable
     /// verwirft, was sie sonst von uns zu diesem Ordner hat. Nachtraege
     /// einzelner Aenderungen laufen ueber IndexUpdate.
     /// </remarks>
-    public Task SendIndexAsync(Proto.Index index, CancellationToken ct = default)
-        => SendAsync(MessageType.Index, index, ct);
+    public async Task SendIndexAsync(Proto.Index index, CancellationToken ct = default)
+    {
+        await _angekuendigt.Task.WaitAsync(ct).ConfigureAwait(false);
+        await SendAsync(MessageType.Index, index, ct).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Schickt einen Nachtrag: nur die Dateien, die sich seit der letzten
@@ -462,8 +489,11 @@ public sealed class BepConnection : IAsyncDisposable
     /// hoechste Nummer der vorigen Nachricht; passt sie nicht zu ihrem Stand,
     /// erkennt die Gegenstelle daran eine Luecke.
     /// </remarks>
-    public Task SendIndexUpdateAsync(IndexUpdate update, CancellationToken ct = default)
-        => SendAsync(MessageType.IndexUpdate, update, ct);
+    public async Task SendIndexUpdateAsync(IndexUpdate update, CancellationToken ct = default)
+    {
+        await _angekuendigt.Task.WaitAsync(ct).ConfigureAwait(false);
+        await SendAsync(MessageType.IndexUpdate, update, ct).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Fordert genau einen Block an. Mehrere Aufrufe duerfen gleichzeitig
@@ -791,6 +821,10 @@ public sealed class BepConnection : IAsyncDisposable
     /// </remarks>
     public async ValueTask DisposeAsync(string grund)
     {
+        // Wer noch auf die Ordnerliste wartet, wartet nicht auf eine
+        // geschlossene Leitung.
+        _angekuendigt.TrySetException(new IOException("Verbindung beendet, bevor die Ordnerliste hinausging."));
+
         try
         {
             await SendAsync(MessageType.Close, new Close { Reason = grund }, CancellationToken.None)

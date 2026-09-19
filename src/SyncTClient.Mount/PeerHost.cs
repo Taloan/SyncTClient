@@ -621,7 +621,12 @@ public sealed class PeerHost : IAsyncDisposable
 
         LastError = ex.Message;
         State = PeerState.Fehler;
-        _log($"[{Display}] Fehler: {ex.Message}");
+
+        // Ein Fehler der Leitung hat seine Meldung; ein Fehler im Programm
+        // braucht die Stelle.
+        _log(ex is IOException or OperationCanceledException or TimeoutException or System.Net.Sockets.SocketException
+            ? $"[{Display}] Fehler: {ex.Message}"
+            : $"[{Display}] Fehler: {ShareHost.Herkunft(ex)}");
     }
 
     /// <summary>Alles, was nach dem Hello gleich ablaeuft, ob aufgebaut oder angenommen.</summary>
@@ -655,12 +660,15 @@ public sealed class PeerHost : IAsyncDisposable
         connection.MessageSent += (typ, bytes) => Zaehle(typ, bytes, false);
         connection.Serve = ServeAsync;
 
-        _readLoop = connection.RunAsync(token);
-
-        // Und jemanden, der ihr Ende bemerkt. Ohne das faellt eine
-        // abgebrochene Verbindung niemandem auf.
-        _ = VerlustBemerken(_readLoop, connection, token);
-
+        // Die Ordner vorbereiten, bevor gelesen und angekuendigt wird.
+        //
+        // Erst eintragen, dann lesen: die Ordnerliste der Gegenstelle kommt
+        // unmittelbar nach dem Handschlag. Wurde sie gelesen, waehrend hier
+        // noch Indexdatenbanken geoeffnet wurden, galten alle noch nicht
+        // eingetragenen Ordner als "nicht uebernommen" -- sieben Angebote
+        // fuer laengst eingerichtete Ordner und eine Anfrage in der
+        // Warteliste. Gemessen am 19.09., 09:07:48.
+        //
         // Die Ordner vorbereiten, bevor angekuendigt wird. Ihr Indexstand
         // geht in die Ankuendigung ein.
         foreach (var share in shares)
@@ -706,6 +714,12 @@ public sealed class PeerHost : IAsyncDisposable
             // nur die Verbindung ein, und genau darum geht es.
             if (!frisch) host2.Rebind(DeviceId, connection);
         }
+
+        _readLoop = connection.RunAsync(token);
+
+        // Und jemanden, der ihr Ende bemerkt. Ohne das faellt eine
+        // abgebrochene Verbindung niemandem auf.
+        _ = VerlustBemerken(_readLoop, connection, token);
 
         await NegotiateAsync(token);
 
@@ -810,6 +824,12 @@ public sealed class PeerHost : IAsyncDisposable
         // er wider Erwarten nicht, wird bei null begonnen.
         await Task.WhenAny(_clusterConfig.Task, Task.Delay(TimeSpan.FromSeconds(5), ct));
 
+        // Die Verbindung kann waehrenddessen fort sein -- der Verlust raeumt
+        // sie aus, und der Abbruch dieser Sitzung ist dann kein Fehler.
+        // Ohne diese Pruefung stand "Object reference not set" im Protokoll.
+        ct.ThrowIfCancellationRequested();
+        var verbindung = _connection ?? throw new OperationCanceledException("die Verbindung ist fort.");
+
         var peerFolders = _clusterConfig.Task.IsCompletedSuccessfully
             ? _clusterConfig.Task.Result.Folders
             : [];
@@ -823,7 +843,7 @@ public sealed class PeerHost : IAsyncDisposable
 
             var folder = peerFolders.FirstOrDefault(f => f.Id == share.FolderId);
             var peerDevice = folder?.Devices.FirstOrDefault(
-                d => Bep.DeviceId.FromBytes(d.Id.Span) == _connection!.PeerId);
+                d => Bep.DeviceId.FromBytes(d.Id.Span) == verbindung.PeerId);
 
             if (peerDevice is not null)
             {
@@ -888,14 +908,14 @@ public sealed class PeerHost : IAsyncDisposable
             });
             entry.Devices.Add(new Device
             {
-                Id = ByteString.CopyFrom(_connection!.PeerId.Span),
+                Id = ByteString.CopyFrom(verbindung.PeerId.Span),
                 MaxSequence = maxSequence,
                 IndexId = peerIndexId
             });
             announcement.Folders.Add(entry);
         }
 
-        await _connection!.SendClusterConfigAsync(announcement, ct);
+        await verbindung.SendClusterConfigAsync(announcement, ct);
         _ersteAnkuendigung = false;
     }
 
@@ -1302,8 +1322,13 @@ public sealed class PeerHost : IAsyncDisposable
         // Inzwischen haengt eine andere Verbindung an dieser Stelle.
         if (!ReferenceEquals(_connection, connection)) return;
 
+        // Der Grund der Gegenstelle gehoert dazu. Syncthing nennt ihn --
+        // "protocol error", "replacing connection" --, und ohne ihn stand
+        // hier nur, dass sie beendet hat, nicht warum.
         _log(grund is null
-            ? $"[{Display}] Die Gegenstelle hat die Verbindung beendet."
+            ? string.IsNullOrWhiteSpace(connection.CloseReason)
+                ? $"[{Display}] Die Gegenstelle hat die Verbindung beendet."
+                : $"[{Display}] Die Gegenstelle hat die Verbindung beendet: {connection.CloseReason}"
             : $"[{Display}] Verbindung verloren: {grund}");
 
         // Derselbe Weg wie beim Anhalten: die Ordner bleiben eingehaengt, nur
