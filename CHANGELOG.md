@@ -9,67 +9,49 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 **Lightroom**
 
-- Entries from a peer that were held back while a catalogue was open got
-  taken out of the queue and never looked at again after it closed: 799
-  entries still stood as backlog an hour after Lightroom had ended. They now
-  stay in the queue and are checked again on the next pass.
+- Entries from a peer that were held back while a catalogue was open were
+  taken out of the queue and not looked at again after it closed. They now
+  stay in the queue and are checked on the next pass.
 
 **Synchronisation**
 
-- When a peer excludes files by pattern or deselects them, it announces those
-  entries as invalid (0 B, no blocks). Such entries stood in the table here
-  like any other and won on a newer version: five GPX files the Rossibox had
-  just excluded from AppData stood as backlog "56 KB here instead of 0 B",
-  and 15,561 entries of that kind were in the index. Syncthing never lets an
-  invalid entry win against a valid version and never fetches one. It now
-  counts as "not announced": the peer's entry goes, the local file stays. The
-  peer's sequence number is kept, so it resumes at the right place on the
-  next connection.
+- A peer announces entries it excludes by pattern or deselects as invalid: no
+  blocks, size zero. They were treated like any other entry and won on a
+  newer version, which put them in the backlog although they can never be
+  fetched. They now count as not announced: the peer's entry is dropped, the
+  local file stays, and the peer's sequence number is kept so that it resumes
+  at the right place.
 - Stored entries of that kind are removed once when the index is opened — in
   the background, and only for entries without a size. Before, the pass ran
-  over every entry on the user-interface thread: with a 640 MB Lightroom
-  index the program stood still for minutes after starting.
+  over every entry on the user-interface thread.
 - Where several peers carry a file in different versions, the backlog was
   measured against the largest size and the most recent time across all of
-  them — a version that does not exist. Eight photos that were new here and
-  on the Rossibox and still old on the disconnected DIRK-PC therefore stood
-  permanently as "21989814 here instead of 22001291 bytes". It is now
-  measured against the version that applies.
-- A file another program had open was transferred in full on every attempt
-  and only refused when it came to replacing it — 12.6 MB per minute over the
-  relay for "notizi pr.db". It is now checked before the transfer.
+  them — a version that exists nowhere. It is now measured against the
+  version that applies.
+- A file another program had open was transferred in full before the attempt
+  to replace it failed. It is now checked before the transfer.
 
 **Connections**
 
-- An index or index update could go out ahead of our own folder list, when a
-  folder that was already running answered the peer's list immediately while
-  ours still stood behind opening the index databases. Syncthing closes the
-  connection over that — four times in one minute on 19 September, with every
-  folder stopped. Index and index update now wait until the folder list is
-  out.
-- The peer's folder list was read before our own folders were registered;
-  everything still missing counted as "not accepted" — seven offers for
-  folders long since set up, and a request in the queue. It is now read after
-  registering.
-- The reason a peer gives when it closes is now in the log; before it only
-  said "closed the connection".
-- When a connection ended during the announcement, "Object reference not set
-  to an instance of an object" appeared instead of a cancellation.
+- An index or index update could go out ahead of our own folder list, on
+  which Syncthing closes the connection. Both now wait until the folder list
+  is out.
+- The peer's folder list was read before our own folders were registered, so
+  folders already set up counted as not accepted. It is read afterwards now.
+- The reason a peer gives when it closes is now in the log.
+- A connection that ended during the announcement raised a null reference
+  instead of a cancellation.
 
 **User interface**
 
-- In the settings, Save and Cancel stood at the end of the scroll area —
-  anyone who did not scroll down did not see them, did not think of saving
-  and closed with X; two ticks that had just been set were gone next time.
-  The buttons now sit fixed below the scroll area, as in the device dialog,
-  and unsaved changes are asked about on closing. If the autostart entry
-  fails, the remaining settings still go through and the error is reported.
-- While an index was coming in, the number shown was the peer's sequence:
-  "sequence 84,408 of 2,145,334" for a folder with 162,000 files, read as a
-  file count. The sequence counts every change since the folder's first day.
-  The bar still works from it — a peer states its highest sequence in its
-  folder list, but no count — while the text now says how many entries have
-  arrived: files, directories and deletion records.
+- In the settings, Save and Cancel scrolled with the content and were out of
+  view until the panel had been scrolled to its end. They now sit fixed below
+  the scroll area, unsaved changes are asked about on closing, and a failed
+  autostart entry no longer stops the remaining settings from being saved.
+- While an index was arriving, the figure shown was the peer's sequence,
+  which counts every change since the folder was created and is not a file
+  count. The bar still works from it — a peer states no count — while the
+  text now gives the number of entries that have arrived.
 
 ## 0.9.6 — 2026-09-13
 
@@ -79,14 +61,12 @@ subjects of the commits — the commit-by-commit history is in `git log`.
   `X.lrcat.lock` sits next to `X.lrcat`, no file of the set — `X.lrcat`,
   `X.lrcat-data`, `X Helper.lrdata`, `X Previews.lrdata`,
   `X Smart Previews.lrdata`, `X Sync.lrdata` — is announced, accepted or
-  deleted. Independent of the smart database mode. Occasion: 79 files removed
-  from `PRI-v14.lrcat-data` by an incoming change during a Lightroom session,
-  followed by a repair message and a crash.
+  deleted. Independent of the smart database mode.
 
 **Synchronisation**
 
-- A change beside a deletion wins; a deletion waits until a change that has
-  not been announced yet is out. Before, the peer's deletion looked newer
+- A change beside a deletion wins, and a deletion waits until a change that
+  has not been announced yet is out. Before, the peer's deletion looked newer
   than a file just written.
 - A deletion needs a witness: the scan that last saw the file, or the
   watcher. Entries that never held content here are no longer reported as
@@ -102,18 +82,18 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 - A file accepted from a peer takes that peer's modification time; before,
   every scan reported it as changed and hashed it again.
 - What has been changed here and not yet announced is shown in the row and in
-  the log — instead of "in sync".
+  the log, instead of "in sync".
 
 **Connections**
 
 - A block request after two minutes of quiet counted as unanswered straight
-  away; every transfer after a pause failed on the first attempt.
+  away, so every transfer after a pause failed on the first attempt.
 - If the connection ended during the announcement, the peer stayed on
   "connecting": no redial, every incoming connection refused.
 - Where both sides dial each other at the same time, the local dial gives way
   to the incoming connection.
 - Where a peer asks for a file that was announced as present here but is not,
-  the announcement is corrected instead of refused every minute.
+  the announcement is corrected instead of refused again every minute.
 
 **User interface**
 
@@ -126,120 +106,100 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 **Connections**
 
 - A relay listening on every interface puts the unspecified address
-  (`::ffff:0.0.0.0`) into its invitation. Connecting there failed with "the
-  requested address is not valid in its context", on every attempt, and the
-  phone stayed unreachable. An unspecified address now counts as an empty
-  one: the relay itself.
+  (`::ffff:0.0.0.0`) into its invitation, and connecting there failed. An
+  unspecified address now counts as an empty one: the relay itself.
 
 **Start**
 
-- Two folders may start at once; the places went to whichever index arrived
-  first — and Lightroom with 67,000 entries held one of them for three
-  minutes while seven small folders waited. Start now goes in ascending
-  order of index size: the small ones are done in seconds, the large one
-  takes as long as it did before.
-- The sequence numbers of our own announcements jumped backwards between two
-  messages. Syncthing accepts that but reports it as a protocol error.
+- Two folders may start at once, and the places went to whichever index
+  arrived first, so a large folder could hold one for minutes while small
+  ones waited. Start now goes in ascending order of index size.
+- The sequence numbers of our own announcements could jump backwards between
+  two messages. Syncthing accepts that but reports it as a protocol error.
   Everything that goes out is now above everything that ever went out.
 
 **Always local**
 
 - "Always local" also created a placeholder for every new or changed version
   from a peer: the existing file was removed, an empty placeholder took its
-  place, and the content came later — or not. Over a relay that lost the
-  connection, 47 photos were left behind as empty placeholders; Lightroom
-  reported them as damaged on import, and the version that had been there
-  was gone. Now as in Syncthing: the peer's version is transferred in full
-  into a side file and only then put in place of the old one. Until then the
-  old file is untouched, and a new one appears only once it is complete.
-  Placeholders now exist only under "on demand".
+  place, and the content followed. If the transfer did not complete, an empty
+  placeholder was left where a complete file had been. Now as in Syncthing:
+  the peer's version is transferred in full into a side file and only then
+  put in place of the old one. Until then the old file is untouched, and a
+  new one appears only once it is complete. Placeholders now exist only under
+  "on demand".
 - Before replacing, it is checked whether the file has been written here in
   the meantime. If so it is not overwritten but announced, and the comparison
   of versions decides next time.
 - After the first download the row said "in sync" even when files were
-  missing ("45 of 47 fetched, 2 still missing", 7409 against 7407). The next
-  scan now measures the backlog; nothing is finished until it confirms.
+  missing. The next scan now measures the backlog; nothing is finished until
+  it confirms.
 - A failed fetch was only retried on the next scan over the folder. It now
   stays queued and is retried after a minute.
 
 **Transfer**
 
-- The deadline for a block request (two minutes) applied per request. A peer
-  answers in order; with 45 files in the queue, the answer to the last one
-  came over the relay only after three minutes, and two files were left with
-  "no answer in 120 s" while 500 MB arrived. The deadline now applies to the
-  connection: it expires when no answer at all has come in for two minutes.
+- The deadline for a block request applied per request. A peer answers in
+  order, so the answer to a request far back in the queue could arrive after
+  the deadline although data was coming in the whole time. The deadline now
+  applies to the connection: it expires when no answer at all has come in for
+  two minutes.
 
 **Error file**
 
-- The error file filled up with call stacks that described no fault of the
-  program: 163 times "The connection timed out from inactivity" from QUIC
-  connection attempts that had been given up after 15 seconds, plus aborted
-  TLS reads from the relay. An abandoned task ran on, failed later, and
-  nobody took the result. Every task with a deadline now gets a follower that
-  takes it — and closes a QUIC connection that did come about after all,
-  instead of leaving it open.
+- Tasks given up on a deadline ran on, failed later, and nobody took the
+  result — the error file filled with call stacks that described no fault of
+  the program. Every task with a deadline now gets a follower that takes the
+  result, and a QUIC connection that comes about after it was given up is
+  closed instead of left open.
 
 **Our own index**
 
-- On every new connection the whole local index went out, in a single message
-  — around 40 MB for PRI with a million blocks. Over a relay that lost the
-  connection every few minutes it never reached its end: the Rossibox did not
-  receive the announcement, showed the folder as up to date, and 66 new files
-  stood here for hours on "waiting for the peer"; after every break it
-  started over. What the peer says about us in its folder list now applies:
-  if it knows our index under its ID up to sequence n, it gets only what is
-  above that — as in Syncthing. A full index goes out in batches, and a break
-  in the middle costs nothing: next time it continues where the peer stopped.
-- The index goes out in a run of its own, not in the folder's background pass:
-  that one now accepts incoming data and starts transfers instead of standing
-  behind the sending for minutes.
-- Where the peer's folder list arrived only after the five-second wait —
-  regularly over the phone's relay — the decision was not made, and the
-  folder went out in full with the next batch. It is now made as soon as the
-  list is there.
+- On every new connection the whole local index went out in a single message,
+  and a break in the middle meant it never arrived; the peer then showed the
+  folder as up to date while new files waited here. What the peer says about
+  us in its folder list now applies: if it knows our index under its ID up to
+  sequence n, it gets only what is above that — as in Syncthing. A full index
+  goes out in batches, and a break costs nothing: next time it continues
+  where the peer stopped.
+- The index goes out in a run of its own instead of in the folder's
+  background pass, which can now accept incoming data and start transfers
+  while it sends.
+- Where the peer's folder list arrived only after the five-second wait, the
+  decision about our index was not made and the folder went out in full with
+  the next batch. It is now made as soon as the list is there.
 
 **Table**
 
-- A share that was set up but not connected showed a dash in the path column,
-  as if no path had been set. The path from the configuration is now shown
-  even when the peer is not connected.
+- A share that was set up but not connected showed a dash in the path column.
+  The path from the configuration is now shown even when the peer is not
+  connected.
 - "not connected" also appeared for folders a peer merely offers and that
-  have not been accepted here — GPS Tracks from the Rossibox, which was
-  connected. Those are now called "offered"; "not connected" is left to
-  configured shares without a connection.
+  have not been accepted here. Those are now called "offered"; "not
+  connected" is left to configured shares without a connection.
 
 **Log**
 
-- A closed accept dialog stood in the log as "OperationCanceledException"
-  with a call stack, as if something had failed. A cancellation is not an
-  error and is no longer reported as one.
+- A closed accept dialog stood in the log as a cancellation exception with a
+  call stack. A cancellation is no longer reported as an error.
 - "resuming at sequence n" came again for every folder on every repeated
-  announcement — an accept dialog opened and closed again cost eighteen
-  lines. Now only when connecting.
-- "Response had to wait n ms because something else was going over the
-  connection" appeared in the log every five seconds while the Rossibox was
-  fetching blocks: every block response waited for its predecessors. That is
-  a busy connection, not a jam, and the line "connection: n block responses
-  sent" says it in one. Reported now is only what stands behind something
-  else or is taken slowly by the peer.
+  announcement. Now only when connecting.
+- A line reporting that a response had to wait for the connection appeared
+  every few seconds while a peer was fetching blocks. Reported now is only
+  what stands behind something else or is taken slowly by the peer.
 - The log is also written to a file: `protokoll.log` next to the
   configuration, a new one per start; the previous one stays as
   `protokoll.1.log`.
 - A deletion was always announced as a file, even for a directory. Syncthing
-  rejects that ("encountered directory when trying to remove file/symlink"),
-  and the folder stood permanently on "out of sync" at the Rossibox — SyncAll
-  because of `.sync`, BackgroundSwitcher because of `Current`. A deletion now
+  rejects that, and the folder stayed out of sync at the peer. A deletion now
   carries the type of the entry it deletes.
 
 **Several peers on one folder**
 
 - A peer taken out of a share only lost its connection; its announcements
   stayed in the index and went on counting — in the backlog, in the peer
-  column, under "always local" as files to fetch, and in "1 of 2" including
-  the peer dialog. Measured on a folder where the Rossibox had been
-  deselected for days: 83 entries from it, the phone carried four. Only what
-  comes from a participating peer now counts; what does not belong is
+  column, under "always local" as files to fetch, and in the peer count. Only
+  what comes from a participating peer now counts; what does not belong is
   discarded on deselection and when opening.
 
 
@@ -252,28 +212,26 @@ with deleted files that came back.
 **Connections outside the local network**
 
 - New: connections over a relay, in both directions. The switch in the
-  settings was already there but had nothing behind it — a peer reachable
-  only over a relay was passed over. From a foreign network that left none of
-  the peer's five addresses usable. A relay is now taken as soon as no direct
-  route comes about, and the client registers itself with a public relay so
-  peers can reach it that way. The address is in discovery.
+  settings was already there but had nothing behind it, and a peer reachable
+  only over a relay was passed over. A relay is now taken as soon as no
+  direct route comes about, and the client registers itself with a public
+  relay so that peers can reach it that way. The address is in discovery.
 - New: QUIC (UDP 22000), outbound and inbound. That switch had no effect
   either.
 - A peer's addresses were tried one after another, each with a ten-second
-  deadline. With nineteen addresses — a phone on several networks — that took
-  minutes, and the relay came last. All direct addresses are now tried at
-  once, then all relays.
+  deadline, so a peer with many addresses took minutes and its relay came
+  last. All direct addresses are now tried at once, then all relays.
 - A peer whose attempt ended in an error was never tried again; only
   "disconnected" went into the reconnector. Both states are now picked up
   again, per peer with a growing interval from fifteen seconds to five
   minutes. A change of network resets the intervals.
-- A connection counted as dead after three minutes without traffic. Syncthing
-  allows five, and a phone in the background stays silent longer than three:
-  the connection to the phone broke every five to six minutes, and the log
-  put it down to the peer. Five minutes now, the connection is then closed
-  immediately, and the line gives the reason.
+- A connection counted as dead after three minutes without traffic, which is
+  shorter than a device in the background may stay silent; the resulting
+  break was logged as the peer's doing. Syncthing allows five minutes, and so
+  does this now; the connection is then closed immediately and the line gives
+  the reason.
 - Where a peer still carries the previous connection after a break, a new one
-  counts as a secondary connection for it: it sends a folder list without
+  counts as a secondary connection for it and it sends a folder list without
   folders. That was taken literally — "offers nothing any more" for every
   share, and a folder list of our own without any knowledge, on which the
   peer sent its entire index from the start. A secondary connection is now
@@ -281,24 +239,22 @@ with deleted files that came back.
   peer applies. In that state it also follows up every thirty seconds instead
   of with a growing interval.
 - The reconnector took one peer after another and waited until that peer's
-  shares had started — ten minutes over a relay. Every other peer stayed
-  disconnected that long. The attempts now run side by side.
-- Three directories were reported as a conflict on every connection, because
-  the local entry kept its old version after "the peer's version applies". It
-  now takes it over.
+  shares had started, during which every other peer stayed disconnected. The
+  attempts now run side by side.
+- Directories could be reported as a conflict on every connection, because
+  the local entry kept its old version after the peer's version had been
+  applied. It now takes it over.
 - While a share's index is still arriving, the columns on the right show
-  dashes instead of zeros. A zero there was not a number but a false
-  statement.
+  dashes instead of zeros.
 
 **Several peers on one folder**
 
 - A folder with two peers spoke only to the first. The second received
   neither index nor requests, although it was connected.
 - What came from one peer never reached the other. Where two peers are not
-  connected to each other — paused, switched off — their files go only
-  through us, and we did not pass them on. Every accepted file is now
-  announced to the remaining peers with its version, and the same goes for
-  deletions.
+  connected to each other, their files go only through us, and we did not
+  pass them on. Every accepted file is now announced to the remaining peers
+  with its version, and the same goes for deletions.
 - A share's settings and "open folder" could be clicked without a connection
   and did nothing. Both now work on the configuration, even when no folder is
   running.
@@ -309,16 +265,14 @@ with deleted files that came back.
 
 **What the peer knows about us**
 
-- Files accepted from a peer stood in no announcement of ours — around 160 GB
-  across all shares. To the peers the client therefore looked like a device
-  that has almost nothing: the phone showed it at one percent. Those entries
-  are now added, two thousand per scan and only after the block list has been
-  recomputed and matches the entry. With large shares that takes a while
-  after updating; the log says how many are still to come.
-- A deselected branch did not count as backlog here, but it did at the peer:
-  it saw files it carries and we do not, and showed us permanently at 99
-  percent. Deselected items are now reported to the peer as "will not be
-  here", the way Syncthing provides for.
+- Files accepted from a peer stood in no announcement of ours, so to its
+  peers the client looked like a device that holds almost nothing. Those
+  entries are now added, two thousand per scan and only after the block list
+  has been recomputed and matches the entry. With large shares that takes a
+  while after updating; the log says how many are still to come.
+- A deselected branch did not count as backlog here, but it did at the peer,
+  which therefore never showed us as complete. Deselected items are now
+  reported to the peer as "will not be here", the way Syncthing provides for.
 - A share never finished although there was nothing to transfer. A file whose
   time had shifted but whose content was the same counted as open; database
   companion files went on counting in the incoming direction; and a database
@@ -345,17 +299,16 @@ with deleted files that came back.
   cancelled the queued deletion. It now does that only when the file is
   actually there.
 - Between deleting a file and the watcher's record of it lie milliseconds,
-  and in that window synchronisation created the same file anew from the
-  peer's announcement, or a running transfer finished writing it — and that
-  counted as "back again". Of 60 files deleted by hand, 32 came back within a
-  second. Whatever the client itself created after a queued deletion is now
-  taken away again; the deletion stands.
+  and in that window synchronisation could create the same file anew from the
+  peer's announcement, or a running transfer could finish writing it — which
+  counted as the file being back. Whatever the client itself created after a
+  queued deletion is now taken away again; the deletion stands.
 
 **Scan**
 
 - Names that evaluation had deferred with a deadline — an open database, a
   file still being written — were queued again by every scan and reported as
-  "new or changed", for hours. They now keep their deadline.
+  new or changed. They now keep their deadline.
 
 
 ## 0.9.3 — 2026-09-08
@@ -366,35 +319,31 @@ while synchronisation is running. Two of the faults could cost data.
 **Conflict copies**
 
 - A locally changed file became a conflict copy as soon as an index from a
-  peer arrived — regardless of what was in it. On connecting, a peer sends
-  its whole index, including what it has from us: the echo of our own
-  announcement was enough. The version just written was put aside and
-  replaced by the peer's older one. In one browser profile 198 conflict
-  copies arose in a single day, and another program's configuration file was
-  made unusable several times. The version last announced is now held against
-  the incoming one: if the peer knows nothing additional, its version waits
-  until our change has been announced. A real conflict stays a conflict.
+  peer arrived, regardless of what was in it. On connecting, a peer sends its
+  whole index, including what it has from us, so the echo of our own
+  announcement was enough: the version just written was put aside and
+  replaced by the peer's older one. The version last announced is now held
+  against the incoming one — if the peer knows nothing additional, its
+  version waits until our change has been announced. A real conflict stays a
+  conflict.
 - A file deferred because of the settle time was only picked up again by the
-  next scan over the folder — and that runs hourly. The window in which a
-  change is here and not yet stated outwards was therefore not ten seconds
-  long but up to an hour. Every deferred name now carries its own deadline;
-  names that have come due return to evaluation every five seconds while
-  idle.
+  next scan over the folder, which runs hourly. The window in which a change
+  is here and not yet stated outwards was therefore up to an hour long. Every
+  deferred name now carries its own deadline; names that have come due return
+  to evaluation every five seconds while idle.
 
 **Files another program is working on**
 
 - The scan computed the checksums of a changed file immediately, that is at
-  the very moment it was being written. What was announced was an
+  the very moment it was being written, so what was announced was an
   intermediate state that never existed. Ten seconds without a change must
   now have passed.
-- Some programs work through a file in stages — first the result the user is
-  to see at once, then the capture data, then the rating. With a fixed settle
-  time every stage went out on its own: measured on a photo folder, 667 MB
-  for a set that should have been transferred once. The settle time now
-  applies per file and grows with every announcement that follows shortly
-  after the previous one — ten seconds, twenty, forty, eighty, at most two
-  minutes. Four minutes without a change reset it, and the first announcement
-  of a new file stays at ten seconds.
+- Some programs work through a file in stages, and with a fixed settle time
+  every stage went out on its own. The settle time now applies per file and
+  grows with every announcement that follows shortly after the previous one —
+  ten seconds, twenty, forty, eighty, at most two minutes. Four minutes
+  without a change reset it, and the first announcement of a new file stays
+  at ten seconds.
 - Three read paths opened foreign files without granting write access, and
   thereby locked out the program the file belongs to: computing for the
   announcement, the verification pass, and the access that starts a transfer.
@@ -417,31 +366,29 @@ while synchronisation is running. Two of the faults could cost data.
 
 **Log and backlog**
 
-- A program that opens and closes its database every second had its companion
-  files coming and going continuously. The log received around sixty lines a
-  second from that, over minutes. Companion files are no longer recorded at
-  all, and every message now falls only once per name.
-- The same files stood permanently in the backlog, with the reason "not yet
+- A program that opens and closes its database repeatedly had its companion
+  files coming and going, and each appearance produced its own log line.
+  Companion files are no longer recorded at all, and every message now falls
+  only once per name.
+- The same files stood permanently in the backlog with the reason "not yet
   announced" — a transfer that never comes. They no longer count as backlog
   but are named with a figure of their own.
 - Where a peer requests a file whose content no longer matches the
-  announcement, every block is refused — over two hundred of them for
-  twenty-five megabytes, and each stood as its own line in the log. Now the
-  first refusal per file and reason stands there, and the count at the end.
-- The reason for that refusal was also misleading. It spoke of the bytes;
-  what is true is that our announcement is out of date. On such a refusal the
-  file is now queued for re-evaluation immediately, instead of waiting for
-  the next scan and repeating the refusals.
-- A deferred file names its reason and the remaining time in the backlog. A
-  postponed name should not look like a stuck one.
+  announcement, every block is refused, and each refusal stood as its own
+  line in the log. Now the first refusal per file and reason stands there,
+  and the count at the end.
+- The reason for that refusal was also misleading: it spoke of the bytes,
+  while what is true is that our announcement is out of date. On such a
+  refusal the file is now queued for re-evaluation immediately, instead of
+  waiting for the next scan and repeating the refusals.
+- A deferred file names its reason and the remaining time in the backlog.
 
 **Delivery**
 
 - The installer carried one version too few: built with the old number, named
-  with the new one. For the check for a new version that was an endless loop
-  — an installed 0.9.2 reported itself as 0.9.1, held 0.9.2 to be newer,
-  installed it and went on reporting 0.9.1. What is in the built application
-  now decides.
+  with the new one. For the check for a new version that was an endless loop,
+  because the installed program reported the older number and went on holding
+  the same release to be newer. What is in the built application now decides.
 - The screenshots in the READMEs carry width and height, so the page does not
   jump while loading.
 
@@ -454,12 +401,10 @@ while synchronisation is running. Two of the faults could cost data.
   monthly. A single item is requested — which release on GitHub is the
   newest. If a newer one is there, a notice appears above the toolbar with a
   link to the page it is on.
-- Nothing whatsoever is downloaded or executed. The program carries no
-  signature and could therefore not check whether a downloaded file comes
-  from its author.
-- A failure stays silent: no network, GitHub unreachable — nobody asked for
-  that, so no message comes either. Dismissed applies to the version named; a
-  newer one reports again.
+- Nothing is downloaded or executed. The program carries no signature and
+  could not verify a downloaded file.
+- A failure stays silent — no network, GitHub unreachable. Dismissed applies
+  to the version named; a newer one reports again.
 
 **User interface**
 
@@ -469,7 +414,7 @@ while synchronisation is running. Two of the faults could cost data.
 - The limits per volume are now in the placeholder management window, which
   refers to one drive anyway, instead of as a list across all drives in the
   settings.
-- The section on volumes was empty at times: a failure while determining the
+- The section on volumes could be empty: a failure while determining the
   eviction candidates took the whole enumeration with it. It now applies per
   cache and costs only that cache's candidates.
 - The placeholder management window computed while opening and stood still
@@ -496,20 +441,18 @@ while synchronisation is running. Two of the faults could cost data.
   why, is now in both READMEs: there is no signing certificate, and
   SmartScreen also judges by reputation, which new software cannot have. The
   way to continue and the comparison of the checksum are given with it.
-- The section on the placeholder threshold now names what is counted and
-  which conditions additionally apply before content is discarded. That is
-  the one operation here where data can be lost.
+- The section on the placeholder threshold names what is counted and which
+  conditions additionally apply before content is discarded.
 - Two screenshots, the program icon beside the heading, and the disclaimer at
   the very top.
-- Details that have no business being in the source have been removed from
-  it: address and device ID of a foreign peer in the launch profiles, and the
-  address of the local network in both READMEs.
+- Removed from the source: the address and device ID of a peer in the launch
+  profiles, and a network address in both READMEs.
 
 **Tools**
 
 - Where publishing fails because a file manager is holding the Explorer
-  extension, a message now says what to do. Visual Studio reported "the cause
-  of the error could not be determined", while it stood ten lines further up.
+  extension, a message now names the cause; the build reported only that it
+  could not be determined.
 - `tools\Veroeffentlichen.cmd` can be clicked. Windows does not associate
   `.ps1` with PowerShell, and the execution policy is set to Restricted.
 - This file exists as of this version.
