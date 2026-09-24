@@ -281,8 +281,8 @@ dotnet run --project src/SyncTClient.Probe -- --addr 192.168.1.42:22000 --target
 
 The client is in daily use against Syncthing v2. Which version is current is on
 the [releases page](https://github.com/Taloan/SyncTClient/releases/latest) and
-in the badge above; every change is listed in the [changelog](CHANGELOG.md)
-(German).
+in the badge above; every change is listed in the
+[changelog](CHANGELOG.md).
 
 One thing is still open: consolidating the two paths by which content arrives
 for "always local". Pinning makes Windows request the content, while the

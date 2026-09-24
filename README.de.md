@@ -292,7 +292,7 @@ dotnet run --project src/SyncTClient.Probe -- --addr 192.168.1.42:22000 --target
 Der Client läuft im täglichen Betrieb gegen Syncthing v2. Welche Fassung die
 aktuelle ist, steht bei den
 [Freigaben](https://github.com/Taloan/SyncTClient/releases/latest) und in der
-Plakette oben; jede Änderung steht im [Changelog](CHANGELOG.md).
+Plakette oben; jede Änderung steht im [Changelog](CHANGELOG.md) (englisch).
 
 Offen ist die Zusammenlegung der beiden Wege, auf denen ein Inhalt für „immer
 lokal" hereinkommt: das Anheften stößt die Bereitstellung durch Windows an,
