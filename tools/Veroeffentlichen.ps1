@@ -445,6 +445,9 @@ if ((Stumm gh release view $etikett --repo $Repo) -eq 0) {
 
 # Derselbe Text, der im Changelog steht -- von dort kommt er auch her. Zwei
 # Quellen fuer dieselbe Liste waeren zwei Gelegenheiten, auseinanderzulaufen.
+#
+# Englisch, wie der Changelog: die Freigabe liegt oeffentlich, und wer sie
+# liest, kann kein Deutsch vorausgesetzt bekommen.
 if (-not $Hinweise) { $Hinweise = $aenderungen }
 
 $text = @"
@@ -455,9 +458,8 @@ $Hinweise
 **Installer:** ``SyncTClient-$Fassung-setup.exe`` ($groesse)
 **SHA256:** ``$pruefsumme``
 
-Die Installation braucht keine Administratorrechte. Die Einbindung in den
-Explorer -- Vorschaubilder und Kontextmenü -- trägt das Programm beim ersten
-Start selbst ein.
+Installing needs no administrator rights. The program registers its Explorer
+integration -- thumbnails and context menu -- itself on first start.
 "@
 
 $textDatei = Join-Path $env:TEMP "synct-freigabe-$Fassung.md"
