@@ -15,6 +15,19 @@ public enum PeerState
 
 /// <summary>Ein Ordner, den die Gegenstelle mit uns teilt.</summary>
 /// <param name="Accepted">Ob wir ihn schon uebernommen haben.</param>
+/// <summary>
+/// Zu dieser Gegenstelle liegt keine Adresse vor: keine eingetragen, keine im
+/// eigenen Netz gefunden, keine von der Erkennung genannt.
+/// </summary>
+/// <remarks>
+/// Eine eigene Art, weil es kein Fehler im Programm ist: eine ausgeschaltete
+/// Gegenstelle meldet sich nirgends, und damit gibt es nichts anzuwaehlen.
+/// Ohne diese Unterscheidung stand die Meldung mit Aufrufliste im Protokoll,
+/// wie ein Absturz, und das alle fuenf Minuten.
+/// </remarks>
+public sealed class OhneAdresseException()
+    : InvalidOperationException("keine Adresse bekannt -- weder eingetragen noch von der Erkennung genannt.");
+
 public sealed record OfferedFolder(string FolderId, string Label, bool Accepted)
 {
     public string Display => string.IsNullOrWhiteSpace(Label) ? FolderId : $"{Label} ({FolderId})";
@@ -224,9 +237,7 @@ public sealed class PeerHost : IAsyncDisposable
         var expected = DeviceId.Length > 0 ? Bep.DeviceId.Parse(DeviceId) : Bep.DeviceId.Empty;
         var candidates = await CandidatesAsync(expected, ct);
 
-        if (candidates.Count == 0)
-            throw new InvalidOperationException(
-                "keine Adresse bekannt -- weder eingetragen noch von der Erkennung genannt.");
+        if (candidates.Count == 0) throw new OhneAdresseException();
 
         // Zwei Gruppen, nacheinander. Innerhalb einer Gruppe gleichzeitig.
         //
@@ -472,12 +483,29 @@ public sealed class PeerHost : IAsyncDisposable
     }
 
     /// <summary>Alle Adressen, unter denen die Gegenstelle zu versuchen ist.</summary>
+    /// <summary>
+    /// Ob bereits gemeldet wurde, dass zu dieser Gegenstelle keine Adresse
+    /// vorliegt.
+    /// </summary>
+    /// <remarks>
+    /// Eine ausgeschaltete Gegenstelle ist ein Zustand, keine Folge von
+    /// Ereignissen. Der Wiederverbinder greift alle fuenf Minuten nach ihr,
+    /// und jeder Griff schrieb drei Zeilen: die Frage an die Erkennung, ihre
+    /// Antwort und einen Fehler mit Aufrufliste. Gemeldet wird deshalb der
+    /// Wechsel -- einmal, wenn keine Adresse mehr vorliegt, und wieder, sobald
+    /// eine da ist.
+    /// </remarks>
+    private bool _ohneAdresse;
+
     private async Task<IReadOnlyList<string>> CandidatesAsync(Bep.DeviceId expected, CancellationToken ct)
     {
         // Ist eine Adresse eingetragen, wird nicht gesucht.
         if (!string.IsNullOrWhiteSpace(_config.Address) &&
             !_config.Address.Equals("dynamic", StringComparison.OrdinalIgnoreCase))
+        {
+            _ohneAdresse = false;
             return [_config.Address];
+        }
 
         if (expected == Bep.DeviceId.Empty) return [];
 
@@ -486,17 +514,18 @@ public sealed class PeerHost : IAsyncDisposable
         var local = _app.Local?.AddressesFor(expected) ?? [];
         if (local.Count > 0)
         {
+            _ohneAdresse = false;
             _log($"[{Display}] im lokalen Netz gefunden: {string.Join(", ", local)}");
             return local;
         }
 
         if (!_app.Discovery || !_config.Discovery)
         {
-            _log($"[{Display}] keine Adresse eingetragen, und die Erkennung ist abgeschaltet.");
+            Stillschweigend($"[{Display}] keine Adresse eingetragen, und die Erkennung ist abgeschaltet.");
             return [];
         }
 
-        _log($"[{Display}] frage die Erkennung nach {expected.Short()} ...");
+        if (!_ohneAdresse) _log($"[{Display}] frage die Erkennung nach {expected.Short()} ...");
 
         foreach (var server in _app.LookupServers)
         {
@@ -509,17 +538,29 @@ public sealed class PeerHost : IAsyncDisposable
                 // die uebrigen liefern dieselben Adressen.
                 if (found.Count == 0) continue;
 
+                _ohneAdresse = false;
                 _log($"[{Display}] Erkennung nennt {found.Count}: {string.Join(", ", found)}");
                 return found;
             }
             catch (Exception ex)
             {
-                _log($"[{Display}] {Bep.GlobalDiscovery.HostOf(server)} antwortet nicht: {ex.Message}");
+                if (!_ohneAdresse)
+                    _log($"[{Display}] {Bep.GlobalDiscovery.HostOf(server)} antwortet nicht: {ex.Message}");
             }
         }
 
-        _log($"[{Display}] die Erkennung kennt keine Adresse.");
+        Stillschweigend($"[{Display}] die Erkennung kennt keine Adresse. " +
+                        "Die Gegenstelle ist nicht erreichbar, bis sie sich wieder meldet.");
         return [];
+    }
+
+    /// <summary>
+    /// Meldet, dass keine Adresse vorliegt -- aber nur beim ersten Mal.
+    /// </summary>
+    private void Stillschweigend(string zeile)
+    {
+        if (!_ohneAdresse) _log(zeile);
+        _ohneAdresse = true;
     }
 
     /// <summary>Entfernt aus einer Adresse das Schema und alles hinter dem Host.</summary>
@@ -622,6 +663,10 @@ public sealed class PeerHost : IAsyncDisposable
         LastError = ex.Message;
         State = PeerState.Fehler;
 
+        // Fehlt die Adresse, steht der Grund schon da -- die Suche hat ihn
+        // eben gemeldet. Eine zweite Zeile dazu sagt dasselbe noch einmal.
+        if (ex is OhneAdresseException) return;
+
         // Ein Fehler der Leitung hat seine Meldung; ein Fehler im Programm
         // braucht die Stelle.
         _log(ex is IOException or OperationCanceledException or TimeoutException or System.Net.Sockets.SocketException
@@ -643,6 +688,12 @@ public sealed class PeerHost : IAsyncDisposable
         }
 
         _connection = connection;
+
+        // Eine eingehende Verbindung geht nicht ueber die Adresssuche. Ohne
+        // das Zuruecksetzen bliebe der Merker stehen, und wenn diese
+        // Verbindung spaeter abreisst und die Gegenstelle ausgeschaltet wird,
+        // bliebe die Meldung darueber aus.
+        _ohneAdresse = false;
 
         ReportedName = connection.PeerHello.DeviceName;
         ClientVersion = connection.PeerHello.ClientVersion;
