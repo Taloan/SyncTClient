@@ -9,7 +9,7 @@ commit-by-commit history.*
 
 <!-- Neue Fassungen kommen von Hand unter diese Zeile, vor die vorige. -->
 
-## 0.9.6 — in Arbeit
+## 0.9.7 — in Arbeit
 
 **Lightroom**
 
@@ -18,6 +18,72 @@ commit-by-commit history.*
   Einträge standen eine Stunde nach dem Ende von Lightroom noch als
   Rückstand. Sie bleiben jetzt in der Schlange und werden im nächsten Takt
   erneut geprüft.
+
+**Abgleich**
+
+- Schließt eine Gegenstelle Dateien per Muster aus oder wählt sie ab, kündigt
+  sie die Einträge als ungültig an (0 B, ohne Blöcke). Solche Einträge
+  standen hier in der Tabelle wie jeder andere und gewannen bei neuerer
+  Version: fünf GPX-Dateien, die die Rossibox eben aus AppData ausgeschlossen
+  hatte, standen als Rückstand „hier 56 KB statt 0 B", und 15.561 solcher
+  Einträge lagen im Index. Syncthing lässt einen ungültigen Eintrag nie gegen
+  eine gültige Fassung gewinnen und holt ihn nie. Jetzt gilt er als „nicht
+  angekündigt": der Eintrag der Gegenstelle geht fort, die eigene Datei
+  bleibt. Die Sequenznummer der Gegenstelle bleibt erhalten, damit sie beim
+  Verbinden an der richtigen Stelle fortsetzt.
+- Gespeicherte Altlasten dieser Art werden beim Öffnen des Index einmalig
+  entfernt — im Hintergrund und nur bei Einträgen ohne Größe. Vorher lief der
+  Durchgang über jeden Eintrag auf dem Faden der Oberfläche: bei einem 640 MB
+  großen Lightroom-Index stand das Programm nach dem Start minutenlang.
+- Führen mehrere Gegenstellen eine Datei in verschiedenen Fassungen, wurde
+  der Rückstand an der größten Größe und jüngsten Zeit über alle gemessen —
+  einer Fassung, die es nicht gibt. Acht Fotos, die hier und auf der Rossibox
+  neu vorlagen und auf dem getrennten DIRK-PC noch alt, standen so dauerhaft
+  als „hier 21989814 statt 22001291 Bytes" im Rückstand. Gemessen wird jetzt
+  an der geltenden Fassung.
+- Eine Datei, die ein anderes Programm geöffnet hat, wurde bei jedem Versuch
+  vollständig übertragen und erst beim Ersetzen abgewiesen — bei „notizi
+  pr.db" 12,6 MB je Minute über das Relay. Jetzt wird vor dem Übertragen
+  geprüft.
+
+**Verbindungen**
+
+- Ein Index oder Nachtrag konnte vor unserer Ordnerliste hinausgehen, wenn
+  ein schon laufender Ordner auf die Liste der Gegenstelle sofort antwortete
+  und die eigene noch hinter dem Öffnen der Indexdatenbanken stand. Syncthing
+  schließt darauf die Verbindung — am 19.09. viermal in einer Minute, und
+  alle Ordner standen auf „gestoppt". Index und Nachtrag warten jetzt, bis
+  die Ordnerliste durch ist.
+- Die Ordnerliste der Gegenstelle wurde gelesen, bevor die eigenen Ordner
+  eingetragen waren; alle noch fehlenden galten als „nicht übernommen" —
+  sieben Angebote für längst eingerichtete Ordner und eine Anfrage in der
+  Warteliste. Gelesen wird jetzt erst nach dem Eintragen.
+- Der Grund, den die Gegenstelle beim Schließen nennt, steht jetzt im
+  Protokoll; bisher hieß es nur „hat die Verbindung beendet".
+- Endete die Verbindung während der Ankündigung, stand „Object reference not
+  set to an instance of an object" statt eines Abbruchs.
+
+**Oberfläche**
+
+- In den Einstellungen standen Speichern und Abbrechen am Ende des
+  Rollbereichs — wer nicht hinunterrollte, sah sie nicht, dachte nicht ans
+  Speichern und schloss mit X; zwei gesetzte Haken waren beim nächsten Öffnen
+  wieder fort. Die Knöpfe stehen jetzt fest unter dem Rollbereich, wie im
+  Gerätedialog, und bei ungespeicherten Änderungen wird beim Schließen
+  gefragt. Scheitert der Autostart-Eintrag, gehen die übrigen Einstellungen
+  trotzdem durch, und der Fehler wird gemeldet.
+- Während ein Index hereinkam, stand als Zahl die Sequenz der Gegenstelle:
+  „Sequenz 84.408 von 2.145.334" für einen Ordner mit 162.000 Dateien, und
+  gelesen wurde das als Dateizahl. Die Sequenz zählt jede Änderung seit dem
+  ersten Tag des Ordners mit. Der Balken rechnet weiter damit — die
+  Gegenstelle nennt in ihrer Ordnerliste ihre höchste Sequenz, aber keine
+  Anzahl —, als Text stehen jetzt die angekommenen Einträge: Dateien,
+  Verzeichnisse und Löschvermerke.
+
+## 0.9.6 — 2026-09-13
+
+**Lightroom**
+
 - Ein geöffneter Katalog wird nicht mehr angefasst. Solange neben `X.lrcat`
   die Sperrdatei `X.lrcat.lock` liegt, wird keine Datei des Verbunds —
   `X.lrcat`, `X.lrcat-data`, `X Helper.lrdata`, `X Previews.lrdata`,
@@ -28,27 +94,6 @@ commit-by-commit history.*
 
 **Abgleich**
 
-- Schließt eine Gegenstelle Dateien per Muster aus oder wählt sie ab, kündigt
-  sie die Einträge als ungültig an (0 B, ohne Blöcke). Solche Einträge
-  standen hier in der Tabelle wie jeder andere und gewannen bei neuerer
-  Version: fünf GPX-Dateien, die die Rossibox eben aus AppData ausgeschlossen
-  hatte, standen als Rückstand "hier 56 KB statt 0 B", und 15.561 solcher
-  Einträge lagen im Index. Syncthing lässt einen ungültigen Eintrag nie
-  gegen eine gültige Fassung gewinnen und holt ihn nie. Jetzt gilt er als
-  "nicht angekündigt": der Eintrag der Gegenstelle geht fort, die eigene
-  Datei bleibt; gespeicherte Altlasten werden beim Öffnen einmalig entfernt.
-  Die Sequenznummer der Gegenstelle bleibt dabei erhalten, damit sie beim
-  Verbinden an der richtigen Stelle fortsetzt.
-- Führen mehrere Gegenstellen eine Datei in verschiedenen Fassungen, wurde
-  der Rückstand an der größten Größe und jüngsten Zeit über alle gemessen —
-  einer Fassung, die es nicht gibt. Acht Fotos, die hier und auf der
-  Rossibox neu vorlagen und auf dem getrennten DIRK-PC noch alt, standen so
-  dauerhaft als "hier 21989814 statt 22001291 Bytes" im Rückstand. Gemessen
-  wird jetzt an der geltenden Fassung.
-- Eine Datei, die ein anderes Programm geöffnet hat, wurde bei jedem Versuch
-  vollständig übertragen und erst beim Ersetzen abgewiesen — bei "notizi
-  pr.db" 12,6 MB je Minute über das Relay. Jetzt wird vor dem Übertragen
-  geprüft.
 - Eine Änderung neben einer Löschung gewinnt; eine Löschung wartet, bis eine
   hier noch nicht angekündigte Änderung hinaus ist. Vorher sah die Löschung
   der Gegenstelle neuer aus als eine eben geschriebene Datei.
@@ -70,20 +115,6 @@ commit-by-commit history.*
 
 **Verbindungen**
 
-- Ein Index oder Nachtrag konnte vor unserer Ordnerliste hinausgehen, wenn
-  ein schon laufender Ordner auf die Liste der Gegenstelle sofort antwortete
-  und die eigene noch hinter dem Öffnen der Indexdatenbanken stand.
-  Syncthing schließt darauf die Verbindung — am 19.09. viermal in einer
-  Minute, und alle Ordner standen auf "gestoppt". Index und Nachtrag warten
-  jetzt, bis die Ordnerliste durch ist.
-- Die Ordnerliste der Gegenstelle wurde gelesen, bevor die eigenen Ordner
-  eingetragen waren; alle noch fehlenden galten als "nicht übernommen" —
-  sieben Angebote für längst eingerichtete Ordner und eine Anfrage in der
-  Warteliste. Gelesen wird jetzt erst nach dem Eintragen.
-- Der Grund, den die Gegenstelle beim Schließen nennt, steht jetzt im
-  Protokoll; bisher hieß es nur "hat die Verbindung beendet".
-- Endete die Verbindung während der Ankündigung, stand "Object reference not
-  set to an instance of an object" statt eines Abbruchs.
 - Eine Blockanfrage nach zwei Minuten Ruhe galt sofort als unbeantwortet;
   jede Übertragung nach einer Pause scheiterte beim ersten Versuch.
 - Endete die Leitung während der Ankündigung, blieb die Gegenstelle auf
@@ -97,20 +128,12 @@ commit-by-commit history.*
 
 **Oberfläche**
 
-- In den Einstellungen standen Speichern und Abbrechen am Ende des
-  Rollbereichs — wer nicht hinunterrollte, sah sie nicht, dachte nicht ans
-  Speichern und schloss mit X; zwei gesetzte Haken waren beim nächsten
-  Öffnen wieder fort. Die Knöpfe stehen jetzt fest unter dem Rollbereich,
-  wie im Gerätedialog, und bei ungespeicherten Änderungen wird beim
-  Schließen gefragt. Scheitert der Autostart-Eintrag, gehen die übrigen
-  Einstellungen trotzdem durch, und der Fehler wird gemeldet.
 - Eingehende Anfragen — neue Gegenstellen, angebotene Ordner — stehen im
   Reiter „Anfragen" und werden dort angenommen oder abgelehnt; kein Dialog
   mehr.
 - Version, Build-Commit und Bauzeitpunkt stehen in der Titelzeile.
 
-
-## 0.9.5 — in Arbeit
+## 0.9.5 — 2026-09-13
 
 **Verbindungen**
 
