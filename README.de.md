@@ -4,6 +4,8 @@
 
 # SyncTClient
 
+[![Neueste Freigabe](https://img.shields.io/github/v/release/Taloan/SyncTClient)](https://github.com/Taloan/SyncTClient/releases/latest)
+
 Ein Syncthing-Client für Windows, der Dateien als **Platzhalter** darstellt und
 Inhalte erst bei Zugriff überträgt — mit selbstverwaltetem Cache je Datenträger.
 
@@ -228,7 +230,7 @@ vergleicht ihre Prüfsumme mit der, die bei der
 [Freigabe](https://github.com/Taloan/SyncTClient/releases/latest) steht:
 
 ```powershell
-Get-FileHash .\SyncTClient-0.9.1-setup.exe -Algorithm SHA256
+Get-FileHash .\SyncTClient-*-setup.exe -Algorithm SHA256
 ```
 
 Stimmen die beiden überein, ist unterwegs nichts verändert worden. Wer die Datei
@@ -287,8 +289,10 @@ dotnet run --project src/SyncTClient.Probe -- --addr 192.168.1.42:22000 --target
 
 ## Stand
 
-Fassung 0.9.1. Der Client läuft im täglichen Betrieb gegen Syncthing v2.
-Jede Änderung steht im [Changelog](CHANGELOG.md).
+Der Client läuft im täglichen Betrieb gegen Syncthing v2. Welche Fassung die
+aktuelle ist, steht bei den
+[Freigaben](https://github.com/Taloan/SyncTClient/releases/latest) und in der
+Plakette oben; jede Änderung steht im [Changelog](CHANGELOG.md).
 
 Offen ist die Zusammenlegung der beiden Wege, auf denen ein Inhalt für „immer
 lokal" hereinkommt: das Anheften stößt die Bereitstellung durch Windows an,

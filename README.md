@@ -4,6 +4,8 @@
 
 # SyncTClient
 
+[![Latest release](https://img.shields.io/github/v/release/Taloan/SyncTClient)](https://github.com/Taloan/SyncTClient/releases/latest)
+
 A Syncthing client for Windows that presents files as **placeholders** and
 transfers their content on first access — with a self-managed cache per volume.
 
@@ -219,7 +221,7 @@ one given on the
 [release](https://github.com/Taloan/SyncTClient/releases/latest):
 
 ```powershell
-Get-FileHash .\SyncTClient-0.9.1-setup.exe -Algorithm SHA256
+Get-FileHash .\SyncTClient-*-setup.exe -Algorithm SHA256
 ```
 
 If the two match, nothing was altered on the way. It does not prove who built
@@ -277,8 +279,10 @@ dotnet run --project src/SyncTClient.Probe -- --addr 192.168.1.42:22000 --target
 
 ## Status
 
-Version 0.9.1. The client is in daily use against Syncthing v2.
-Every change is listed in the [changelog](CHANGELOG.md) (German).
+The client is in daily use against Syncthing v2. Which version is current is on
+the [releases page](https://github.com/Taloan/SyncTClient/releases/latest) and
+in the badge above; every change is listed in the [changelog](CHANGELOG.md)
+(German).
 
 One thing is still open: consolidating the two paths by which content arrives
 for "always local". Pinning makes Windows request the content, while the
