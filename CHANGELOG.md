@@ -5,7 +5,7 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 <!-- New versions go in by hand below this line, above the previous one. -->
 
-## 0.9.7 — in progress
+## 0.9.8 — 2026-09-26
 
 **Lightroom**
 
