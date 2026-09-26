@@ -15,6 +15,16 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 **Synchronisation**
 
+- Files deleted locally while the program was not running were not
+  reported as deleted unless the local version vector carried our own
+  counter. That excluded every file received from a peer — the normal
+  case: photos come from the phone, are imported and then deleted here.
+  Instead of the deletion, an "I do not have this" announcement went out,
+  the peer's version kept winning, and with "keep everything local" 48
+  images and 1.1 GB came straight back. An entry in the local index now
+  counts as the witness it is: the file was held here, it is gone, so it
+  was deleted. The safeguards stay — the folder marker, deselected paths,
+  and the limit on how many deletions count as one.
 - A peer announces entries it excludes by pattern or deselects as invalid: no
   blocks, size zero. They were treated like any other entry and won on a
   newer version, which put them in the backlog although they can never be

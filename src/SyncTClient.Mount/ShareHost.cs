@@ -3283,8 +3283,6 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
 
         var fehlend = new List<string>();
-        var nieGehalten = new List<BepFileInfo>();
-        var eigenerZaehler = OwnDeviceId.ShortId();
 
         foreach (var eigen in _index.LocalFrom(0))
         {
@@ -3303,34 +3301,24 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
 
             if (da) continue;
 
-            // Beim Start gibt es keinen Zeugen dafuer, dass die Datei je hier
-            // lag. Ein Eintrag ohne eigenen Zaehler im Versionsvektor ist eine
-            // uebernommene Fassung der Gegenstelle -- die kann heruntergeladen
-            // gewesen sein, oder nur ein Platzhalter, der nie Inhalt bekam.
-            // Beides sieht im Bestand gleich aus. Eine Loeschung an die
-            // Gegenstellen zu melden, waere im zweiten Fall die Loeschung
-            // einer Datei, die es hier nie gab. Gemeldet wird deshalb nur,
-            // dass sie hier nicht liegt; die Fassung der Gegenstelle gilt,
-            // und bei "vollstaendig lokal" kommt sie wieder her.
+            // Ein eigener Eintrag heisst: diese Datei haben wir gefuehrt und
+            // den Gegenstellen angekuendigt. Liegt sie jetzt nicht mehr da
+            // und steht die Ordnermarkierung, dann ist sie hier geloescht
+            // worden -- so sieht es Syncthing, und so ist es gemeint.
             //
-            // Was hier selbst geschrieben oder geaendert wurde, traegt den
-            // eigenen Zaehler. Dafuer bleibt es bei der Loeschung, wie bei
-            // Syncthing.
-            var eigene = eigen.Version?.Counters.Any(c => c.Id == eigenerZaehler) == true;
-
-            if (eigene) fehlend.Add(eigen.Name);
-            else nieGehalten.Add(eigen);
-        }
-
-        if (nieGehalten.Count > 0)
-        {
-            foreach (var eintrag in nieGehalten) AlsNichtVorhandenAnkuendigen(eintrag);
-
-            _log($"[{FolderId}] {nieGehalten.Count} uebernommene Dateien fehlen beim Start. Sie werden " +
-                 "nicht als geloescht gemeldet, sondern als hier nicht vorhanden; die Fassung der " +
-                 "Gegenstelle gilt. Erste: " +
-                 string.Join(", ", nieGehalten.Take(3).Select(e => $"\"{e.Name}\"")) +
-                 (nieGehalten.Count > 3 ? $" und {nieGehalten.Count - 3} weitere" : "") + ".");
+            // Hier stand eine Ausnahme: ein Eintrag ohne eigenen Zaehler im
+            // Versionsvektor galt als "nie gehalten" und wurde nur als hier
+            // nicht vorhanden gemeldet. Das trifft aber jede uebernommene
+            // Datei, und genau die ist der Normalfall: Fotos kommen vom
+            // Telefon, werden importiert und danach hier geloescht. Statt
+            // der Loeschung ging eine Ankuendigung "habe ich nicht" hinaus,
+            // die Fassung der Gegenstelle galt weiter, und bei "vollstaendig
+            // lokal" kamen 48 Bilder samt 1,1 GB sofort wieder zurueck.
+            //
+            // Die Sicherungen gegen eine erfundene Loeschung bleiben: die
+            // Ordnermarkierung oben, der Ausschluss von Abgewaehltem, und
+            // die Schranke fuer die Zahl weiter unten.
+            fehlend.Add(eigen.Name);
         }
 
         if (fehlend.Count == 0) return;
@@ -3348,7 +3336,9 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         foreach (var name in fehlend) _removed[name] = DateTime.UtcNow + Loeschfrist;
 
         _log($"[{FolderId}] {fehlend.Count} Dateien wurden entfernt, waehrend das Programm nicht lief. " +
-             "Die Loeschung wird weitergegeben.");
+             "Die Loeschung wird weitergegeben. Erste: " +
+             string.Join(", ", fehlend.Take(3).Select(n => $"\"{n}\"")) +
+             (fehlend.Count > 3 ? $" und {fehlend.Count - 3} weitere" : "") + ".");
     }
 
     /// <summary>
