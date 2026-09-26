@@ -1455,6 +1455,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // Zurueck auf "gestoppt". Ohne das blieb der Ordner auf
+            // "wartet" stehen, und beim naechsten Verbinden wurde er nicht
+            // wieder gestartet: gestartet wird nur, was gestoppt ist.
+            // Gemessen am 26.09.: die Leitung zur Rossibox riss waehrend des
+            // Starts, acht Ordner meldeten "A task was canceled" und standen
+            // danach neun Stunden auf "Index", ohne dass einer der sechs
+            // Neuaufbauten sie wieder aufnahm.
+            State = ShareState.Gestoppt;
+            SetPhase(SyncPhase.Ruht);
+
             // Abgebrochen, nicht gescheitert: der Dialog zur Uebernahme wurde
             // geschlossen, oder der Ordner wird angehalten. Das stand als
             // "OperationCanceledException" mit Aufrufweg im Protokoll und
@@ -1534,6 +1544,16 @@ public sealed partial class ShareHost : IAsyncDisposable, IContentSource
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            // Zurueck auf "gestoppt". Ohne das blieb der Ordner auf
+            // "wartet" stehen, und beim naechsten Verbinden wurde er nicht
+            // wieder gestartet: gestartet wird nur, was gestoppt ist.
+            // Gemessen am 26.09.: die Leitung zur Rossibox riss waehrend des
+            // Starts, acht Ordner meldeten "A task was canceled" und standen
+            // danach neun Stunden auf "Index", ohne dass einer der sechs
+            // Neuaufbauten sie wieder aufnahm.
+            State = ShareState.Gestoppt;
+            SetPhase(SyncPhase.Ruht);
+
             // Siehe PrepareAsync: ein Abbruch ist kein Fehler.
             throw;
         }

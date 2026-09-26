@@ -797,7 +797,11 @@ public sealed class PeerHost : IAsyncDisposable
         // Schreibvorgaenge selbst hintereinander ein.
         await Task.WhenAll(_shares.Values
             // Ein Ordner, der schon steht, ist mit der neuen Verbindung fertig.
-            .Where(share => share.State == ShareState.Gestoppt)
+            // Gestoppt heisst "noch nicht gestartet", Fehler heisst "der Start
+            // ging schief" -- beides gehoert in den neuen Anlauf. Ein
+            // gescheiterter Ordner blieb sonst liegen, bis jemand das Programm
+            // neu startete.
+            .Where(share => share.State is ShareState.Gestoppt or ShareState.Fehler)
             .Select(async share =>
             {
                 try { await share.StartAsync(DeviceId, connection, token); }

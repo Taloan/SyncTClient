@@ -33,6 +33,11 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 **Connections**
 
+- A folder whose start was cut short by a dropped connection stayed on
+  "waiting" for good: the state was never reset, and only stopped folders
+  are started when a connection comes back. Eight folders sat on "index"
+  for nine hours across six reconnects. A cancelled start now returns the
+  folder to "stopped", and a failed one is started again as well.
 - An index or index update could go out ahead of our own folder list, on
   which Syncthing closes the connection. Both now wait until the folder list
   is out.
