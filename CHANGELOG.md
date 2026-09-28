@@ -7,6 +7,27 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 ## 0.9.8 — 2026-09-26
 
+**Synchronisation**
+
+- Files deleted locally while the program was not running were only reported
+  as deleted when the local version vector carried our own counter, which
+  excluded every file received from a peer. Instead of the deletion, an
+  announcement that the content is not held here went out, the peer's version
+  kept winning, and where the folder is kept fully local the file was
+  transferred again. An entry in the local index now counts as the witness it
+  is: the file was held here and is gone, so it was deleted. The safeguards
+  stay — the folder marker, deselected paths, and the limit on how many
+  deletions count as one pass.
+
+**Connections**
+
+- A folder whose start was cut short by a dropped connection stayed on
+  "waiting" for good: the state was never reset, and only stopped folders are
+  started when a connection returns. A cancelled start now returns the folder
+  to "stopped", and a failed one is started again as well.
+
+## 0.9.7 — 2026-09-24
+
 **Lightroom**
 
 - Entries from a peer that were held back while a catalogue was open were
@@ -15,16 +36,6 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 **Synchronisation**
 
-- Files deleted locally while the program was not running were not
-  reported as deleted unless the local version vector carried our own
-  counter. That excluded every file received from a peer — the normal
-  case: photos come from the phone, are imported and then deleted here.
-  Instead of the deletion, an "I do not have this" announcement went out,
-  the peer's version kept winning, and with "keep everything local" 48
-  images and 1.1 GB came straight back. An entry in the local index now
-  counts as the witness it is: the file was held here, it is gone, so it
-  was deleted. The safeguards stay — the folder marker, deselected paths,
-  and the limit on how many deletions count as one.
 - A peer announces entries it excludes by pattern or deselects as invalid: no
   blocks, size zero. They were treated like any other entry and won on a
   newer version, which put them in the backlog although they can never be
@@ -43,11 +54,6 @@ subjects of the commits — the commit-by-commit history is in `git log`.
 
 **Connections**
 
-- A folder whose start was cut short by a dropped connection stayed on
-  "waiting" for good: the state was never reset, and only stopped folders
-  are started when a connection comes back. Eight folders sat on "index"
-  for nine hours across six reconnects. A cancelled start now returns the
-  folder to "stopped", and a failed one is started again as well.
 - An index or index update could go out ahead of our own folder list, on
   which Syncthing closes the connection. Both now wait until the folder list
   is out.
